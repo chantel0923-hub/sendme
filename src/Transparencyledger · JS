@@ -1,0 +1,142 @@
+import { useState, useEffect } from "react";
+import { supabase } from "./supabase";
+
+const fmt = (n) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+
+const DEMO_LEDGER = [
+  { id:1, description:"Bibles purchased — 200 units",     category:"Materials",    amount:2500, date:"2025-03-10", verified:true  },
+  { id:2, description:"Transport to Merkato district",    category:"Transport",    amount:1200, date:"2025-03-14", verified:true  },
+  { id:3, description:"Food parcels — 40 families",       category:"Food Aid",     amount:1800, date:"2025-03-18", verified:true  },
+  { id:4, description:"Accommodation — 2 weeks",          category:"Accommodation",amount:900,  date:"2025-03-25", verified:true  },
+  { id:5, description:"Sound equipment hire",             category:"Equipment",    amount:600,  date:"2025-04-02", verified:false },
+];
+
+const CATEGORY_COLORS = {
+  "Materials":    "#e8b34b",
+  "Transport":    "#5b9cf6",
+  "Food Aid":     "#3ecf8e",
+  "Accommodation":"#b06cf5",
+  "Equipment":    "#f5a44a",
+  "Admin":        "rgba(255,255,255,0.4)",
+};
+
+export default function TransparencyLedger({ mission, onBack }) {
+  const m = mission;
+  const [entries, setEntries]   = useState([]);
+  const [loading, setLoading]   = useState(true);
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      try {
+        const { data } = await supabase
+          .from("mission_ledger")
+          .select("*")
+          .eq("mission_id", m.id)
+          .order("date", { ascending: false });
+        if (data && data.length > 0) setEntries(data);
+        else setEntries(DEMO_LEDGER);
+      } catch { setEntries(DEMO_LEDGER); }
+      setLoading(false);
+    };
+    load();
+  }, [m.id]);
+
+  const totalSpent = entries.reduce((s, e) => s + (e.amount || 0), 0);
+  const pctSpent   = Math.min(100, Math.round((totalSpent / m.goal) * 100));
+
+  const byCategory = entries.reduce((acc, e) => {
+    acc[e.category] = (acc[e.category] || 0) + e.amount;
+    return acc;
+  }, {});
+
+  return (
+    <div style={{ minHeight:"100vh", background:"#060c18", color:"#eef1ff", fontFamily:"Georgia, serif" }}>
+      <div style={{ background:"#09111f", borderBottom:"1px solid rgba(255,255,255,0.07)", padding:"16px 24px", display:"flex", alignItems:"center", gap:14, position:"sticky", top:0, zIndex:100 }}>
+        <button onClick={onBack} style={{ background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:10, padding:"8px 16px", color:"rgba(255,255,255,0.6)", cursor:"pointer", fontSize:14, fontFamily:"Georgia, serif" }}>Back</button>
+        <div>
+          <div style={{ fontSize:18, fontWeight:700 }}>Giving Transparency Ledger</div>
+          <div style={{ fontSize:12, color:"rgba(255,255,255,0.4)", marginTop:2 }}>{m.protected ? "Protected Mission" : m.name} · {m.title}</div>
+        </div>
+      </div>
+
+      <div style={{ maxWidth:680, margin:"0 auto", padding:"28px 20px 60px" }}>
+
+        {/* Summary */}
+        <div style={{ background:`linear-gradient(135deg,${m.color}18,${m.color}06)`, borderRadius:18, border:`1px solid ${m.color}33`, padding:20, marginBottom:20 }}>
+          <div style={{ fontSize:13, color:"rgba(255,255,255,0.4)", marginBottom:12, letterSpacing:1, textTransform:"uppercase" }}>Fund Summary</div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, marginBottom:16 }}>
+            {[
+              ["💝", `$${fmt(m.raised)}`, "Total Raised",   "#3ecf8e"],
+              ["💸", `$${fmt(totalSpent)}`,"Total Spent",    m.color  ],
+              ["🏦", `$${fmt(m.raised - totalSpent)}`, "In Escrow", "#5b9cf6"],
+            ].map(([icon,val,label,c]) => (
+              <div key={label} style={{ background:"rgba(255,255,255,0.04)", borderRadius:12, padding:"12px 10px", textAlign:"center" }}>
+                <div style={{ fontSize:18 }}>{icon}</div>
+                <div style={{ fontSize:17, fontWeight:700, color:c, marginTop:4 }}>{val}</div>
+                <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", marginTop:2 }}>{label}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ background:"rgba(255,255,255,0.07)", borderRadius:999, height:8, overflow:"hidden" }}>
+            <div style={{ width:`${pctSpent}%`, height:"100%", borderRadius:999, background:`linear-gradient(90deg,${m.color},${m.color}bb)`, transition:"width .7s ease" }}/>
+          </div>
+          <div style={{ display:"flex", justifyContent:"space-between", marginTop:8 }}>
+            <span style={{ fontSize:12, color:m.color }}>{pctSpent}% of funds deployed</span>
+            <span style={{ fontSize:12, color:"rgba(255,255,255,0.3)" }}>{100-pctSpent}% still in escrow</span>
+          </div>
+        </div>
+
+        {/* Category breakdown */}
+        <div style={{ background:"rgba(255,255,255,0.02)", borderRadius:14, border:"1px solid rgba(255,255,255,0.07)", padding:"18px 20px", marginBottom:20 }}>
+          <div style={{ fontSize:14, fontWeight:700, color:"#eef1ff", marginBottom:14 }}>Spending by Category</div>
+          {Object.entries(byCategory).map(([cat, amt]) => {
+            const c = CATEGORY_COLORS[cat] || "#e8b34b";
+            const p = Math.round((amt / totalSpent) * 100);
+            return (
+              <div key={cat} style={{ marginBottom:12 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:5 }}>
+                  <span style={{ fontSize:13, color:"rgba(255,255,255,0.7)" }}>{cat}</span>
+                  <span style={{ fontSize:13, color:c, fontWeight:700 }}>${fmt(amt)} <span style={{ color:"rgba(255,255,255,0.3)", fontWeight:400 }}>({p}%)</span></span>
+                </div>
+                <div style={{ background:"rgba(255,255,255,0.06)", borderRadius:999, height:5, overflow:"hidden" }}>
+                  <div style={{ width:`${p}%`, height:"100%", borderRadius:999, background:c, transition:"width .7s ease" }}/>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Transaction list */}
+        <div style={{ fontSize:16, fontWeight:700, color:"#eef1ff", marginBottom:14 }}>Transaction History</div>
+        {loading ? (
+          <div style={{ textAlign:"center", padding:"30px 0", color:"rgba(255,255,255,0.3)" }}>Loading...</div>
+        ) : (
+          <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+            {entries.map((e, i) => {
+              const c = CATEGORY_COLORS[e.category] || "#e8b34b";
+              return (
+                <div key={e.id||i} style={{ background:"#0c1628", borderRadius:12, border:"1px solid rgba(255,255,255,0.07)", padding:"14px 16px", display:"flex", justifyContent:"space-between", alignItems:"center", gap:12 }}>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:4 }}>
+                      <span style={{ fontSize:11, padding:"2px 8px", borderRadius:6, background:`${c}18`, color:c, border:`1px solid ${c}33` }}>{e.category}</span>
+                      {e.verified && <span style={{ fontSize:11, padding:"2px 8px", borderRadius:6, background:"rgba(62,207,142,0.1)", color:"#3ecf8e", border:"1px solid rgba(62,207,142,0.2)" }}>✓ Verified</span>}
+                    </div>
+                    <div style={{ fontSize:13, color:"rgba(255,255,255,0.7)" }}>{e.description}</div>
+                    <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", marginTop:3 }}>{e.date ? new Date(e.date).toLocaleDateString("en-GB", { day:"numeric", month:"short", year:"numeric" }) : ""}</div>
+                  </div>
+                  <div style={{ fontSize:16, fontWeight:700, color:c, flexShrink:0 }}>${fmt(e.amount)}</div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <div style={{ background:"rgba(232,179,75,0.06)", borderRadius:12, border:"1px solid rgba(232,179,75,0.15)", padding:"12px 16px", marginTop:20, display:"flex", gap:10, alignItems:"center" }}>
+          <span style={{ fontSize:16 }}>🔐</span>
+          <span style={{ fontSize:13, color:"rgba(255,255,255,0.4)", lineHeight:1.6 }}>All transactions are reviewed by the SendMe admin team. Funds are only released from escrow when milestone proof is verified.</span>
+        </div>
+      </div>
+    </div>
+  );
+}
