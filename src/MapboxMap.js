@@ -43,7 +43,7 @@ export default function MapboxMap({ missions, churches = [], onMissionClick }) {
 
     map.current = new mapboxgl.Map({
       container: mapContainer.current,
-      style: "mapbox://styles/mapbox/dark-v11",
+      style: "https://api.mapbox.com/styles/v1/mapbox/dark-v11?access_token=" + process.env.REACT_APP_MAPBOX_TOKEN,
       center: [20, 10],
       zoom: 2.2,
       projection: "mercator",
