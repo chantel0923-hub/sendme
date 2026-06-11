@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { supabase } from "./supabase";
 
-export default function Auth({ onLogin }) {
+export default function Auth({ onLogin, onGuest })
   const [mode, setMode]         = useState("login");
   const [role, setRole]         = useState("");
   const [name, setName]         = useState("");
@@ -230,7 +230,7 @@ export default function Auth({ onLogin }) {
             }}
           >
             Browse Missions as Guest →
-          </button>
+          </button> onClick={onGuest}
 
           <div style={{ textAlign: "center", fontSize: 12, color: "rgba(255,255,255,0.2)", marginTop: 16 }}>
             🔒 Your data is secure · SendMe is a non-profit platform

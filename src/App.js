@@ -132,7 +132,7 @@ const JourneyTimeline = ({ currentStep, color }) => (
 // ── BUDGET BREAKDOWN ──────────────────────────────────────────────────────────
 const BudgetBreakdown = ({ budget=[], goal, color }) => {
   if (!budget||budget.length===0) return null;
-  const total = budget.reduce((s,b)=>s+b.amount,0);
+  const total = budget.reduce((acc,b)=>acc+b.amount,0);
   return (
     <div style={{ padding:"20px 0", borderBottom:"1px solid rgba(255,255,255,0.06)" }}>
       <div style={{ fontSize:14,fontWeight:700,color:"#eef1ff",marginBottom:4 }}>Budget Breakdown</div>
@@ -604,7 +604,7 @@ const PrayerWall = ({ missions, onBack }) => {
     { id:6, mission:"Dalit Women's Bible Mission",    country:"India",    text:"Please pray for Sister Priya as she begins literacy classes in the 8th village. Many women are eager.", urgent:false, prayers:77  },
   ];
 
-  const totalPraying = allRequests.reduce((s,r) => s + r.prayers, 0);
+  const totalPraying = allRequests.reduce((acc,r) => acc + r.prayers, 0);
 
   return (
     <div style={{ minHeight:"100vh", background:"#060c18", color:"#eef1ff", fontFamily:"Georgia, serif" }}>
@@ -710,7 +710,7 @@ const DonorProfile = ({ user, onBack }) => {
     {id:4,mission_name:"Syrian Refugee Outreach",     country:"Lebanon", amount:50, created_at:"2025-05-02",status:"active"},
   ];
   const disp  = donations.length>0?donations:DEMO;
-  const total = disp.reduce((s,d)=>s+(d.amount||0),0);
+  const total = disp.reduce((acc,d)=>acc+(d.amount||0),0);
   return (
     <div style={{ minHeight:"100vh",background:"#060c18",color:"#eef1ff",fontFamily:"Georgia, serif" }}>
       <div style={{ background:"#09111f",borderBottom:"1px solid rgba(255,255,255,0.07)",padding:"16px 24px",display:"flex",alignItems:"center",gap:14,position:"sticky",top:0,zIndex:100 }}>
@@ -788,7 +788,7 @@ const HomeScreen = ({ onMission,user,onSignOut,onApply,onChurch,onChurches,onPro
     fetchMissions();
   },[]);
   const visible      = region==="All"?missions:missions.filter(m=>m.region===region||m.region.startsWith(region.slice(0,3)));
-  const totalRaised  = missions.reduce((s,m)=>s+(m.raised||0),0);
+  const totalRaised  = missions.reduce((acc,m)=>acc+(m.raised||0),0);
   const activeCount  = missions.filter(m=>m.status==="active").length;
   const countryCount = new Set(missions.map(m=>m.country)).size;
   return (
@@ -833,7 +833,7 @@ const HomeScreen = ({ onMission,user,onSignOut,onApply,onChurch,onChurches,onPro
           ))}
         </div>
         <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:28 }}>
-          {[["✝",activeCount,"Active Missions","#e8b34b"],["💝","$"+fmt(totalRaised),"Total Raised","#3ecf8e"],["👥",fmt(missions.reduce((s,m)=>s+(m.prayers||0),0)),"Prayers","#5b9cf6"],["🌍",countryCount,"Countries","#b06cf5"]].map(([icon,val,label,c])=>(
+          {[["✝",activeCount,"Active Missions","#e8b34b"],["💝","$"+fmt(totalRaised),"Total Raised","#3ecf8e"],["👥",fmt(missions.reduce((acc,m)=>acc+(m.prayers||0),0)),"Prayers","#5b9cf6"],["🌍",countryCount,"Countries","#b06cf5"]].map(([icon,val,label,c])=>(
             <div key={label} style={{ background:"rgba(255,255,255,0.03)",borderRadius:14,border:"1px solid rgba(255,255,255,0.07)",padding:"16px 12px",textAlign:"center" }}>
               <div style={{ fontSize:20 }}>{icon}</div>
               <div style={{ fontSize:18,fontWeight:700,color:c,marginTop:4 }}>{val}</div>
@@ -893,6 +893,7 @@ export default function App() {
   const [screen,setScreen]                     = useState("home");
   const [selectedMission,setSelectedMission]   = useState(null);
   const [donateAmt,setDonateAmt]               = useState("");
+  const [guest,setGuest]                       = useState(false);
 
   useEffect(()=>{
     supabase.auth.getSession().then(({data:{session}})=>{setUser(session?.user??null);setAuthReady(true);});
@@ -900,13 +901,13 @@ export default function App() {
     return ()=>subscription.unsubscribe();
   },[]);
 
-  const signOut       = async()=>{await supabase.auth.signOut();setUser(null);setScreen("home");};
+  const signOut       = async()=>{await supabase.auth.signOut();setUser(null);setGuest(false);setScreen("home");};
   const openMission   = (m)  =>{setSelectedMission(m);setScreen("detail");};
   const openDonate    = ()   =>{setScreen("donate");};
   const handleSuccess = (amt)=>{setDonateAmt(amt);setScreen("success");};
 
   if(!authReady) return(<div style={{ minHeight:"100vh",background:"#060c18",display:"flex",alignItems:"center",justifyContent:"center" }}><div style={{ fontSize:48,color:"#e8b34b" }}>✝</div></div>);
-  if(!user) return <Auth onLogin={(u)=>setUser(u)}/>;
+  if(!user && !guest) return <Auth onLogin={(u)=>setUser(u)} onGuest={()=>setGuest(true)}/>;
   if(screen==="pray")        return <PrayerWall missions={DEMO_MISSIONS} onBack={()=>setScreen("home")}/>;
   if(screen==="churches")    return <ChurchesTab onBack={()=>setScreen("home")}/>;
   if(screen==="apply")       return <MissionaryApplication onBack={()=>setScreen("home")} user={user}/>;
