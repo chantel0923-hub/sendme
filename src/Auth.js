@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { supabase } from "./supabase";
 
-export default function Auth({ onLogin, onGuest })
+export default function Auth({ onLogin, onGuest }) {
   const [mode, setMode]         = useState("login");
   const [role, setRole]         = useState("");
   const [name, setName]         = useState("");
@@ -77,9 +77,7 @@ export default function Auth({ onLogin, onGuest })
               <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
             </filter>
             <g filter="url(#glow)">
-              {/* Vertical beam */}
               <rect x="14" y="0" width="8" height="48" rx="4" fill="url(#crossGold)"/>
-              {/* Horizontal beam */}
               <rect x="0" y="12" width="36" height="8" rx="4" fill="url(#crossGold)"/>
             </g>
             <defs>
@@ -111,7 +109,7 @@ export default function Auth({ onLogin, onGuest })
           border: "1px solid rgba(255,255,255,0.08)", padding: "32px 28px",
         }}>
 
-          {/* ── Tabs (fixed alignment) ── */}
+          {/* ── Tabs ── */}
           <div style={{
             display: "grid", gridTemplateColumns: "1fr 1fr",
             background: "rgba(255,255,255,0.04)", borderRadius: 12,
@@ -220,7 +218,7 @@ export default function Auth({ onLogin, onGuest })
 
           {/* ── Guest button ── */}
           <button
-            onClick={() => onLogin(null)}
+            onClick={onGuest}
             style={{
               width: "100%", padding: "12px 0", borderRadius: 12,
               border: "1px solid rgba(255,255,255,0.1)",
@@ -230,7 +228,7 @@ export default function Auth({ onLogin, onGuest })
             }}
           >
             Browse Missions as Guest →
-          </button> onClick={onGuest}
+          </button>
 
           <div style={{ textAlign: "center", fontSize: 12, color: "rgba(255,255,255,0.2)", marginTop: 16 }}>
             🔒 Your data is secure · SendMe is a non-profit platform
