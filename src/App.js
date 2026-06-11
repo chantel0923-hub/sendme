@@ -33,14 +33,14 @@ const DEMO_UPDATES = [
 const COLORS = ["#e8b34b","#4caf7d","#5b9cf6","#e85b5b","#b06cf5","#f5a44a","#3ecf8e","#f06292"];
 const getColor = (id) => COLORS[id % COLORS.length];
 const mapRow = (row, i) => ({
-  id:row.id, name:row.missionary_name||"Unknown", role:row.missionary_role||"Missionary",
-  church:row.church_name||"", city:row.area||"", country:row.country||"",
-  area:row.area||"", region:row.region||"Other",
+  id:row.id, name:row.missionary_role?"Missionary (" + (row.city||row.country||"Unknown") + ")":"Unknown", role:row.missionary_role||"Missionary",
+  church:row.church_name||"", city:row.city||"", country:row.country||"",
+  area:row.area||"", region:row.region||"Africa",
   lat:parseFloat(row.lat)||0, lng:parseFloat(row.lng)||0,
-  title:row.title||"Untitled Mission", blurb:row.blurb||"",
-  raised:row.raised||0, goal:row.goal||1000, color:getColor(i),
+  title:row.title||"Untitled Mission", blurb:row.blurb||row.description||"",
+  raised:row.raised||0, goal:row.goal||1000, color:row.color||getColor(i),
   status:row.status||"active", milestone:row.milestone||0,
-  souls:row.souls||0, bibles:row.bibles||0, churches:row.churches||0,
+  souls:row.souls||0, bibles:row.bibles||0, churches:row.churches_planted||0,
   prayers:row.prayers||0, protected:row.protected||false,
   trustLevel:row.trust_level||1, journeyStep:row.journey_step||1,
   riskLevel:row.risk_level||1, budget:row.budget||[],
