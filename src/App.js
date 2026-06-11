@@ -12,6 +12,7 @@ import MissionMatching from "./MissionMatching";
 import TestimonyEngine from "./TestimonyEngine";
 import SendAWorker from "./SendAWorker";
 import QRShare from "./QRShare";
+import FAQScreen from './FAQScreen';
 
 const DEMO_MISSIONS = [
   { id:1, name:"Rev. Samuel Osei",   role:"Missionary",  church:"Accra Redemption Church",   city:"Addis Ababa", country:"Ethiopia", area:"Merkato District",         region:"Africa",      lat:9.03,  lng:38.74, title:"Gospel & Food Aid — Merkato",     blurb:"Feeding 400 families weekly while planting the Word in one of Addis Ababa's most densely populated slums.",           raised:9840,  goal:15000, color:"#e8b34b", status:"active",   milestone:2, souls:312, bibles:200, churches:1, prayers:87,  protected:false, trustLevel:2, journeyStep:4, riskLevel:1, budget:[{label:"Food parcels",amount:4000},{label:"Bibles & Tracts",amount:2500},{label:"Transport",amount:1500},{label:"Accommodation",amount:1840}] },
@@ -209,7 +210,6 @@ const UpdatesFeed = ({ missionId, missionColor, missionName }) => {
       <div style={{ fontSize:16,fontWeight:700,color:"#eef1ff",marginBottom:6 }}>Live Mission Updates</div>
       <div style={{ fontSize:12,color:"rgba(255,255,255,0.35)",marginBottom:16 }}>Field reports, photos and prayer requests from the missionary.</div>
 
-      {/* Post new update */}
       <div style={{ background:"rgba(255,255,255,0.03)",borderRadius:14,border:"1px solid rgba(255,255,255,0.08)",padding:16,marginBottom:16 }}>
         <div style={{ display:"flex",gap:8,marginBottom:10 }}>
           {[["update","📋 Field Report"],["prayer","🙏 Prayer Request"]].map(([t,l]) => (
@@ -228,7 +228,6 @@ const UpdatesFeed = ({ missionId, missionColor, missionName }) => {
         </button>
       </div>
 
-      {/* Updates list */}
       {loading ? (
         <div style={{ textAlign:"center",padding:"20px 0",color:"rgba(255,255,255,0.3)",fontSize:13 }}>Loading updates...</div>
       ) : updates.length === 0 ? (
@@ -283,7 +282,6 @@ const PrayerChain = ({ missionId, missionColor, initialCount=0 }) => {
     <div style={{ padding:"20px 0", borderBottom:"1px solid rgba(255,255,255,0.06)" }}>
       <div style={{ fontSize:14,fontWeight:700,color:"#eef1ff",marginBottom:4 }}>Prayer Chain</div>
 
-      {/* Counter */}
       <div style={{ background:`${missionColor}0e`,borderRadius:14,border:`1px solid ${missionColor}22`,padding:"16px 18px",marginBottom:14,display:"flex",justifyContent:"space-between",alignItems:"center" }}>
         <div>
           <div style={{ fontSize:22,fontWeight:700,color:missionColor }}>{fmt(count)} believers praying</div>
@@ -299,7 +297,6 @@ const PrayerChain = ({ missionId, missionColor, initialCount=0 }) => {
         </button>
       </div>
 
-      {/* Prayer request */}
       {!submitted ? (
         <div style={{ background:"rgba(255,255,255,0.02)",borderRadius:12,border:"1px solid rgba(255,255,255,0.07)",padding:14 }}>
           <div style={{ fontSize:13,color:"rgba(255,255,255,0.4)",marginBottom:8 }}>Share a specific prayer request for this mission</div>
@@ -618,7 +615,6 @@ const PrayerWall = ({ missions, onBack }) => {
       </div>
 
       <div style={{ maxWidth:680, margin:"0 auto", padding:"28px 20px 60px" }}>
-
         <div style={{ background:"rgba(232,179,75,0.08)", borderRadius:16, border:"1px solid rgba(232,179,75,0.2)", padding:"20px 24px", marginBottom:24, textAlign:"center" }}>
           <div style={{ fontSize:32, marginBottom:8 }}>🙏</div>
           <div style={{ fontSize:18, fontWeight:700, color:"#eef1ff", marginBottom:8 }}>The effectual fervent prayer of a righteous man availeth much.</div>
@@ -680,7 +676,6 @@ const PrayerWall = ({ missions, onBack }) => {
     </div>
   );
 };
-
 
 const LoadingMap = () => (
   <div style={{ height:400,borderRadius:20,border:"1px solid rgba(255,255,255,0.08)",background:"#09111f",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16 }}>
@@ -769,7 +764,8 @@ const DonorProfile = ({ user, onBack }) => {
   );
 };
 
-const HomeScreen = ({ onMission,user,onSignOut,onApply,onChurch,onChurches,onProfile,onEmergency,onMatching,onPray,onTestimonies,onWorker,onQR }) => {
+// ── HOME SCREEN ───────────────────────────────────────────────────────────────
+const HomeScreen = ({ onMission,user,onSignOut,onApply,onChurch,onChurches,onProfile,onEmergency,onMatching,onPray,onTestimonies,onWorker,onQR,onFaq }) => {
   const [region,setRegion]       = useState("All");
   const [missions,setMissions]   = useState([]);
   const [loading,setLoading]     = useState(true);
@@ -798,7 +794,7 @@ const HomeScreen = ({ onMission,user,onSignOut,onApply,onChurch,onChurches,onPro
           <div style={{ fontSize:28,fontWeight:800,color:"#fff" }}>Send<span style={{ color:"#e8b34b" }}>Me</span></div>
           <div style={{ fontSize:10,color:"rgba(255,255,255,0.3)",letterSpacing:4 }}>GLOBAL MISSION FUND</div>
         </div>
-        <div style={{ display:"flex",gap:8,alignItems:"center" }}>
+        <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" }}>
           {user&&<span style={{ fontSize:12,color:"rgba(255,255,255,0.4)" }}>✝ {user.email?.split("@")[0]}</span>}
           <button onClick={onPray} style={{ background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"8px 16px",color:"rgba(255,255,255,0.6)",cursor:"pointer",fontSize:13 }}>Pray</button>
           <button onClick={onChurches} style={{ background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"8px 16px",color:"rgba(255,255,255,0.6)",cursor:"pointer",fontSize:13 }}>Churches</button>
@@ -810,6 +806,8 @@ const HomeScreen = ({ onMission,user,onSignOut,onApply,onChurch,onChurches,onPro
           <button onClick={onWorker} style={{ background:"rgba(176,108,245,0.1)",border:"1px solid rgba(176,108,245,0.25)",borderRadius:10,padding:"8px 14px",color:"#b06cf5",cursor:"pointer",fontSize:12,fontWeight:600 }}>Send Worker</button>
           <button onClick={onMatching} style={{ background:"rgba(91,156,246,0.1)",border:"1px solid rgba(91,156,246,0.3)",borderRadius:10,padding:"8px 14px",color:"#5b9cf6",cursor:"pointer",fontSize:12,fontWeight:600 }}>Find Mission</button>
           <button onClick={onQR} style={{ background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"8px 14px",color:"rgba(255,255,255,0.6)",cursor:"pointer",fontSize:12 }}>QR Share</button>
+          {/* ── FAQ BUTTON ── */}
+          <button onClick={onFaq} style={{ background:"rgba(232,179,75,0.08)",border:"1px solid rgba(232,179,75,0.2)",borderRadius:10,padding:"8px 14px",color:"#e8b34b",cursor:"pointer",fontSize:12,fontWeight:600 }}>FAQ</button>
           {user&&<button onClick={onSignOut} style={{ background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:10,padding:"8px 14px",color:"rgba(255,255,255,0.4)",cursor:"pointer",fontSize:12 }}>Sign Out</button>}
         </div>
       </div>
@@ -881,6 +879,10 @@ const HomeScreen = ({ onMission,user,onSignOut,onApply,onChurch,onChurches,onPro
         <div style={{ textAlign:"center",padding:"40px 0 20px",borderTop:"1px solid rgba(255,255,255,0.06)",marginTop:32 }}>
           <div style={{ fontSize:14,color:"rgba(255,255,255,0.3)",marginBottom:6 }}>✝ SendMe — For Message Believers Worldwide</div>
           <div style={{ fontSize:13,color:"#e8b34b",fontStyle:"italic" }}>"Here am I Lord, send me." — Isaiah 6:8</div>
+          {/* ── FAQ FOOTER LINK ── */}
+          <button onClick={onFaq} style={{ marginTop:12,background:"none",border:"none",color:"rgba(232,179,75,0.5)",cursor:"pointer",fontSize:12,fontFamily:"Georgia,serif",textDecoration:"underline" }}>
+            New to SendMe? Read our FAQ
+          </button>
         </div>
       </div>
     </div>
@@ -908,6 +910,7 @@ export default function App() {
 
   if(!authReady) return(<div style={{ minHeight:"100vh",background:"#060c18",display:"flex",alignItems:"center",justifyContent:"center" }}><div style={{ fontSize:48,color:"#e8b34b" }}>✝</div></div>);
   if(!user && !guest) return <Auth onLogin={(u)=>setUser(u)} onGuest={()=>setGuest(true)}/>;
+  if(screen==="faq")         return <FAQScreen onBack={()=>setScreen("home")}/>;
   if(screen==="pray")        return <PrayerWall missions={DEMO_MISSIONS} onBack={()=>setScreen("home")}/>;
   if(screen==="churches")    return <ChurchesTab onBack={()=>setScreen("home")}/>;
   if(screen==="apply")       return <MissionaryApplication onBack={()=>setScreen("home")} user={user}/>;
@@ -930,6 +933,7 @@ export default function App() {
       onEmergency={()=>setScreen("emergency")} onMatching={()=>setScreen("matching")}
       onPray={()=>setScreen("pray")} onTestimonies={()=>setScreen("testimonies")}
       onWorker={()=>setScreen("worker")} onQR={()=>setScreen("qr")}
+      onFaq={()=>setScreen("faq")}
     />
   );
 }
