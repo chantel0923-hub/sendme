@@ -8,4 +8,4 @@
 [[headers]]
   for = "/*"
   [headers.values]
-    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline' https://api.mapbox.com; connect-src 'self' https://*.mapbox.com https://*.supabase.co wss://*.supabase.co blob:; worker-src blob: 'self'; img-src 'self' data: blob: https://*.mapbox.com; font-src 'self' data: https://fonts.gstatic.com;"
+    Content-Security-Policy = "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:;"
