@@ -4,8 +4,3 @@
 
 [build.environment]
   NODE_VERSION = "18"
-
-[[headers]]
-  for = "/*"
-  [headers.values]
-    Content-Security-Policy = "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:;"
