@@ -63,7 +63,6 @@ const ChurchesMap = ({ churches, onChurchClick }) => {
   useEffect(() => {
     if (!mapRef.current) return;
 
-    // Clear old markers
     markersRef.current.forEach(m => m.remove());
     markersRef.current = [];
 
@@ -129,20 +128,31 @@ export default function ChurchesTab({ onBack }) {
   const [expanded, setExpanded]   = useState(null);
 
   useEffect(() => {
-    const fetch = async () => {
+    const load = async () => {
       setLoading(true);
       try {
+        // ── FIX: removed .eq("verified", true) filter ──────────────────────
+        // Churches table uses status="verified" (text), not a boolean column.
+        // RLS policy already restricts to public rows. We filter in JS below.
         const { data, error } = await supabase
           .from("churches")
           .select("*")
-          .eq("verified", true)
           .order("name", { ascending: true });
 
         if (error) throw error;
 
         if (data && data.length > 0) {
-          setChurches(data);
-          setUsingDemo(false);
+          // Accept rows where status is "verified" OR no status set (legacy rows)
+          const verified = data.filter(c =>
+            !c.status || c.status === "verified" || c.status === "active"
+          );
+          if (verified.length > 0) {
+            setChurches(verified);
+            setUsingDemo(false);
+          } else {
+            setChurches(DEMO_CHURCHES);
+            setUsingDemo(true);
+          }
         } else {
           setChurches(DEMO_CHURCHES);
           setUsingDemo(true);
@@ -153,7 +163,7 @@ export default function ChurchesTab({ onBack }) {
       }
       setLoading(false);
     };
-    fetch();
+    load();
   }, []);
 
   const visible = churches.filter(c => {

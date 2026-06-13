@@ -42,7 +42,8 @@ const getColor = (id) => COLORS[id % COLORS.length];
 const mapRow = (row, i) => ({
   id:row.id,
   name: row.full_name || row.name || row.pastor_name ||
-        (row.missionary_role ? (row.missionary_role + " — " + (row.city||row.country||"Unknown")) : "Unknown"),
+      row.title ||
+      (row.missionary_role ? (row.missionary_role + " — " + (row.city||row.country||"Unknown")) : "Unknown"),
   role:row.missionary_role||"Missionary",
   church:row.church_name||"", city:row.city||"", country:row.country||"",
   area:row.area||"", region:row.region||"Africa",
