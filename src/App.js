@@ -37,8 +37,13 @@ const DEMO_UPDATES = [
 
 const COLORS = ["#e8b34b","#4caf7d","#5b9cf6","#e85b5b","#b06cf5","#f5a44a","#3ecf8e","#f06292"];
 const getColor = (id) => COLORS[id % COLORS.length];
+
+// ── FIX: mapRow now correctly reads name from DB columns ──────────────────────
 const mapRow = (row, i) => ({
-  id:row.id, name:row.missionary_role?"Missionary (" + (row.city||row.country||"Unknown") + ")":"Unknown", role:row.missionary_role||"Missionary",
+  id:row.id,
+  name: row.full_name || row.name || row.pastor_name ||
+        (row.missionary_role ? (row.missionary_role + " — " + (row.city||row.country||"Unknown")) : "Unknown"),
+  role:row.missionary_role||"Missionary",
   church:row.church_name||"", city:row.city||"", country:row.country||"",
   area:row.area||"", region:row.region||"Africa",
   lat:parseFloat(row.lat)||0, lng:parseFloat(row.lng)||0,
@@ -810,11 +815,8 @@ const HomeScreen = ({ onMission,user,onSignOut,onApply,onChurch,onChurches,onPro
           <button onClick={onWorker} style={{ background:"rgba(176,108,245,0.1)",border:"1px solid rgba(176,108,245,0.25)",borderRadius:10,padding:"8px 14px",color:"#b06cf5",cursor:"pointer",fontSize:12,fontWeight:600 }}>Send Worker</button>
           <button onClick={onMatching} style={{ background:"rgba(91,156,246,0.1)",border:"1px solid rgba(91,156,246,0.3)",borderRadius:10,padding:"8px 14px",color:"#5b9cf6",cursor:"pointer",fontSize:12,fontWeight:600 }}>Find Mission</button>
           <button onClick={onQR} style={{ background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"8px 14px",color:"rgba(255,255,255,0.6)",cursor:"pointer",fontSize:12 }}>QR Share</button>
-          {/* ── FAQ BUTTON ── */}
           <button onClick={onFaq} style={{ background:"rgba(232,179,75,0.08)",border:"1px solid rgba(232,179,75,0.2)",borderRadius:10,padding:"8px 14px",color:"#e8b34b",cursor:"pointer",fontSize:12,fontWeight:600 }}>FAQ</button>
-          {/* ── PAYOUT DETAILS BUTTON (for missionaries/churches) ── */}
           {user&&<button onClick={onPayout} style={{ background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"8px 14px",color:"rgba(255,255,255,0.6)",cursor:"pointer",fontSize:12 }}>Payout Details</button>}
-          {/* ── ADMIN PAYOUTS BUTTON (Br Donald only) ── */}
           {isAdmin&&<button onClick={onAdminPayouts} style={{ background:"rgba(232,91,91,0.1)",border:"1px solid rgba(232,91,91,0.3)",borderRadius:10,padding:"8px 14px",color:"#e85b5b",cursor:"pointer",fontSize:12,fontWeight:700 }}>💰 Payouts</button>}
           {user&&<button onClick={onSignOut} style={{ background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:10,padding:"8px 14px",color:"rgba(255,255,255,0.4)",cursor:"pointer",fontSize:12 }}>Sign Out</button>}
         </div>
@@ -833,7 +835,6 @@ const HomeScreen = ({ onMission,user,onSignOut,onApply,onChurch,onChurches,onPro
           <div style={{ fontSize:15,color:"#f4e4c0",fontStyle:"italic",lineHeight:1.7 }}>"Go ye into all the world and preach the gospel to every creature."</div>
           <div style={{ fontSize:12,color:"#e8b34b",marginTop:6,fontWeight:700 }}>Mark 16:15</div>
         </div>
-        {/* ── MISSION & VISION VIDEO ── */}
         {FEATURED_VIDEOS.missionVision && (
           <div style={{ marginBottom:24 }}>
             <div style={{ fontSize:16,fontWeight:700,color:"#eef1ff",marginBottom:10 }}>✝ Our Mission &amp; Vision</div>
@@ -900,7 +901,6 @@ const HomeScreen = ({ onMission,user,onSignOut,onApply,onChurch,onChurches,onPro
         <div style={{ textAlign:"center",padding:"40px 0 20px",borderTop:"1px solid rgba(255,255,255,0.06)",marginTop:32 }}>
           <div style={{ fontSize:14,color:"rgba(255,255,255,0.3)",marginBottom:6 }}>✝ SendMe — For Message Believers Worldwide</div>
           <div style={{ fontSize:13,color:"#e8b34b",fontStyle:"italic" }}>"Here am I Lord, send me." — Isaiah 6:8</div>
-          {/* ── FAQ FOOTER LINK ── */}
           <button onClick={onFaq} style={{ marginTop:12,background:"none",border:"none",color:"rgba(232,179,75,0.5)",cursor:"pointer",fontSize:12,fontFamily:"Georgia,serif",textDecoration:"underline" }}>
             New to SendMe? Read our FAQ
           </button>
