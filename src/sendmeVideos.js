@@ -2,7 +2,7 @@
 // Just paste your YouTube VIDEO ID (the part after "watch?v=" in the URL)
 // Example: https://www.youtube.com/watch?v=dQw4w9WgXcQ  →  "dQw4w9WgXcQ"
 
-export const SENDME_CHANNEL_URL = "https://www.youtube.com/@SendMeMissions"; // ← update with your real channel URL
+export const SENDME_CHANNEL_URL = "https://www.youtube.com/@SendMeGlobalMission";
 
 export const FEATURED_VIDEOS = {
   missionVision: "",   // ← Mission & Vision video ID
