@@ -13,6 +13,10 @@ import TestimonyEngine from "./TestimonyEngine";
 import SendAWorker from "./SendAWorker";
 import QRShare from "./QRShare";
 import FAQScreen from './FAQScreen';
+import PayoutSetup from './PayoutSetup';
+import AdminPayouts, { ADMIN_EMAIL } from './AdminPayouts';
+import YouTubeEmbed from './YouTubeEmbed';
+import { FEATURED_VIDEOS, SENDME_CHANNEL_URL } from './sendmeVideos';
 
 const DEMO_MISSIONS = [
   { id:1, name:"Rev. Samuel Osei",   role:"Missionary",  church:"Accra Redemption Church",   city:"Addis Ababa", country:"Ethiopia", area:"Merkato District",         region:"Africa",      lat:9.03,  lng:38.74, title:"Gospel & Food Aid — Merkato",     blurb:"Feeding 400 families weekly while planting the Word in one of Addis Ababa's most densely populated slums.",           raised:9840,  goal:15000, color:"#e8b34b", status:"active",   milestone:2, souls:312, bibles:200, churches:1, prayers:87,  protected:false, trustLevel:2, journeyStep:4, riskLevel:1, budget:[{label:"Food parcels",amount:4000},{label:"Bibles & Tracts",amount:2500},{label:"Transport",amount:1500},{label:"Accommodation",amount:1840}] },
@@ -765,7 +769,7 @@ const DonorProfile = ({ user, onBack }) => {
 };
 
 // ── HOME SCREEN ───────────────────────────────────────────────────────────────
-const HomeScreen = ({ onMission,user,onSignOut,onApply,onChurch,onChurches,onProfile,onEmergency,onMatching,onPray,onTestimonies,onWorker,onQR,onFaq }) => {
+const HomeScreen = ({ onMission,user,onSignOut,onApply,onChurch,onChurches,onProfile,onEmergency,onMatching,onPray,onTestimonies,onWorker,onQR,onFaq,onPayout,onAdminPayouts,isAdmin }) => {
   const [region,setRegion]       = useState("All");
   const [missions,setMissions]   = useState([]);
   const [loading,setLoading]     = useState(true);
@@ -808,6 +812,10 @@ const HomeScreen = ({ onMission,user,onSignOut,onApply,onChurch,onChurches,onPro
           <button onClick={onQR} style={{ background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"8px 14px",color:"rgba(255,255,255,0.6)",cursor:"pointer",fontSize:12 }}>QR Share</button>
           {/* ── FAQ BUTTON ── */}
           <button onClick={onFaq} style={{ background:"rgba(232,179,75,0.08)",border:"1px solid rgba(232,179,75,0.2)",borderRadius:10,padding:"8px 14px",color:"#e8b34b",cursor:"pointer",fontSize:12,fontWeight:600 }}>FAQ</button>
+          {/* ── PAYOUT DETAILS BUTTON (for missionaries/churches) ── */}
+          {user&&<button onClick={onPayout} style={{ background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"8px 14px",color:"rgba(255,255,255,0.6)",cursor:"pointer",fontSize:12 }}>Payout Details</button>}
+          {/* ── ADMIN PAYOUTS BUTTON (Br Donald only) ── */}
+          {isAdmin&&<button onClick={onAdminPayouts} style={{ background:"rgba(232,91,91,0.1)",border:"1px solid rgba(232,91,91,0.3)",borderRadius:10,padding:"8px 14px",color:"#e85b5b",cursor:"pointer",fontSize:12,fontWeight:700 }}>💰 Payouts</button>}
           {user&&<button onClick={onSignOut} style={{ background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:10,padding:"8px 14px",color:"rgba(255,255,255,0.4)",cursor:"pointer",fontSize:12 }}>Sign Out</button>}
         </div>
       </div>
@@ -825,6 +833,19 @@ const HomeScreen = ({ onMission,user,onSignOut,onApply,onChurch,onChurches,onPro
           <div style={{ fontSize:15,color:"#f4e4c0",fontStyle:"italic",lineHeight:1.7 }}>"Go ye into all the world and preach the gospel to every creature."</div>
           <div style={{ fontSize:12,color:"#e8b34b",marginTop:6,fontWeight:700 }}>Mark 16:15</div>
         </div>
+        {/* ── MISSION & VISION VIDEO ── */}
+        {FEATURED_VIDEOS.missionVision && (
+          <div style={{ marginBottom:24 }}>
+            <div style={{ fontSize:16,fontWeight:700,color:"#eef1ff",marginBottom:10 }}>✝ Our Mission &amp; Vision</div>
+            <YouTubeEmbed videoId={FEATURED_VIDEOS.missionVision} title="SendMe — Mission & Vision" />
+            <div style={{ textAlign:"center" }}>
+              <a href={SENDME_CHANNEL_URL} target="_blank" rel="noopener noreferrer"
+                style={{ fontSize:12,color:"#e8b34b",textDecoration:"underline",fontFamily:"Georgia,serif" }}>
+                Visit our YouTube channel for more videos
+              </a>
+            </div>
+          </div>
+        )}
         <div style={{ display:"flex",gap:8,marginBottom:20,flexWrap:"wrap" }}>
           {REGIONS.map(r=>(
             <button key={r} onClick={()=>setRegion(r)} style={{ padding:"7px 16px",borderRadius:999,border:`1px solid ${region===r?"#e8b34b":"rgba(255,255,255,0.1)"}`,background:region===r?"rgba(232,179,75,0.15)":"rgba(255,255,255,0.03)",color:region===r?"#e8b34b":"rgba(255,255,255,0.5)",cursor:"pointer",fontSize:13,fontWeight:600,transition:"all .15s" }}>{r}</button>
@@ -911,6 +932,8 @@ export default function App() {
   if(!authReady) return(<div style={{ minHeight:"100vh",background:"#060c18",display:"flex",alignItems:"center",justifyContent:"center" }}><div style={{ fontSize:48,color:"#e8b34b" }}>✝</div></div>);
   if(!user && !guest) return <Auth onLogin={(u)=>setUser(u)} onGuest={()=>setGuest(true)}/>;
   if(screen==="faq")         return <FAQScreen onBack={()=>setScreen("home")}/>;
+  if(screen==="payout")      return <PayoutSetup onBack={()=>setScreen("home")}/>;
+  if(screen==="admin-payouts") return user?.email===ADMIN_EMAIL ? <AdminPayouts onBack={()=>setScreen("home")}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
   if(screen==="pray")        return <PrayerWall missions={DEMO_MISSIONS} onBack={()=>setScreen("home")}/>;
   if(screen==="churches")    return <ChurchesTab onBack={()=>setScreen("home")}/>;
   if(screen==="apply")       return <MissionaryApplication onBack={()=>setScreen("home")} user={user}/>;
@@ -934,6 +957,9 @@ export default function App() {
       onPray={()=>setScreen("pray")} onTestimonies={()=>setScreen("testimonies")}
       onWorker={()=>setScreen("worker")} onQR={()=>setScreen("qr")}
       onFaq={()=>setScreen("faq")}
+      onPayout={()=>setScreen("payout")}
+      onAdminPayouts={()=>setScreen("admin-payouts")}
+      isAdmin={user?.email===ADMIN_EMAIL}
     />
   );
 }

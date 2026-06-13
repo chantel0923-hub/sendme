@@ -2,6 +2,8 @@
 // Then register it in App.js like all other screens
 
 import React, { useState } from 'react';
+import { FEATURED_VIDEOS, SENDME_CHANNEL_URL } from './sendmeVideos';
+import YouTubeEmbed from './YouTubeEmbed';
 
 const faqs = [
   {
@@ -190,6 +192,38 @@ export default function FAQScreen({ onBack }) {
         </p>
       </div>
 
+      {/* Video Tutorials */}
+      {(FEATURED_VIDEOS.missionaryHowTo || FEATURED_VIDEOS.churchHowTo || FEATURED_VIDEOS.donorHowTo) && (
+        <div style={{ margin: '0 16px 20px' }}>
+          <h2 style={{
+            margin: '0 0 12px',
+            fontSize: '13px',
+            fontFamily: 'Georgia, serif',
+            fontWeight: 'normal',
+            letterSpacing: '2px',
+            textTransform: 'uppercase',
+            color: '#e8b34b',
+          }}>
+            ▶ Video Tutorials
+          </h2>
+          {FEATURED_VIDEOS.missionaryHowTo && (
+            <YouTubeEmbed videoId={FEATURED_VIDEOS.missionaryHowTo} title="How to Apply as a Missionary" caption="For Missionaries — How to Apply" />
+          )}
+          {FEATURED_VIDEOS.churchHowTo && (
+            <YouTubeEmbed videoId={FEATURED_VIDEOS.churchHowTo} title="How Your Church Can Partner with SendMe" caption="For Churches — How to Partner" />
+          )}
+          {FEATURED_VIDEOS.donorHowTo && (
+            <YouTubeEmbed videoId={FEATURED_VIDEOS.donorHowTo} title="How to Give and Pray on SendMe" caption="For Donors — How to Give & Pray" />
+          )}
+          <div style={{ textAlign: 'center', marginTop: 8 }}>
+            <a href={SENDME_CHANNEL_URL} target="_blank" rel="noopener noreferrer"
+              style={{ fontSize: 12, color: '#e8b34b', textDecoration: 'underline', fontFamily: 'Georgia, serif' }}>
+              Visit our YouTube channel for more
+            </a>
+          </div>
+        </div>
+      )}
+
       {/* FAQ Categories */}
       <div style={{ padding: '0 16px' }}>
         {faqs.map((section, sIdx) => (
@@ -323,7 +357,7 @@ export default function FAQScreen({ onBack }) {
           We're real people, brother. Reach out and we'll answer you personally.
         </p>
         <a
-          href="mailto:info@sendme.missions"
+          href="mailto:sendmemissionfund@gmail.com"
           style={{
             display: 'inline-block',
             padding: '10px 24px',
