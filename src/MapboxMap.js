@@ -120,7 +120,7 @@ export default function MapboxMap({ missions, churches = [], onMissionClick }) {
             geometry: { type: "Point", coordinates: [m.lng, m.lat] },
             properties: {
               id:        m.id,
-              name:      m.protected ? "Protected Mission" : m.name,
+              name:      m.protected ? "Protected Mission" : (m.name || m.title || "Untitled Mission"),
               title:     m.title,
               role:      m.role,
               city:      m.city,
@@ -278,3 +278,4 @@ export default function MapboxMap({ missions, churches = [], onMissionClick }) {
     </div>
   );
 }
+"fix: mission popup name fallback to title"
