@@ -278,4 +278,3 @@ export default function MapboxMap({ missions, churches = [], onMissionClick }) {
     </div>
   );
 }
-"fix: mission popup name fallback to title"
