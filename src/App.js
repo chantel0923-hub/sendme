@@ -41,9 +41,8 @@ const getColor = (id) => COLORS[id % COLORS.length];
 // ── FIX: mapRow now correctly reads name from DB columns ──────────────────────
 const mapRow = (row, i) => ({
   id:row.id,
-  name: row.full_name || row.name || row.pastor_name ||
-      row.title ||
-      (row.missionary_role ? (row.missionary_role + " — " + (row.city||row.country||"Unknown")) : "Unknown"),
+  name: [row.full_name, row.name, row.pastor_name, row.title].find(v => v && String(v).trim().toLowerCase() !== "null") ||
+        (row.missionary_role ? (row.missionary_role + " — " + (row.city||row.country||"Unknown")) : "Unknown"),
   role:row.missionary_role||"Missionary",
   church:row.church_name||"", city:row.city||"", country:row.country||"",
   area:row.area||"", region:row.region||"Africa",
