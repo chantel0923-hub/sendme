@@ -1,9 +1,5 @@
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "./supabase";
-import mapboxgl from "mapbox-gl";
-import "mapbox-gl/dist/mapbox-gl.css";
-
-mapboxgl.accessToken = process.env.REACT_APP_MAPBOX_TOKEN;
 
 const fmt = (n) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 
@@ -39,7 +35,7 @@ const regionFor = (country) => {
   return "Other";
 };
 
-// ── CHURCHES MAP ────────────────────────────────────────────────────────────
+// ── CHURCHES MAP (Leaflet — no Mapbox WebWorker issues) ─────────────────────
 const ChurchesMap = ({ churches, onChurchClick }) => {
   const mapContainer = useRef(null);
   const mapRef = useRef(null);
@@ -47,97 +43,122 @@ const ChurchesMap = ({ churches, onChurchClick }) => {
 
   useEffect(() => {
     if (!mapContainer.current || mapRef.current) return;
-    mapboxgl.accessToken = process.env.REACT_APP_MAPBOX_TOKEN;
-    mapRef.current = new mapboxgl.Map({
-      container: mapContainer.current,
-      style: "mapbox://styles/mapbox/dark-v10",
-      center: [10, 10],
-      zoom: 1.3,
-      attributionControl: true,
-    });
-    mapRef.current.addControl(new mapboxgl.NavigationControl(), "top-right");
 
-    // Inject dark popup styles to match home screen
-    const style = document.createElement("style");
-    style.textContent = `
-      .sendme-church-popup .mapboxgl-popup-content {
-        background: #0c1628 !important;
-        border: 1px solid rgba(232,179,75,0.3) !important;
-        border-radius: 12px !important;
-        padding: 14px 16px !important;
-        box-shadow: 0 8px 32px rgba(0,0,0,0.7) !important;
-        color: #eef1ff !important;
-      }
-      .sendme-church-popup .mapboxgl-popup-tip {
-        border-top-color: #0c1628 !important;
-        border-bottom-color: #0c1628 !important;
-      }
-      .sendme-church-popup .mapboxgl-popup-close-button {
-        color: rgba(255,255,255,0.4) !important;
-        font-size: 16px !important;
-        padding: 4px 8px !important;
-      }
-      .sendme-church-popup .mapboxgl-popup-close-button:hover {
-        color: #e8b34b !important;
-        background: transparent !important;
-      }
-    `;
-    document.head.appendChild(style);
+    // Dynamically load Leaflet CSS + JS
+    const loadLeaflet = () => new Promise((resolve) => {
+      if (window.L) { resolve(); return; }
+      const link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+      document.head.appendChild(link);
+      const script = document.createElement("script");
+      script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+      script.onload = resolve;
+      document.head.appendChild(script);
+    });
+
+    loadLeaflet().then(() => {
+      const L = window.L;
+
+      // Inject styles to hide Leaflet default blue markers + dark popups
+      const style = document.createElement("style");
+      style.textContent = `
+        .leaflet-container { background: #060c18 !important; font-family: Georgia, serif; }
+        .leaflet-tile-pane { filter: brightness(0.85) saturate(0.7); }
+        .sendme-popup .leaflet-popup-content-wrapper {
+          background: #0c1628 !important;
+          border: 1px solid rgba(232,179,75,0.3) !important;
+          border-radius: 12px !important;
+          box-shadow: 0 8px 32px rgba(0,0,0,0.7) !important;
+          color: #eef1ff !important;
+          padding: 0 !important;
+        }
+        .sendme-popup .leaflet-popup-content { margin: 0 !important; }
+        .sendme-popup .leaflet-popup-tip { background: #0c1628 !important; }
+        .sendme-popup .leaflet-popup-close-button { color: rgba(255,255,255,0.4) !important; font-size:18px !important; top:6px !important; right:10px !important; }
+        .sendme-popup .leaflet-popup-close-button:hover { color: #e8b34b !important; }
+        .leaflet-control-zoom a { background:#0c1628 !important; color:#e8b34b !important; border-color:rgba(232,179,75,0.2) !important; }
+        .leaflet-control-attribution { background:rgba(6,12,24,0.7) !important; color:rgba(255,255,255,0.3) !important; }
+        .leaflet-control-attribution a { color:rgba(255,255,255,0.4) !important; }
+      `;
+      document.head.appendChild(style);
+
+      mapRef.current = L.map(mapContainer.current, {
+        center: [10, 10],
+        zoom: 2,
+        zoomControl: true,
+      });
+
+      // Dark tile layer — CartoDB Dark Matter (free, no token)
+      L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/">CARTO</a>',
+        subdomains: "abcd",
+        maxZoom: 19,
+      }).addTo(mapRef.current);
+
+      // Add church markers
+      churches.forEach(c => {
+        if (typeof c.lat !== "number" || typeof c.lng !== "number") return;
+
+        const icon = L.divIcon({
+          className: "",
+          html: `<div style="
+            width:20px; height:20px; border-radius:50%;
+            background: radial-gradient(circle at 35% 35%, #f5d07a, #c8942b);
+            border: 2px solid #060c18;
+            box-shadow: 0 0 10px rgba(232,179,75,0.8), 0 0 20px rgba(232,179,75,0.3);
+            cursor:pointer;
+          "></div>`,
+          iconSize: [20, 20],
+          iconAnchor: [10, 10],
+          popupAnchor: [0, -14],
+        });
+
+        const popupHtml = `
+          <div style="font-family:Georgia,serif; min-width:190px; padding:14px 16px;">
+            <div style="font-size:10px; color:#e8b34b; letter-spacing:1.5px; font-weight:700; margin-bottom:6px; text-transform:uppercase;">⛪ Verified Church</div>
+            <div style="font-weight:700; font-size:14px; color:#eef1ff; margin-bottom:4px; line-height:1.3;">${c.name}</div>
+            <div style="font-size:12px; color:rgba(255,255,255,0.5); margin-bottom:6px;">📍 ${c.city}, ${c.country}</div>
+            <div style="font-size:12px; color:#e8b34b; margin-bottom:3px;">✝ ${c.pastor_name || ""}</div>
+            ${c.size ? `<div style="font-size:11px; color:rgba(255,255,255,0.35); margin-top:3px;">👥 ${c.size} members</div>` : ""}
+            ${c.website ? `<div style="font-size:11px; color:#5b9cf6; margin-top:4px;">🌐 ${c.website}</div>` : ""}
+          </div>`;
+
+        const marker = L.marker([c.lat, c.lng], { icon })
+          .bindPopup(popupHtml, { className: "sendme-popup", maxWidth: 240 })
+          .addTo(mapRef.current);
+
+        marker.on("click", () => {
+          if (onChurchClick) onChurchClick(c.id);
+        });
+
+        markersRef.current.push(marker);
+      });
+    });
 
     return () => {
       if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; }
     };
   }, []);
 
+  // Update markers when churches change
   useEffect(() => {
-    if (!mapRef.current) return;
-
+    if (!mapRef.current || !window.L) return;
+    const L = window.L;
     markersRef.current.forEach(m => m.remove());
     markersRef.current = [];
-
     churches.forEach(c => {
       if (typeof c.lat !== "number" || typeof c.lng !== "number") return;
-
-      // Church pin element
-      const el = document.createElement("div");
-      el.style.cssText = `
-        width: 20px; height: 20px; border-radius: 50%;
-        background: radial-gradient(circle at 35% 35%, #f5d07a, #c8942b);
-        border: 2px solid #060c18;
-        box-shadow: 0 0 10px rgba(232,179,75,0.8), 0 0 20px rgba(232,179,75,0.3);
-        cursor: pointer;
-        transition: transform 0.15s;
-      `;
-      el.addEventListener("mouseenter", () => { el.style.transform = "scale(1.4)"; });
-      el.addEventListener("mouseleave", () => { el.style.transform = "scale(1)"; });
-
-      const popupHtml = `
-        <div style="font-family:Georgia,serif; min-width:190px;">
-          <div style="font-size:10px; color:#e8b34b; letter-spacing:1.5px; font-weight:700; margin-bottom:6px; text-transform:uppercase;">⛪ Verified Church</div>
-          <div style="font-weight:700; font-size:14px; color:#eef1ff; margin-bottom:4px; line-height:1.3;">${c.name}</div>
-          <div style="font-size:12px; color:rgba(255,255,255,0.5); margin-bottom:6px;">📍 ${c.city}, ${c.country}</div>
-          <div style="font-size:12px; color:#e8b34b; margin-bottom:3px;">✝ ${c.pastor_name || ""}</div>
-          ${c.size ? `<div style="font-size:11px; color:rgba(255,255,255,0.35); margin-top:3px;">👥 ${c.size} members</div>` : ""}
-          ${c.website ? `<div style="font-size:11px; color:#5b9cf6; margin-top:4px;">🌐 ${c.website}</div>` : ""}
-        </div>`;
-
-      const popup = new mapboxgl.Popup({
-        offset: 16,
-        closeButton: true,
-        className: "sendme-church-popup",
-        maxWidth: "240px",
-      }).setHTML(popupHtml);
-
-      const marker = new mapboxgl.Marker({ element: el })
-        .setLngLat([c.lng, c.lat])
-        .setPopup(popup)
-        .addTo(mapRef.current);
-
-      el.addEventListener("click", () => {
-        marker.togglePopup();
-        if (onChurchClick) onChurchClick(c.id);
+      const icon = L.divIcon({
+        className: "",
+        html: `<div style="width:20px;height:20px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#f5d07a,#c8942b);border:2px solid #060c18;box-shadow:0 0 10px rgba(232,179,75,0.8);cursor:pointer;"></div>`,
+        iconSize: [20,20], iconAnchor: [10,10], popupAnchor: [0,-14],
       });
-
+      const popupHtml = `<div style="font-family:Georgia,serif;min-width:190px;padding:14px 16px;"><div style="font-size:10px;color:#e8b34b;letter-spacing:1.5px;font-weight:700;margin-bottom:6px;text-transform:uppercase;">⛪ Verified Church</div><div style="font-weight:700;font-size:14px;color:#eef1ff;margin-bottom:4px;">${c.name}</div><div style="font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:6px;">📍 ${c.city}, ${c.country}</div><div style="font-size:12px;color:#e8b34b;">✝ ${c.pastor_name || ""}</div>${c.size?`<div style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:3px;">👥 ${c.size} members</div>`:""}</div>`;
+      const marker = L.marker([c.lat, c.lng], { icon })
+        .bindPopup(popupHtml, { className:"sendme-popup", maxWidth:240 })
+        .addTo(mapRef.current);
+      marker.on("click", () => { if (onChurchClick) onChurchClick(c.id); });
       markersRef.current.push(marker);
     });
   }, [churches, onChurchClick]);
@@ -146,7 +167,7 @@ const ChurchesMap = ({ churches, onChurchClick }) => {
     <div style={{ position:"relative", borderRadius:18, overflow:"hidden", border:"1px solid rgba(232,179,75,0.2)", marginBottom:24, boxShadow:"0 8px 40px rgba(0,0,0,0.5)" }}>
       <div ref={mapContainer} style={{ width:"100%", height:420 }} />
       <div style={{
-        position:"absolute", top:14, left:14,
+        position:"absolute", top:14, left:14, zIndex:1000,
         background:"rgba(6,12,24,0.88)", borderRadius:10,
         border:"1px solid rgba(232,179,75,0.25)",
         padding:"10px 14px", fontFamily:"Georgia, serif",
@@ -181,7 +202,6 @@ export default function ChurchesTab({ onBack }) {
         if (error) throw error;
 
         if (data && data.length > 0) {
-          // Show rows where verified = true OR verified is null/missing (legacy demo rows)
           const verified = data.filter(c => c.verified === true || c.verified == null);
           if (verified.length > 0) {
             setChurches(verified);
