@@ -49,7 +49,7 @@ const ChurchesMap = ({ churches, onChurchClick }) => {
     if (!mapContainer.current || mapRef.current) return;
     mapRef.current = new mapboxgl.Map({
       container: mapContainer.current,
-      style: "mapbox://styles/mapbox/navigation-night-v1",
+      style: "mapbox://styles/mapbox/dark-v10",
       center: [10, 10],
       zoom: 1.3,
       attributionControl: true,
