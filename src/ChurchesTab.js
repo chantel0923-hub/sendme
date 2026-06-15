@@ -48,6 +48,7 @@ const ChurchesMap = ({ churches, onChurchClick }) => {
 
   useEffect(() => {
     if (!mapContainer.current || mapRef.current) return;
+    mapboxgl.accessToken = process.env.REACT_APP_MAPBOX_TOKEN;
     mapRef.current = new mapboxgl.Map({
       container: mapContainer.current,
       style: "mapbox://styles/mapbox/dark-v10",
