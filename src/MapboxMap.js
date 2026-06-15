@@ -1,9 +1,8 @@
 import { useEffect, useRef } from "react";
 import "mapbox-gl/dist/mapbox-gl.css";
 
-// Fix CRA Babel transpilation issue with mapbox-gl worker
-// eslint-disable-next-line import/no-webpack-loader-syntax
-import mapboxgl from "!mapbox-gl";
+import mapboxgl from "mapbox-gl";
+if (typeof window !== "undefined") { window.mapboxWorkerCount = 0; }
 
 mapboxgl.accessToken = process.env.REACT_APP_MAPBOX_TOKEN;
 
