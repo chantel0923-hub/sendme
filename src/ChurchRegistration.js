@@ -22,21 +22,15 @@ const STEPS = [
 const COUNTRIES = ["South Africa","Nigeria","Kenya","Ghana","Ethiopia","Zimbabwe","Uganda","Tanzania","Zambia","Mozambique","USA","UK","Canada","Australia","Brazil","India","Philippines","Indonesia","South Korea","Germany","France","Netherlands","Other"];
 const SIZES     = ["Under 50","50 – 100","100 – 300","300 – 500","500 – 1,000","Over 1,000"];
 
-// ── FIX: auto-geocode city + country into lat/lng so new churches appear on the World Church Map ──
-// Uses the same Mapbox token already configured for MapboxMap.js / ChurchesTab.js.
-// If geocoding fails for any reason, lat/lng are returned as null and the church
-// can still be registered — an admin can add coordinates manually later in Supabase.
 const geocodeLocation = async (city, country) => {
   try {
     const token = process.env.REACT_APP_MAPBOX_TOKEN;
     if (!token) return { lat: null, lng: null };
-
     const query = encodeURIComponent(`${city}, ${country}`.trim());
     const res = await fetch(
       `https://api.mapbox.com/geocoding/v5/mapbox.places/${query}.json?access_token=${token}&limit=1`
     );
     if (!res.ok) return { lat: null, lng: null };
-
     const data = await res.json();
     if (data?.features?.length > 0) {
       const [lng, lat] = data.features[0].center;
@@ -293,9 +287,6 @@ export default function ChurchRegistration({ onBack, user }) {
   const handleSubmit = async () => {
     setSubmitting(true); setError("");
     try {
-      // ── FIX: geocode city + country to lat/lng before inserting ──────────
-      // This is what makes the church appear as a pin on the World Church Map
-      // (see open item #3 in project handover).
       const { lat, lng } = await geocodeLocation(form.city, form.country);
 
       const { error: dbError } = await supabase.from("churches").insert({
@@ -305,11 +296,13 @@ export default function ChurchRegistration({ onBack, user }) {
         phone:        form.phone,
         email:        form.email,
         size:         form.size,
+        province:     form.province,
+        website:      form.website,
         pastor_name:  form.pastorName,
         pastor_email: form.pastorEmail,
         pastor_phone: form.pastorPhone,
         can_endorse:  form.canEndorse,
-        status:       "pending",
+        verified:     false,
         user_id:      user?.id || null,
         lat,
         lng,
