@@ -9,18 +9,18 @@ const fmt = (n) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 
 // Demo churches shown until real data exists
 const DEMO_CHURCHES = [
-  { id:1,  name:"Branham Tabernacle",            pastor_name:"Pastor William Steyn",    pastor_email:"pastor@branhamtab.org",    city:"Johannesburg", country:"South Africa", size:"100 – 300", status:"verified", year_established:1987, phone:"+27 11 000 0000", website:"branhamtabernacle.org", lat:-26.20, lng:28.05 },
-  { id:2,  name:"Voice of God Fellowship",        pastor_name:"Pastor James Okafor",     pastor_email:"james@vogfellowship.org",  city:"Lagos",        country:"Nigeria",      size:"300 – 500", status:"verified", year_established:1994, phone:"+234 1 000 0000", website:"vogfellowship.org", lat:6.52, lng:3.38 },
-  { id:3,  name:"End Time Message Church",        pastor_name:"Pastor David Kimotho",    pastor_email:"david@etmc.co.ke",         city:"Nairobi",      country:"Kenya",        size:"100 – 300", status:"verified", year_established:2001, phone:"+254 20 000 000",  website:"etmc.co.ke", lat:-1.29, lng:36.82 },
-  { id:4,  name:"Message Believers Assembly",     pastor_name:"Pastor John Swanson",     pastor_email:"john@mba.org.au",          city:"Sydney",       country:"Australia",    size:"50 – 100",  status:"verified", year_established:1999, phone:"+61 2 0000 0000",  website:"mba.org.au", lat:-33.87, lng:151.21 },
-  { id:5,  name:"Spoken Word Church",             pastor_name:"Pastor Emmanuel Asante",  pastor_email:"emmanuel@swc.gh",          city:"Accra",        country:"Ghana",        size:"100 – 300", status:"verified", year_established:2005, phone:"+233 30 000 000",  website:"swc.gh", lat:5.60, lng:-0.19 },
-  { id:6,  name:"Latter Rain Tabernacle",         pastor_name:"Pastor Paul Muller",      pastor_email:"paul@lrt.co.za",           city:"Cape Town",    country:"South Africa", size:"50 – 100",  status:"verified", year_established:2008, phone:"+27 21 000 0000",  website:"lrt.co.za", lat:-33.92, lng:18.42 },
-  { id:7,  name:"Harvest Time Fellowship",        pastor_name:"Pastor Samuel Achebe",    pastor_email:"samuel@htf.ng",            city:"Abuja",        country:"Nigeria",      size:"50 – 100",  status:"verified", year_established:2010, phone:"+234 9 000 0000",  website:"htf.ng", lat:9.06, lng:7.49 },
-  { id:8,  name:"Word Tabernacle",                pastor_name:"Pastor George Dlamini",   pastor_email:"george@wordtab.sz",        city:"Mbabane",      country:"Eswatini",     size:"Under 50",  status:"verified", year_established:2015, phone:"+268 2 000 0000",  website:"", lat:-26.32, lng:31.13 },
-  { id:9,  name:"Amazon River Message Church",    pastor_name:"Pastor Carlos Mendes",    pastor_email:"carlos@armc.br",           city:"Manaus",       country:"Brazil",       size:"50 – 100",  status:"verified", year_established:2003, phone:"+55 92 0000 0000", website:"armc.br", lat:-3.10, lng:-60.00 },
-  { id:10, name:"Grace Message Assembly",         pastor_name:"Pastor Philip Raj",       pastor_email:"philip@gma.in",            city:"Chennai",      country:"India",        size:"100 – 300", status:"verified", year_established:1998, phone:"+91 44 0000 0000", website:"gma.in", lat:13.08, lng:80.27 },
-  { id:11, name:"Spoken Word Tabernacle Berlin",  pastor_name:"Pastor Hans Weber",       pastor_email:"hans@swt-berlin.de",       city:"Berlin",       country:"Germany",      size:"Under 50",  status:"verified", year_established:2012, phone:"+49 30 0000 0000", website:"swt-berlin.de", lat:52.52, lng:13.40 },
-  { id:12, name:"End Time Message Fellowship",    pastor_name:"Pastor Andrew Kim",       pastor_email:"andrew@etmf.kr",           city:"Seoul",        country:"South Korea",  size:"50 – 100",  status:"verified", year_established:2007, phone:"+82 2 0000 0000",  website:"etmf.kr", lat:37.57, lng:126.98 },
+  { id:1,  name:"Branham Tabernacle",            pastor_name:"Pastor William Steyn",    pastor_email:"pastor@branhamtab.org",    city:"Johannesburg", country:"South Africa", size:"100 – 300", verified:true, year_established:1987, phone:"+27 11 000 0000", website:"branhamtabernacle.org", lat:-26.20, lng:28.05 },
+  { id:2,  name:"Voice of God Fellowship",        pastor_name:"Pastor James Okafor",     pastor_email:"james@vogfellowship.org",  city:"Lagos",        country:"Nigeria",      size:"300 – 500", verified:true, year_established:1994, phone:"+234 1 000 0000", website:"vogfellowship.org", lat:6.52, lng:3.38 },
+  { id:3,  name:"End Time Message Church",        pastor_name:"Pastor David Kimotho",    pastor_email:"david@etmc.co.ke",         city:"Nairobi",      country:"Kenya",        size:"100 – 300", verified:true, year_established:2001, phone:"+254 20 000 000",  website:"etmc.co.ke", lat:-1.29, lng:36.82 },
+  { id:4,  name:"Message Believers Assembly",     pastor_name:"Pastor John Swanson",     pastor_email:"john@mba.org.au",          city:"Sydney",       country:"Australia",    size:"50 – 100",  verified:true, year_established:1999, phone:"+61 2 0000 0000",  website:"mba.org.au", lat:-33.87, lng:151.21 },
+  { id:5,  name:"Spoken Word Church",             pastor_name:"Pastor Emmanuel Asante",  pastor_email:"emmanuel@swc.gh",          city:"Accra",        country:"Ghana",        size:"100 – 300", verified:true, year_established:2005, phone:"+233 30 000 000",  website:"swc.gh", lat:5.60, lng:-0.19 },
+  { id:6,  name:"Latter Rain Tabernacle",         pastor_name:"Pastor Paul Muller",      pastor_email:"paul@lrt.co.za",           city:"Cape Town",    country:"South Africa", size:"50 – 100",  verified:true, year_established:2008, phone:"+27 21 000 0000",  website:"lrt.co.za", lat:-33.92, lng:18.42 },
+  { id:7,  name:"Harvest Time Fellowship",        pastor_name:"Pastor Samuel Achebe",    pastor_email:"samuel@htf.ng",            city:"Abuja",        country:"Nigeria",      size:"50 – 100",  verified:true, year_established:2010, phone:"+234 9 000 0000",  website:"htf.ng", lat:9.06, lng:7.49 },
+  { id:8,  name:"Word Tabernacle",                pastor_name:"Pastor George Dlamini",   pastor_email:"george@wordtab.sz",        city:"Mbabane",      country:"Eswatini",     size:"Under 50",  verified:true, year_established:2015, phone:"+268 2 000 0000",  website:"", lat:-26.32, lng:31.13 },
+  { id:9,  name:"Amazon River Message Church",    pastor_name:"Pastor Carlos Mendes",    pastor_email:"carlos@armc.br",           city:"Manaus",       country:"Brazil",       size:"50 – 100",  verified:true, year_established:2003, phone:"+55 92 0000 0000", website:"armc.br", lat:-3.10, lng:-60.00 },
+  { id:10, name:"Grace Message Assembly",         pastor_name:"Pastor Philip Raj",       pastor_email:"philip@gma.in",            city:"Chennai",      country:"India",        size:"100 – 300", verified:true, year_established:1998, phone:"+91 44 0000 0000", website:"gma.in", lat:13.08, lng:80.27 },
+  { id:11, name:"Spoken Word Tabernacle Berlin",  pastor_name:"Pastor Hans Weber",       pastor_email:"hans@swt-berlin.de",       city:"Berlin",       country:"Germany",      size:"Under 50",  verified:true, year_established:2012, phone:"+49 30 0000 0000", website:"swt-berlin.de", lat:52.52, lng:13.40 },
+  { id:12, name:"End Time Message Fellowship",    pastor_name:"Pastor Andrew Kim",       pastor_email:"andrew@etmf.kr",           city:"Seoul",        country:"South Korea",  size:"50 – 100",  verified:true, year_established:2007, phone:"+82 2 0000 0000",  website:"etmf.kr", lat:37.57, lng:126.98 },
 ];
 
 const CONTINENTS = ["All","Africa","Asia","Europe","Americas","Oceania"];
@@ -49,12 +49,40 @@ const ChurchesMap = ({ churches, onChurchClick }) => {
     if (!mapContainer.current || mapRef.current) return;
     mapRef.current = new mapboxgl.Map({
       container: mapContainer.current,
-      style: "mapbox://styles/mapbox/dark-v10",
+      style: "mapbox://styles/mapbox/navigation-night-v1",
       center: [10, 10],
       zoom: 1.3,
       attributionControl: true,
     });
     mapRef.current.addControl(new mapboxgl.NavigationControl(), "top-right");
+
+    // Inject dark popup styles to match home screen
+    const style = document.createElement("style");
+    style.textContent = `
+      .sendme-church-popup .mapboxgl-popup-content {
+        background: #0c1628 !important;
+        border: 1px solid rgba(232,179,75,0.3) !important;
+        border-radius: 12px !important;
+        padding: 14px 16px !important;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.7) !important;
+        color: #eef1ff !important;
+      }
+      .sendme-church-popup .mapboxgl-popup-tip {
+        border-top-color: #0c1628 !important;
+        border-bottom-color: #0c1628 !important;
+      }
+      .sendme-church-popup .mapboxgl-popup-close-button {
+        color: rgba(255,255,255,0.4) !important;
+        font-size: 16px !important;
+        padding: 4px 8px !important;
+      }
+      .sendme-church-popup .mapboxgl-popup-close-button:hover {
+        color: #e8b34b !important;
+        background: transparent !important;
+      }
+    `;
+    document.head.appendChild(style);
+
     return () => {
       if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; }
     };
@@ -69,24 +97,35 @@ const ChurchesMap = ({ churches, onChurchClick }) => {
     churches.forEach(c => {
       if (typeof c.lat !== "number" || typeof c.lng !== "number") return;
 
+      // Church pin element
       const el = document.createElement("div");
-      el.style.width = "16px";
-      el.style.height = "16px";
-      el.style.borderRadius = "50%";
-      el.style.background = "#e8b34b";
-      el.style.border = "2px solid #060c18";
-      el.style.boxShadow = "0 0 8px rgba(232,179,75,0.7)";
-      el.style.cursor = "pointer";
+      el.style.cssText = `
+        width: 20px; height: 20px; border-radius: 50%;
+        background: radial-gradient(circle at 35% 35%, #f5d07a, #c8942b);
+        border: 2px solid #060c18;
+        box-shadow: 0 0 10px rgba(232,179,75,0.8), 0 0 20px rgba(232,179,75,0.3);
+        cursor: pointer;
+        transition: transform 0.15s;
+      `;
+      el.addEventListener("mouseenter", () => { el.style.transform = "scale(1.4)"; });
+      el.addEventListener("mouseleave", () => { el.style.transform = "scale(1)"; });
 
       const popupHtml = `
-        <div style="font-family:Georgia,serif; color:#060c18; min-width:160px;">
-          <div style="font-weight:700; font-size:13px; margin-bottom:4px;">${c.name}</div>
-          <div style="font-size:11px; color:#444;">${c.city}, ${c.country}</div>
-          <div style="font-size:11px; color:#e8b34b; margin-top:4px;">✝ ${c.pastor_name || ""}</div>
+        <div style="font-family:Georgia,serif; min-width:190px;">
+          <div style="font-size:10px; color:#e8b34b; letter-spacing:1.5px; font-weight:700; margin-bottom:6px; text-transform:uppercase;">⛪ Verified Church</div>
+          <div style="font-weight:700; font-size:14px; color:#eef1ff; margin-bottom:4px; line-height:1.3;">${c.name}</div>
+          <div style="font-size:12px; color:rgba(255,255,255,0.5); margin-bottom:6px;">📍 ${c.city}, ${c.country}</div>
+          <div style="font-size:12px; color:#e8b34b; margin-bottom:3px;">✝ ${c.pastor_name || ""}</div>
+          ${c.size ? `<div style="font-size:11px; color:rgba(255,255,255,0.35); margin-top:3px;">👥 ${c.size} members</div>` : ""}
+          ${c.website ? `<div style="font-size:11px; color:#5b9cf6; margin-top:4px;">🌐 ${c.website}</div>` : ""}
         </div>`;
 
-      const popup = new mapboxgl.Popup({ offset: 14, closeButton: false })
-        .setHTML(popupHtml);
+      const popup = new mapboxgl.Popup({
+        offset: 16,
+        closeButton: true,
+        className: "sendme-church-popup",
+        maxWidth: "240px",
+      }).setHTML(popupHtml);
 
       const marker = new mapboxgl.Marker({ element: el })
         .setLngLat([c.lng, c.lat])
@@ -94,6 +133,7 @@ const ChurchesMap = ({ churches, onChurchClick }) => {
         .addTo(mapRef.current);
 
       el.addEventListener("click", () => {
+        marker.togglePopup();
         if (onChurchClick) onChurchClick(c.id);
       });
 
@@ -102,16 +142,17 @@ const ChurchesMap = ({ churches, onChurchClick }) => {
   }, [churches, onChurchClick]);
 
   return (
-    <div style={{ position: "relative", borderRadius: 18, overflow: "hidden", border: "1px solid rgba(232,179,75,0.2)", marginBottom: 24 }}>
-      <div ref={mapContainer} style={{ width: "100%", height: 360 }} />
+    <div style={{ position:"relative", borderRadius:18, overflow:"hidden", border:"1px solid rgba(232,179,75,0.2)", marginBottom:24, boxShadow:"0 8px 40px rgba(0,0,0,0.5)" }}>
+      <div ref={mapContainer} style={{ width:"100%", height:420 }} />
       <div style={{
-        position: "absolute", top: 14, left: 14,
-        background: "rgba(6,12,24,0.85)", borderRadius: 10,
-        border: "1px solid rgba(232,179,75,0.25)",
-        padding: "10px 14px", fontFamily: "Georgia, serif",
+        position:"absolute", top:14, left:14,
+        background:"rgba(6,12,24,0.88)", borderRadius:10,
+        border:"1px solid rgba(232,179,75,0.25)",
+        padding:"10px 14px", fontFamily:"Georgia, serif",
+        backdropFilter:"blur(4px)",
       }}>
-        <div style={{ fontSize: 12, color: "#e8b34b", letterSpacing: 1, fontWeight: 700 }}>WORLD CHURCH MAP</div>
-        <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginTop: 2 }}>
+        <div style={{ fontSize:12, color:"#e8b34b", letterSpacing:1, fontWeight:700 }}>WORLD CHURCH MAP</div>
+        <div style={{ fontSize:11, color:"rgba(255,255,255,0.4)", marginTop:2 }}>
           {churches.filter(c => typeof c.lat === "number" && typeof c.lng === "number").length} churches · tap a pin
         </div>
       </div>
@@ -131,9 +172,6 @@ export default function ChurchesTab({ onBack }) {
     const load = async () => {
       setLoading(true);
       try {
-        // ── FIX: removed .eq("verified", true) filter ──────────────────────
-        // Churches table uses status="verified" (text), not a boolean column.
-        // RLS policy already restricts to public rows. We filter in JS below.
         const { data, error } = await supabase
           .from("churches")
           .select("*")
@@ -142,10 +180,8 @@ export default function ChurchesTab({ onBack }) {
         if (error) throw error;
 
         if (data && data.length > 0) {
-          // Accept rows where status is "verified" OR no status set (legacy rows)
-          const verified = data.filter(c =>
-            !c.status || c.status === "verified" || c.status === "active"
-          );
+          // Show rows where verified = true OR verified is null/missing (legacy demo rows)
+          const verified = data.filter(c => c.verified === true || c.verified == null);
           if (verified.length > 0) {
             setChurches(verified);
             setUsingDemo(false);
@@ -199,7 +235,18 @@ export default function ChurchesTab({ onBack }) {
       <div style={{ maxWidth:860, margin:"0 auto", padding:"28px 20px 60px" }}>
 
         {/* World map */}
-        {!loading && <ChurchesMap churches={visible} onChurchClick={(id) => setExpanded(prev => prev === id ? null : id)} />}
+        {!loading && (
+          <ChurchesMap
+            churches={visible}
+            onChurchClick={(id) => {
+              setExpanded(prev => prev === id ? null : id);
+              setTimeout(() => {
+                const el = document.getElementById(`church-${id}`);
+                if (el) el.scrollIntoView({ behavior:"smooth", block:"center" });
+              }, 100);
+            }}
+          />
+        )}
 
         {/* Hero banner */}
         <div style={{ background:"rgba(232,179,75,0.08)", borderRadius:18, border:"1px solid rgba(232,179,75,0.2)", padding:"20px 24px", marginBottom:24, textAlign:"center" }}>
@@ -286,7 +333,7 @@ export default function ChurchesTab({ onBack }) {
                     borderLeft:`3px solid #e8b34b`,
                     overflow:"hidden", transition:"border .2s" }}>
 
-                  {/* Card header — always visible */}
+                  {/* Card header */}
                   <div
                     onClick={() => setExpanded(open ? null : c.id)}
                     style={{ padding:"18px 20px", cursor:"pointer", display:"flex",
@@ -326,16 +373,14 @@ export default function ChurchesTab({ onBack }) {
                     </div>
                   </div>
 
-                  {/* Expanded pastor details */}
+                  {/* Expanded details */}
                   {open && (
                     <div style={{ padding:"0 20px 20px", borderTop:"1px solid rgba(255,255,255,0.06)" }}>
                       <div style={{ paddingTop:16, display:"flex", flexDirection:"column", gap:10 }}>
-
                         <div style={{ fontSize:13, color:"rgba(255,255,255,0.35)",
                           letterSpacing:1.5, textTransform:"uppercase", marginBottom:4 }}>
                           Pastor Details
                         </div>
-
                         {[
                           ["✝ Pastor",  c.pastor_name],
                           ["📧 Email",  c.pastor_email || c.email],
@@ -343,24 +388,23 @@ export default function ChurchesTab({ onBack }) {
                           ["🌐 Website",c.website],
                           ["📍 Address",c.address],
                           ["👥 Size",   c.size ? c.size + " members" : null],
-                        ].map(([label, val]) => val ? (
-                          <div key={label} style={{ display:"flex", gap:12, alignItems:"flex-start",
+                        ].map(([lbl, val]) => val ? (
+                          <div key={lbl} style={{ display:"flex", gap:12, alignItems:"flex-start",
                             padding:"10px 14px", borderRadius:10,
                             background:"rgba(255,255,255,0.02)",
                             border:"1px solid rgba(255,255,255,0.05)" }}>
                             <span style={{ fontSize:12, color:"rgba(255,255,255,0.35)",
-                              minWidth:90, flexShrink:0 }}>{label}</span>
+                              minWidth:90, flexShrink:0 }}>{lbl}</span>
                             <span style={{ fontSize:13, color:"#eef1ff", wordBreak:"break-word" }}>
-                              {label.includes("Email") ? (
+                              {lbl.includes("Email") ? (
                                 <a href={`mailto:${val}`} style={{ color:"#e8b34b", textDecoration:"none" }}>{val}</a>
-                              ) : label.includes("Website") ? (
+                              ) : lbl.includes("Website") ? (
                                 <a href={`https://${val}`} target="_blank" rel="noreferrer"
                                   style={{ color:"#5b9cf6", textDecoration:"none" }}>{val}</a>
                               ) : val}
                             </span>
                           </div>
                         ) : null)}
-
                         <button
                           onClick={() => window.location.href = `mailto:${c.pastor_email || c.email}`}
                           style={{ marginTop:6, padding:"11px 0", borderRadius:12, border:"none",
