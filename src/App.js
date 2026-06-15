@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "./supabase";
 import Auth from "./Auth";
 import "./App.css";
@@ -773,6 +773,69 @@ const DonorProfile = ({ user, onBack }) => {
   );
 };
 
+// ── NAV "MORE" DROPDOWN ──────────────────────────────────────────────────────
+const NavDropdown = ({ user,onProfile,onEmergency,onTestimonies,onWorker,onMatching,onQR,onFaq,onPayout }) => {
+  const [open,setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(()=>{
+    const handler = (e)=>{ if(ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown",handler);
+    return ()=>document.removeEventListener("mousedown",handler);
+  },[]);
+
+  const items = [
+    user && { label:"My Profile",     icon:"✝",  color:"#e8b34b",             onClick:onProfile },
+    { label:"🚨 Emergency",  color:"#e85b5b",             onClick:onEmergency },
+    { label:"Testimonies",   color:"#3ecf8e",             onClick:onTestimonies },
+    { label:"Send Worker",   color:"#b06cf5",             onClick:onWorker },
+    { label:"Find Mission",  color:"#5b9cf6",             onClick:onMatching },
+    { label:"QR Share",      color:"rgba(255,255,255,0.65)", onClick:onQR },
+    { label:"FAQ",           color:"#e8b34b",             onClick:onFaq },
+    user && { label:"Payout Details", color:"rgba(255,255,255,0.65)", onClick:onPayout },
+  ].filter(Boolean);
+
+  return (
+    <div ref={ref} style={{ position:"relative" }}>
+      <button onClick={()=>setOpen(o=>!o)} style={{
+        background:open?"rgba(232,179,75,0.12)":"rgba(255,255,255,0.05)",
+        border:`1px solid ${open?"rgba(232,179,75,0.35)":"rgba(255,255,255,0.1)"}`,
+        borderRadius:10, padding:"8px 16px",
+        color:open?"#e8b34b":"rgba(255,255,255,0.6)",
+        cursor:"pointer", fontSize:13, fontFamily:"Georgia, serif",
+        display:"flex", alignItems:"center", gap:5,
+      }}>
+        More
+        <span style={{ fontSize:10, display:"inline-block", transform:open?"rotate(180deg)":"none", transition:"transform .15s" }}>▾</span>
+      </button>
+      {open && (
+        <div style={{
+          position:"absolute", top:"calc(100% + 8px)", right:0, minWidth:200,
+          background:"#0c1628", border:"1px solid rgba(232,179,75,0.2)",
+          borderRadius:14, boxShadow:"0 12px 40px rgba(0,0,0,0.6)",
+          padding:6, zIndex:200, display:"flex", flexDirection:"column", gap:2,
+        }}>
+          {items.map(item=>(
+            <button key={item.label}
+              onClick={()=>{ item.onClick && item.onClick(); setOpen(false); }}
+              onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,0.05)";}}
+              onMouseLeave={e=>{e.currentTarget.style.background="transparent";}}
+              style={{
+                display:"flex", alignItems:"center", gap:8,
+                width:"100%", textAlign:"left", padding:"10px 12px",
+                borderRadius:8, border:"none", background:"transparent",
+                color:item.color, cursor:"pointer", fontSize:13,
+                fontWeight:600, fontFamily:"Georgia, serif", transition:"background .12s",
+              }}>
+              {item.icon && <span>{item.icon}</span>}{item.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ── HOME SCREEN ───────────────────────────────────────────────────────────────
 const HomeScreen = ({ onMission,user,onSignOut,onApply,onChurch,onChurches,onProfile,onEmergency,onMatching,onPray,onTestimonies,onWorker,onQR,onFaq,onPayout,onAdminPayouts,isAdmin }) => {
   const [region,setRegion]       = useState("All");
@@ -809,14 +872,7 @@ const HomeScreen = ({ onMission,user,onSignOut,onApply,onChurch,onChurches,onPro
           <button onClick={onChurches} style={{ background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"8px 16px",color:"rgba(255,255,255,0.6)",cursor:"pointer",fontSize:13 }}>Churches</button>
           <button onClick={onApply} style={{ background:"linear-gradient(135deg,#e8b34b,#c8942b)",border:"none",borderRadius:10,padding:"8px 16px",color:"#000",cursor:"pointer",fontSize:13,fontWeight:700 }}>Apply</button>
           <button onClick={onChurch} style={{ background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"8px 16px",color:"rgba(255,255,255,0.6)",cursor:"pointer",fontSize:13 }}>Register Church</button>
-          {user&&<button onClick={onProfile} style={{ background:"rgba(232,179,75,0.1)",border:"1px solid rgba(232,179,75,0.25)",borderRadius:10,padding:"8px 14px",color:"#e8b34b",cursor:"pointer",fontSize:12,fontWeight:600 }}>My Profile</button>}
-          <button onClick={onEmergency} style={{ background:"rgba(232,91,91,0.1)",border:"1px solid rgba(232,91,91,0.3)",borderRadius:10,padding:"8px 14px",color:"#e85b5b",cursor:"pointer",fontSize:12,fontWeight:600 }}>🚨 Emergency</button>
-          <button onClick={onTestimonies} style={{ background:"rgba(62,207,142,0.1)",border:"1px solid rgba(62,207,142,0.25)",borderRadius:10,padding:"8px 14px",color:"#3ecf8e",cursor:"pointer",fontSize:12,fontWeight:600 }}>Testimonies</button>
-          <button onClick={onWorker} style={{ background:"rgba(176,108,245,0.1)",border:"1px solid rgba(176,108,245,0.25)",borderRadius:10,padding:"8px 14px",color:"#b06cf5",cursor:"pointer",fontSize:12,fontWeight:600 }}>Send Worker</button>
-          <button onClick={onMatching} style={{ background:"rgba(91,156,246,0.1)",border:"1px solid rgba(91,156,246,0.3)",borderRadius:10,padding:"8px 14px",color:"#5b9cf6",cursor:"pointer",fontSize:12,fontWeight:600 }}>Find Mission</button>
-          <button onClick={onQR} style={{ background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"8px 14px",color:"rgba(255,255,255,0.6)",cursor:"pointer",fontSize:12 }}>QR Share</button>
-          <button onClick={onFaq} style={{ background:"rgba(232,179,75,0.08)",border:"1px solid rgba(232,179,75,0.2)",borderRadius:10,padding:"8px 14px",color:"#e8b34b",cursor:"pointer",fontSize:12,fontWeight:600 }}>FAQ</button>
-          {user&&<button onClick={onPayout} style={{ background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"8px 14px",color:"rgba(255,255,255,0.6)",cursor:"pointer",fontSize:12 }}>Payout Details</button>}
+          <NavDropdown user={user} onProfile={onProfile} onEmergency={onEmergency} onTestimonies={onTestimonies} onWorker={onWorker} onMatching={onMatching} onQR={onQR} onFaq={onFaq} onPayout={onPayout}/>
           {isAdmin&&<button onClick={onAdminPayouts} style={{ background:"rgba(232,91,91,0.1)",border:"1px solid rgba(232,91,91,0.3)",borderRadius:10,padding:"8px 14px",color:"#e85b5b",cursor:"pointer",fontSize:12,fontWeight:700 }}>💰 Payouts</button>}
           {user&&<button onClick={onSignOut} style={{ background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:10,padding:"8px 14px",color:"rgba(255,255,255,0.4)",cursor:"pointer",fontSize:12 }}>Sign Out</button>}
         </div>

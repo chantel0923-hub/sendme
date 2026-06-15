@@ -128,6 +128,8 @@ const ChurchesMap = ({ churches, onChurchClick }) => {
           .bindPopup(popupHtml, { className: "sendme-popup", maxWidth: 240 })
           .addTo(mapRef.current);
 
+        marker.on("mouseover", () => marker.openPopup());
+        marker.on("mouseout", () => marker.closePopup());
         marker.on("click", () => {
           if (onChurchClick) onChurchClick(c.id);
         });
@@ -158,6 +160,8 @@ const ChurchesMap = ({ churches, onChurchClick }) => {
       const marker = L.marker([c.lat, c.lng], { icon })
         .bindPopup(popupHtml, { className:"sendme-popup", maxWidth:240 })
         .addTo(mapRef.current);
+      marker.on("mouseover", () => marker.openPopup());
+      marker.on("mouseout", () => marker.closePopup());
       marker.on("click", () => { if (onChurchClick) onChurchClick(c.id); });
       markersRef.current.push(marker);
     });
