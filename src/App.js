@@ -17,6 +17,7 @@ import PayoutSetup from './PayoutSetup';
 import AdminPayouts, { ADMIN_EMAIL } from './AdminPayouts';
 import YouTubeEmbed from './YouTubeEmbed';
 import { FEATURED_VIDEOS, SENDME_CHANNEL_URL } from './sendmeVideos';
+import { startPayfastDonation } from './payfast';
 
 const DEMO_MISSIONS = [
   { id:1, name:"Rev. Samuel Osei",   role:"Missionary",  church:"Accra Redemption Church",   city:"Addis Ababa", country:"Ethiopia", area:"Merkato District",         region:"Africa",      lat:9.03,  lng:38.74, title:"Gospel & Food Aid — Merkato",     blurb:"Feeding 400 families weekly while planting the Word in one of Addis Ababa's most densely populated slums.",           raised:9840,  goal:15000, color:"#e8b34b", status:"active",   milestone:2, souls:312, bibles:200, churches:1, prayers:87,  protected:false, trustLevel:2, journeyStep:4, riskLevel:1, budget:[{label:"Food parcels",amount:4000},{label:"Bibles & Tracts",amount:2500},{label:"Transport",amount:1500},{label:"Accommodation",amount:1840}] },
@@ -399,10 +400,27 @@ const MsTrack = ({ current,color }) => (
   </div>
 );
 
-const DonateScreen = ({ mission: m, onBack, onSuccess }) => {
+const DonateScreen = ({ mission: m, onBack, onPayfast }) => {
   const [amt,setAmt]       = useState("");
   const [prayed,setPrayed] = useState(false);
+  const [submitting,setSubmitting] = useState(false);
+  const [error,setError]   = useState("");
   const canGive = amt && Number(amt) > 0 && prayed;
+
+  const handleGive = async () => {
+    if (!canGive || submitting) return;
+    setSubmitting(true);
+    setError("");
+    try {
+      await onPayfast(amt);
+      // onPayfast redirects the browser to PayFast, so execution
+      // normally won't continue past this point.
+    } catch {
+      setError("Could not start PayFast checkout. Please try again.");
+      setSubmitting(false);
+    }
+  };
+
   return (
     <div style={{ minHeight:"100vh",background:"#060c18",color:"#eef1ff",fontFamily:"Georgia, serif" }}>
       <div style={{ background:"#09111f",borderBottom:"1px solid rgba(255,255,255,0.07)",padding:"16px 24px",display:"flex",alignItems:"center",gap:14,position:"sticky",top:0,zIndex:100 }}>
@@ -452,28 +470,49 @@ const DonateScreen = ({ mission: m, onBack, onSuccess }) => {
             <div style={{ fontSize:12,color:"rgba(255,255,255,0.4)",lineHeight:1.7,fontStyle:"italic" }}>"The effective, fervent prayer of a righteous man avails much." — James 5:16</div>
           </div>
         </div>
-        <button onClick={()=>{ if(canGive) onSuccess(amt); }}
+        <button onClick={handleGive} disabled={!canGive||submitting}
           style={{ padding:"16px 0",borderRadius:14,border:"none",
             background:canGive?`linear-gradient(135deg,${m.color},${m.color}cc)`:"rgba(255,255,255,0.06)",
-            color:canGive?"#000":"rgba(255,255,255,0.25)",fontWeight:700,cursor:canGive?"pointer":"default",
-            fontSize:16,fontFamily:"Georgia, serif",
+            color:canGive?"#000":"rgba(255,255,255,0.25)",fontWeight:700,cursor:canGive&&!submitting?"pointer":"default",
+            fontSize:16,fontFamily:"Georgia, serif",opacity:submitting?0.7:1,
             boxShadow:canGive?`0 6px 28px ${m.color}44`:"none",transition:"all .2s" }}>
-          {!amt||Number(amt)===0?"Enter an amount to continue":!prayed?"✝  Tick the prayer commitment to give":`💝  Give $${amt} to this Mission`}
+          {!amt||Number(amt)===0?"Enter an amount to continue":!prayed?"✝  Tick the prayer commitment to give":submitting?"Redirecting to PayFast…":`💝  Give $${amt} via PayFast`}
         </button>
-        <div style={{ textAlign:"center",fontSize:12,color:"rgba(255,255,255,0.2)" }}>🔒 Funds held in escrow · Released only on verified proof of work</div>
+        {error && <div style={{ textAlign:"center",fontSize:13,color:"#e85b5b" }}>{error}</div>}
+        <div style={{ textAlign:"center",fontSize:12,color:"rgba(255,255,255,0.2)" }}>🔒 Secure checkout via PayFast · Funds held in escrow · Released only on verified proof of work</div>
       </div>
     </div>
   );
 };
 
-const SuccessScreen = ({ mission: m, amt, onContinue }) => (
+// ── PAYFAST RETURN SCREEN ─────────────────────────────────────────────────────
+// Shown when the browser comes back from PayFast after a redirect-based
+// checkout (return_url / cancel_url). The real confirmation of payment
+// happens server-side via the ITN webhook in /api/payfast-notify — this
+// screen just gives the donor a friendly landing page.
+const PayfastResultScreen = ({ status, amount, onContinue }) => (
   <div style={{ minHeight:"100vh",background:"#060c18",color:"#eef1ff",fontFamily:"Georgia, serif",display:"flex",alignItems:"center",justifyContent:"center",padding:32 }}>
     <div style={{ textAlign:"center",maxWidth:480,display:"flex",flexDirection:"column",gap:20,alignItems:"center" }}>
-      <div style={{ width:90,height:90,borderRadius:999,background:"rgba(62,207,142,0.12)",border:"2px solid rgba(62,207,142,0.4)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:44 }}>🙏</div>
-      <div>
-        <div style={{ fontSize:30,fontWeight:700,color:"#eef1ff",marginBottom:8 }}>God Bless You</div>
-        <div style={{ fontSize:15,color:"rgba(255,255,255,0.5)",lineHeight:1.8 }}>Your gift of <strong style={{ color:"#3ecf8e" }}>${amt}</strong> to <strong style={{ color:"#eef1ff" }}>{m.protected?"this protected missionary":m.name}</strong>'s mission has been placed in escrow.</div>
-      </div>
+      {status==="success" ? (
+        <>
+          <div style={{ width:90,height:90,borderRadius:999,background:"rgba(62,207,142,0.12)",border:"2px solid rgba(62,207,142,0.4)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:44 }}>🙏</div>
+          <div>
+            <div style={{ fontSize:30,fontWeight:700,color:"#eef1ff",marginBottom:8 }}>God Bless You</div>
+            <div style={{ fontSize:15,color:"rgba(255,255,255,0.5)",lineHeight:1.8 }}>
+              {amount?<>Your gift of <strong style={{ color:"#3ecf8e" }}>${amount}</strong> is on its way to the mission field via PayFast.</>:"Your donation via PayFast is being processed."}
+            </div>
+            <div style={{ fontSize:13,color:"rgba(255,255,255,0.3)",marginTop:10 }}>It will appear in your Giving History once PayFast confirms the payment — usually within a few minutes.</div>
+          </div>
+        </>
+      ) : (
+        <>
+          <div style={{ width:90,height:90,borderRadius:999,background:"rgba(232,179,75,0.12)",border:"2px solid rgba(232,179,75,0.3)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:44 }}>🙁</div>
+          <div>
+            <div style={{ fontSize:26,fontWeight:700,color:"#eef1ff",marginBottom:8 }}>Payment Cancelled</div>
+            <div style={{ fontSize:15,color:"rgba(255,255,255,0.5)",lineHeight:1.8 }}>No worries — nothing was charged. You're welcome to try again any time.</div>
+          </div>
+        </>
+      )}
       <div style={{ background:"rgba(232,179,75,0.08)",borderRadius:16,border:"1px solid rgba(232,179,75,0.2)",padding:"16px 24px",width:"100%",textAlign:"center" }}>
         <div style={{ fontSize:15,color:"#e8b34b",fontStyle:"italic",marginBottom:4 }}>"The harvest is plentiful but the workers are few."</div>
         <div style={{ fontSize:12,color:"rgba(255,255,255,0.3)" }}>Matthew 9:37</div>
@@ -971,8 +1010,8 @@ export default function App() {
   const [authReady,setAuthReady]               = useState(false);
   const [screen,setScreen]                     = useState("home");
   const [selectedMission,setSelectedMission]   = useState(null);
-  const [donateAmt,setDonateAmt]               = useState("");
   const [guest,setGuest]                       = useState(false);
+  const [pfReturn,setPfReturn]                 = useState(null);
 
   useEffect(()=>{
     supabase.auth.getSession().then(({data:{session}})=>{setUser(session?.user??null);setAuthReady(true);});
@@ -980,12 +1019,33 @@ export default function App() {
     return ()=>subscription.unsubscribe();
   },[]);
 
+  // ── PAYFAST RETURN HANDLING ──────────────────────────────────────────────
+  // PayFast redirects the browser back to return_url / cancel_url with
+  // ?payfast=success|cancel after checkout. Catch that here, recall the
+  // pending donation we stashed in sessionStorage, then clean the URL.
+  useEffect(()=>{
+    const params = new URLSearchParams(window.location.search);
+    const pf = params.get("payfast");
+    if(pf==="success"||pf==="cancel"){
+      const missionId = params.get("m");
+      let amount = null;
+      try {
+        const stored = JSON.parse(sessionStorage.getItem("sendme_pending_donation")||"null");
+        if(stored && String(stored.mission_id)===String(missionId)) amount = stored.amount;
+        sessionStorage.removeItem("sendme_pending_donation");
+      } catch {}
+      setPfReturn({ status: pf, amount });
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  },[]);
+
   const signOut       = async()=>{await supabase.auth.signOut();setUser(null);setGuest(false);setScreen("home");};
   const openMission   = (m)  =>{setSelectedMission(m);setScreen("detail");};
   const openDonate    = ()   =>{setScreen("donate");};
-  const handleSuccess = (amt)=>{setDonateAmt(amt);setScreen("success");};
+  const handlePayfastDonate = (amt) => startPayfastDonation({ mission: selectedMission, amount: amt, user });
 
   if(!authReady) return(<div style={{ minHeight:"100vh",background:"#060c18",display:"flex",alignItems:"center",justifyContent:"center" }}><div style={{ fontSize:48,color:"#e8b34b" }}>✝</div></div>);
+  if(pfReturn) return <PayfastResultScreen status={pfReturn.status} amount={pfReturn.amount} onContinue={()=>setPfReturn(null)}/>;
   if(!user && !guest) return <Auth onLogin={(u)=>setUser(u)} onGuest={()=>setGuest(true)}/>;
   if(screen==="faq")         return <FAQScreen onBack={()=>setScreen("home")}/>;
   if(screen==="payout")      return <PayoutSetup onBack={()=>setScreen("home")}/>;
@@ -1002,8 +1062,7 @@ export default function App() {
   if(screen==="qr")          return <QRShare missions={DEMO_MISSIONS} onBack={()=>setScreen("home")}/>;
   if(screen==="ledger"&&selectedMission)  return <TransparencyLedger mission={selectedMission} onBack={()=>setScreen("detail")}/>;
   if(screen==="detail"&&selectedMission)  return <MissionDetail mission={selectedMission} onBack={()=>setScreen("home")} onDonate={openDonate} onLedger={()=>setScreen("ledger")}/>;
-  if(screen==="donate"&&selectedMission)  return <DonateScreen mission={selectedMission} onBack={()=>setScreen("detail")} onSuccess={handleSuccess}/>;
-  if(screen==="success"&&selectedMission) return <SuccessScreen mission={selectedMission} amt={donateAmt} onContinue={()=>setScreen("home")}/>;
+  if(screen==="donate"&&selectedMission)  return <DonateScreen mission={selectedMission} onBack={()=>setScreen("detail")} onPayfast={handlePayfastDonate}/>;
   return(
     <HomeScreen
       onMission={openMission} user={user} onSignOut={signOut}
