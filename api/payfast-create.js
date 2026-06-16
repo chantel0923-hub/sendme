@@ -52,7 +52,11 @@ function pfSignature(data, passphrase = "") {
   if (passphrase) {
     getString += `&passphrase=${encodeURIComponent(passphrase.trim()).replace(/%20/g, "+")}`;
   }
-  return crypto.createHash("md5").update(getString).digest("hex");
+  // TEMPORARY DEBUG — remove once signature issue is resolved
+  console.log("PAYFAST SIGNATURE STRING:", getString);
+  const sig = crypto.createHash("md5").update(getString).digest("hex");
+  console.log("PAYFAST SIGNATURE HASH:", sig);
+  return sig;
 }
 
 export default async function handler(req, res) {
@@ -98,6 +102,16 @@ export default async function handler(req, res) {
 
     pfData.signature = pfSignature(pfData, process.env.PAYFAST_PASSPHRASE || "");
 
+    // TEMPORARY DEBUG — rebuild the exact string again here just to return it
+    let debugString = "";
+    for (const key of PAYFAST_FIELD_ORDER) {
+      if (!Object.prototype.hasOwnProperty.call(pfData, key)) continue;
+      const val = pfData[key];
+      if (val === "" || val === undefined || val === null) continue;
+      debugString += `${key}=${encodeURIComponent(String(val).trim()).replace(/%20/g, "+")}&`;
+    }
+    debugString = debugString.slice(0, -1);
+
     // Record a pending donation so the ITN webhook can match it up later
     const supabase = createClient(
       process.env.REACT_APP_SUPABASE_URL,
@@ -132,7 +146,7 @@ export default async function handler(req, res) {
     }
     orderedFields.signature = pfData.signature;
 
-    return res.status(200).json({ action, fields: orderedFields });
+    return res.status(200).json({ action, fields: orderedFields, _debug_signature_string: debugString, _debug_passphrase_set: !!process.env.PAYFAST_PASSPHRASE });
   } catch (err) {
     console.error("payfast-create error", err);
     return res.status(500).json({ error: "Could not start PayFast payment" });
