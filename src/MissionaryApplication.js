@@ -178,13 +178,40 @@ const Step4 = ({ form, set }) => (
       <FInput label="Mission Start Date" type="date" value={form.startDate} onChange={e=>set("startDate",e.target.value)}/>
       <FInput label="Expected Duration" placeholder="e.g. 12 months" value={form.duration} onChange={e=>set("duration",e.target.value)}/>
     </div>
+
+    {/* Platform surcharge disclosure */}
+    <div style={{ background:"rgba(91,156,246,0.07)",borderRadius:14,border:"1px solid rgba(91,156,246,0.25)",padding:"16px 18px",marginBottom:14 }}>
+      <div style={{ display:"flex",gap:10,marginBottom:8 }}>
+        <span style={{ fontSize:18,flexShrink:0 }}>🌐</span>
+        <div style={{ fontSize:13,color:"rgba(255,255,255,0.55)",lineHeight:1.7 }}>
+          SendMe operates across multiple countries and currencies. To keep this platform completely free for missionaries and donors worldwide, a <strong style={{color:"#5b9cf6"}}>10% platform surcharge</strong> is applied on top of your funding goal. This covers international payment processing, currency conversion, platform maintenance, and operational costs.
+        </div>
+      </div>
+      {Number(form.fundingGoal) > 0 && (
+        <div style={{ background:"rgba(255,255,255,0.03)",borderRadius:10,padding:"12px 14px",marginTop:6,display:"flex",flexDirection:"column",gap:6 }}>
+          <div style={{ display:"flex",justifyContent:"space-between",fontSize:13 }}>
+            <span style={{ color:"rgba(255,255,255,0.4)" }}>Your funding goal</span>
+            <span style={{ color:"#eef1ff" }}>${Number(form.fundingGoal).toLocaleString()}</span>
+          </div>
+          <div style={{ display:"flex",justifyContent:"space-between",fontSize:13 }}>
+            <span style={{ color:"rgba(255,255,255,0.4)" }}>Platform surcharge (10%)</span>
+            <span style={{ color:"#5b9cf6" }}>${Math.round(Number(form.fundingGoal)*0.1).toLocaleString()}</span>
+          </div>
+          <div style={{ display:"flex",justifyContent:"space-between",fontSize:14,fontWeight:700,borderTop:"1px solid rgba(255,255,255,0.08)",paddingTop:8,marginTop:2 }}>
+            <span style={{ color:"#eef1ff" }}>Donors will be asked for</span>
+            <span style={{ color:"#e8b34b" }}>${Math.round(Number(form.fundingGoal)*1.1).toLocaleString()}</span>
+          </div>
+        </div>
+      )}
+    </div>
+
     <FInput label="Milestone 1 — First goal" placeholder="e.g. First open-air crusade" value={form.milestone1} onChange={e=>set("milestone1",e.target.value)}/>
     <FInput label="Milestone 2 — Mid-mission goal" placeholder="e.g. Plant first congregation" value={form.milestone2} onChange={e=>set("milestone2",e.target.value)}/>
     <FInput label="Milestone 3 — Final goal" placeholder="e.g. Local leadership trained" value={form.milestone3} onChange={e=>set("milestone3",e.target.value)}/>
   </div>
 );
 
-const Step5 = ({ form, submitted, submitting, onSubmit }) => {
+const Step5 = ({ form, set, submitted, submitting, onSubmit }) => {
   if (submitted) {
     return (
       <div style={{ textAlign:"center",padding:"20px 0 10px",display:"flex",flexDirection:"column",alignItems:"center",gap:20 }}>
@@ -215,6 +242,8 @@ const Step5 = ({ form, submitted, submitting, onSubmit }) => {
     ["Mission title", form.missionTitle],
     ["Target country",form.targetCountry],
     ["Funding goal",  form.fundingGoal?`$${Number(form.fundingGoal).toLocaleString()}`:null],
+    ["Platform surcharge (10%)", form.fundingGoal?`$${Math.round(Number(form.fundingGoal)*0.1).toLocaleString()}`:null],
+    ["Total donors asked for", form.fundingGoal?`$${Math.round(Number(form.fundingGoal)*1.1).toLocaleString()}`:null],
     ["Shadow mode",   form.shadowMode?"Requested":"No"],
   ];
 
@@ -238,13 +267,31 @@ const Step5 = ({ form, submitted, submitting, onSubmit }) => {
           Submitting will send an <strong style={{color:"#e8b34b"}}>endorsement request</strong> to your pastor and place your mission in the <strong style={{color:"#e8b34b"}}>admin review queue</strong>.
         </div>
       </div>
-      <button onClick={onSubmit} disabled={submitting}
+
+      <div onClick={()=>set("surchargeAcknowledged",!form.surchargeAcknowledged)}
+        style={{ display:"flex",gap:14,alignItems:"flex-start",padding:"14px 16px",borderRadius:12,cursor:"pointer",
+          background:form.surchargeAcknowledged?"rgba(91,156,246,0.08)":"rgba(255,255,255,0.02)",
+          border:`1px solid ${form.surchargeAcknowledged?"rgba(91,156,246,0.35)":"rgba(255,255,255,0.07)"}`,
+          transition:"all .2s" }}>
+        <div style={{ width:22,height:22,borderRadius:6,flexShrink:0,marginTop:1,
+          background:form.surchargeAcknowledged?"linear-gradient(135deg,#5b9cf6,#3a7bd5)":"rgba(255,255,255,0.05)",
+          border:form.surchargeAcknowledged?"none":"1px solid rgba(255,255,255,0.15)",
+          display:"flex",alignItems:"center",justifyContent:"center",
+          fontSize:13,color:"#fff",fontWeight:700,transition:"all .2s" }}>
+          {form.surchargeAcknowledged?"✓":""}
+        </div>
+        <span style={{ fontSize:13,color:form.surchargeAcknowledged?"#eef1ff":"rgba(255,255,255,0.45)",lineHeight:1.65,transition:"color .2s" }}>
+          I understand that SendMe will collect 10% above my stated funding goal from donors to cover platform and international payment processing costs. My full requested amount will be released to me upon verified milestone completion — regardless of currency or country.
+        </span>
+      </div>
+
+      <button onClick={form.surchargeAcknowledged?onSubmit:undefined} disabled={submitting||!form.surchargeAcknowledged}
         style={{ width:"100%",padding:"16px 0",borderRadius:14,border:"none",
-          background:submitting?"rgba(255,255,255,0.06)":"linear-gradient(135deg,#e8b34b,#c8942b)",
-          color:submitting?"rgba(255,255,255,0.25)":"#000",fontWeight:700,
-          cursor:submitting?"default":"pointer",fontSize:16,fontFamily:"Georgia, serif",
-          boxShadow:submitting?"none":"0 6px 28px rgba(232,179,75,0.44)",transition:"all .2s" }}>
-        {submitting?"Submitting...":"Submit My Application"}
+          background:submitting||!form.surchargeAcknowledged?"rgba(255,255,255,0.06)":"linear-gradient(135deg,#e8b34b,#c8942b)",
+          color:submitting||!form.surchargeAcknowledged?"rgba(255,255,255,0.25)":"#000",fontWeight:700,
+          cursor:submitting||!form.surchargeAcknowledged?"default":"pointer",fontSize:16,fontFamily:"Georgia, serif",
+          boxShadow:submitting||!form.surchargeAcknowledged?"none":"0 6px 28px rgba(232,179,75,0.44)",transition:"all .2s" }}>
+        {submitting?"Submitting...":!form.surchargeAcknowledged?"Please acknowledge the surcharge above":"Submit My Application"}
       </button>
     </div>
   );
@@ -273,6 +320,9 @@ const validate = (step, form) => {
     if (!form.missionDescription.trim()) return "Please describe your mission.";
     if (!form.fundingGoal||Number(form.fundingGoal)<100) return "Please enter a funding goal of at least $100.";
   }
+  if (step===5) {
+    if (!form.surchargeAcknowledged) return "Please acknowledge the 10% platform surcharge before submitting.";
+  }
   return null;
 };
 
@@ -290,7 +340,7 @@ export default function MissionaryApplication({ onBack, user }) {
     churchCity:"", churchCountry:"", churchWebsite:"",
     missionTitle:"", targetRegion:"", targetCountry:"", targetArea:"",
     missionDescription:"", fundingGoal:"", startDate:"", duration:"",
-    milestone1:"", milestone2:"", milestone3:"",
+    milestone1:"", milestone2:"", milestone3:"", surchargeAcknowledged:false,
   });
 
   const set = (key, val) => setForm(f => ({...f,[key]:val}));
@@ -307,6 +357,10 @@ export default function MissionaryApplication({ onBack, user }) {
   const handleSubmit = async () => {
     setSubmitting(true); setError("");
     try {
+      const goal = Number(form.fundingGoal);
+      const platformSurcharge = Math.round(goal * 0.1);
+      const collectionTarget = goal + platformSurcharge;
+
       // Only insert columns that exist in the missions table
       const { error: dbError } = await supabase.from("missions").insert({
         missionary_name:  form.shadowMode ? null : form.fullName,
@@ -320,7 +374,10 @@ export default function MissionaryApplication({ onBack, user }) {
         country:          form.targetCountry,
         area:             form.targetArea,
         blurb:            form.missionDescription,
-        goal:             Number(form.fundingGoal),
+        goal:             goal,
+        collection_target: collectionTarget,
+        platform_surcharge: platformSurcharge,
+        surcharge_acknowledged: form.surchargeAcknowledged,
         raised:           0,
         status:           "pending",
         milestone:        0,
@@ -360,7 +417,7 @@ export default function MissionaryApplication({ onBack, user }) {
           {step===2 && <Step2 form={form} set={set}/>}
           {step===3 && <Step3 form={form} set={set}/>}
           {step===4 && <Step4 form={form} set={set}/>}
-          {step===5 && <Step5 form={form} submitted={submitted} submitting={submitting} onSubmit={handleSubmit}/>}
+          {step===5 && <Step5 form={form} set={set} submitted={submitted} submitting={submitting} onSubmit={handleSubmit}/>}
         </div>
         {!submitted && (
           <div style={{ display:"grid",gridTemplateColumns:step>1?"1fr 1fr":"1fr",gap:12 }}>
