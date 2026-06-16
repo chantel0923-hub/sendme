@@ -40,7 +40,7 @@ const PAYFAST_FIELD_ORDER = [
   "email_confirmation", "confirmation_address", "payment_method",
 ];
 
-function pfSignature(data, passphrase = "") {
+function pfSignature(data, passphrase) {
   let pfOutput = "";
   for (const key of PAYFAST_FIELD_ORDER) {
     if (!Object.prototype.hasOwnProperty.call(data, key)) continue;
@@ -49,8 +49,12 @@ function pfSignature(data, passphrase = "") {
     pfOutput += `${key}=${encodeURIComponent(String(val).trim()).replace(/%20/g, "+")}&`;
   }
   let getString = pfOutput.slice(0, -1);
-  if (passphrase) {
-    getString += `&passphrase=${encodeURIComponent(passphrase.trim()).replace(/%20/g, "+")}`;
+  // PayFast's own reference implementation appends &passphrase=... whenever
+  // passphrase is not null/undefined — even if it's an empty string. Using
+  // `if (passphrase)` (truthy check) skips this for "" and breaks the
+  // signature to match PayFast's expectation when no passphrase is set.
+  if (passphrase !== undefined && passphrase !== null) {
+    getString += `&passphrase=${encodeURIComponent(String(passphrase).trim()).replace(/%20/g, "+")}`;
   }
   return crypto.createHash("md5").update(getString).digest("hex");
 }
@@ -96,7 +100,14 @@ export default async function handler(req, res) {
       custom_str3: user_id ? String(user_id) : "",
     };
 
-    pfData.signature = pfSignature(pfData, process.env.PAYFAST_PASSPHRASE || "");
+    // PayFast's sandbox default credentials have no passphrase configured —
+    // pass an explicit empty string (not undefined) so pfSignature() still
+    // appends "&passphrase=" per PayFast's reference implementation.
+    const passphrase = process.env.PAYFAST_PASSPHRASE !== undefined
+      ? process.env.PAYFAST_PASSPHRASE
+      : "";
+
+    pfData.signature = pfSignature(pfData, passphrase);
 
     // Record a pending donation so the ITN webhook can match it up later
     const supabase = createClient(

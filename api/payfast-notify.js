@@ -45,7 +45,7 @@ function getRawBody(req) {
 // arrived in (insertion order from URLSearchParams), NOT a fixed list.
 // This is the opposite rule from payfast-create.js and is the source of the
 // original mismatch if both functions used the same fixed-order assumption.
-function pfSignature(data, passphrase = "") {
+function pfSignature(data, passphrase) {
   let pfOutput = "";
   for (const key in data) {
     if (!Object.prototype.hasOwnProperty.call(data, key)) continue;
@@ -55,8 +55,11 @@ function pfSignature(data, passphrase = "") {
     pfOutput += `${key}=${encodeURIComponent(String(val).trim()).replace(/%20/g, "+")}&`;
   }
   let getString = pfOutput.slice(0, -1);
-  if (passphrase) {
-    getString += `&passphrase=${encodeURIComponent(passphrase.trim()).replace(/%20/g, "+")}`;
+  // See payfast-create.js — PayFast's reference implementation appends
+  // &passphrase=... whenever passphrase is not null/undefined, even if it's
+  // an empty string. A truthy check on "" incorrectly skips this.
+  if (passphrase !== undefined && passphrase !== null) {
+    getString += `&passphrase=${encodeURIComponent(String(passphrase).trim()).replace(/%20/g, "+")}`;
   }
   return crypto.createHash("md5").update(getString).digest("hex");
 }
