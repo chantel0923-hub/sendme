@@ -52,11 +52,7 @@ function pfSignature(data, passphrase = "") {
   if (passphrase) {
     getString += `&passphrase=${encodeURIComponent(passphrase.trim()).replace(/%20/g, "+")}`;
   }
-  // TEMPORARY DEBUG — remove once signature issue is resolved
-  console.log("PAYFAST SIGNATURE STRING:", getString);
-  const sig = crypto.createHash("md5").update(getString).digest("hex");
-  console.log("PAYFAST SIGNATURE HASH:", sig);
-  return sig;
+  return crypto.createHash("md5").update(getString).digest("hex");
 }
 
 export default async function handler(req, res) {
@@ -85,8 +81,8 @@ export default async function handler(req, res) {
     const pfData = {
       merchant_id: process.env.PAYFAST_MERCHANT_ID || SANDBOX_MERCHANT_ID,
       merchant_key: process.env.PAYFAST_MERCHANT_KEY || SANDBOX_MERCHANT_KEY,
-      return_url: `${site}/?payfast=success&m=${encodeURIComponent(mission_id ?? "")}`,
-      cancel_url: `${site}/?payfast=cancel&m=${encodeURIComponent(mission_id ?? "")}`,
+      return_url: `${site}/payfast-success`,
+      cancel_url: `${site}/payfast-cancel`,
       notify_url: `${site}/api/payfast-notify`,
       name_first: firstName,
       name_last: lastName,
@@ -101,16 +97,6 @@ export default async function handler(req, res) {
     };
 
     pfData.signature = pfSignature(pfData, process.env.PAYFAST_PASSPHRASE || "");
-
-    // TEMPORARY DEBUG — rebuild the exact string again here just to return it
-    let debugString = "";
-    for (const key of PAYFAST_FIELD_ORDER) {
-      if (!Object.prototype.hasOwnProperty.call(pfData, key)) continue;
-      const val = pfData[key];
-      if (val === "" || val === undefined || val === null) continue;
-      debugString += `${key}=${encodeURIComponent(String(val).trim()).replace(/%20/g, "+")}&`;
-    }
-    debugString = debugString.slice(0, -1);
 
     // Record a pending donation so the ITN webhook can match it up later
     const supabase = createClient(
@@ -146,7 +132,7 @@ export default async function handler(req, res) {
     }
     orderedFields.signature = pfData.signature;
 
-    return res.status(200).json({ action, fields: orderedFields, _debug_signature_string: debugString, _debug_passphrase_set: !!process.env.PAYFAST_PASSPHRASE });
+    return res.status(200).json({ action, fields: orderedFields });
   } catch (err) {
     console.error("payfast-create error", err);
     return res.status(500).json({ error: "Could not start PayFast payment" });
