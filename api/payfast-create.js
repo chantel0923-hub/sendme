@@ -27,9 +27,22 @@ const PAYFAST_HOSTS = {
 const SANDBOX_MERCHANT_ID = "10000100";
 const SANDBOX_MERCHANT_KEY = "46f0cd694581a";
 
+// PayFast REQUIRES the signature string fields to be in this exact order —
+// the order published in their API docs, NOT JS object insertion order.
+// Relying on `for...in` order is fragile: adding/reordering a field in the
+// data object silently breaks the signature. This explicit list fixes that.
+const PAYFAST_FIELD_ORDER = [
+  "merchant_id", "merchant_key", "return_url", "cancel_url", "notify_url",
+  "name_first", "name_last", "email_address", "m_payment_id", "amount",
+  "item_name", "item_description",
+  "custom_int1", "custom_int2", "custom_int3", "custom_int4", "custom_int5",
+  "custom_str1", "custom_str2", "custom_str3", "custom_str4", "custom_str5",
+  "email_confirmation", "confirmation_address", "payment_method",
+];
+
 function pfSignature(data, passphrase = "") {
   let pfOutput = "";
-  for (const key in data) {
+  for (const key of PAYFAST_FIELD_ORDER) {
     if (!Object.prototype.hasOwnProperty.call(data, key)) continue;
     const val = data[key];
     if (val === "" || val === undefined || val === null) continue;
@@ -109,7 +122,17 @@ export default async function handler(req, res) {
       // logging issue, but flag it for investigation.
     }
 
-    return res.status(200).json({ action, fields: pfData });
+    // IMPORTANT: the fields object sent to the browser must ALSO be built in
+    // PAYFAST_FIELD_ORDER so the hidden form posts inputs in that order.
+    const orderedFields = {};
+    for (const key of PAYFAST_FIELD_ORDER) {
+      if (Object.prototype.hasOwnProperty.call(pfData, key)) {
+        orderedFields[key] = pfData[key];
+      }
+    }
+    orderedFields.signature = pfData.signature;
+
+    return res.status(200).json({ action, fields: orderedFields });
   } catch (err) {
     console.error("payfast-create error", err);
     return res.status(500).json({ error: "Could not start PayFast payment" });

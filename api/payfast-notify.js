@@ -36,6 +36,15 @@ function getRawBody(req) {
   });
 }
 
+// Same explicit field order as payfast-create.js. The ITN payload PayFast
+// sends back includes every field it received plus its own (payment_status,
+// pf_payment_id, amount_gross, etc.) — for signature verification, only the
+// fields PayFast itself signs (in ITS order) matter. PayFast's ITN signature
+// is actually computed over the fields AS RECEIVED in the POST body, in the
+// order they arrive — so for verification we preserve the order the params
+// arrived in (insertion order from URLSearchParams), NOT a fixed list.
+// This is the opposite rule from payfast-create.js and is the source of the
+// original mismatch if both functions used the same fixed-order assumption.
 function pfSignature(data, passphrase = "") {
   let pfOutput = "";
   for (const key in data) {
@@ -78,7 +87,8 @@ export default async function handler(req, res) {
 
   const rawBody = await getRawBody(req);
 
-  // Parse the URL-encoded body
+  // Parse the URL-encoded body — params preserves the order fields arrived
+  // in, which is what PayFast itself used to generate the signature.
   const params = Object.fromEntries(new URLSearchParams(rawBody));
 
   const mode = (process.env.PAYFAST_MODE || "sandbox").toLowerCase();
