@@ -36,15 +36,10 @@ function getRawBody(req) {
   });
 }
 
-// Same explicit field order as payfast-create.js. The ITN payload PayFast
-// sends back includes every field it received plus its own (payment_status,
-// pf_payment_id, amount_gross, etc.) — for signature verification, only the
-// fields PayFast itself signs (in ITS order) matter. PayFast's ITN signature
-// is actually computed over the fields AS RECEIVED in the POST body, in the
-// order they arrive — so for verification we preserve the order the params
-// arrived in (insertion order from URLSearchParams), NOT a fixed list.
-// This is the opposite rule from payfast-create.js and is the source of the
-// original mismatch if both functions used the same fixed-order assumption.
+// PayFast's ITN signature is computed over the fields as PayFast sent them
+// in the POST body, in that order. URLSearchParams parsing preserves the
+// order fields appear in the raw body, so iterating params in that natural
+// order (not a fixed list) should match what PayFast itself hashed.
 function pfSignature(data, passphrase) {
   let pfOutput = "";
   for (const key in data) {
@@ -55,13 +50,15 @@ function pfSignature(data, passphrase) {
     pfOutput += `${key}=${encodeURIComponent(String(val).trim()).replace(/%20/g, "+")}&`;
   }
   let getString = pfOutput.slice(0, -1);
-  // See payfast-create.js — PayFast's reference implementation appends
-  // &passphrase=... whenever passphrase is not null/undefined, even if it's
-  // an empty string. A truthy check on "" incorrectly skips this.
   if (passphrase !== undefined && passphrase !== null) {
     getString += `&passphrase=${encodeURIComponent(String(passphrase).trim()).replace(/%20/g, "+")}`;
   }
-  return crypto.createHash("md5").update(getString).digest("hex");
+  // TEMPORARY DEBUG — log the raw body and computed string so we can see
+  // exactly what PayFast sent and compare byte-for-byte.
+  console.log("ITN RAW BODY:", JSON.stringify(getString));
+  const sig = crypto.createHash("md5").update(getString).digest("hex");
+  console.log("ITN COMPUTED SIGNATURE:", sig);
+  return sig;
 }
 
 async function verifyWithPayfast(rawBody, mode) {
@@ -89,6 +86,7 @@ export default async function handler(req, res) {
   }
 
   const rawBody = await getRawBody(req);
+  console.log("ITN RAW BODY FROM PAYFAST:", rawBody);
 
   // Parse the URL-encoded body — params preserves the order fields arrived
   // in, which is what PayFast itself used to generate the signature.
