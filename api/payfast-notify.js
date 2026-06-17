@@ -37,28 +37,27 @@ function getRawBody(req) {
 }
 
 // PayFast's ITN signature is computed over the fields as PayFast sent them
-// in the POST body, in that order. URLSearchParams parsing preserves the
-// order fields appear in the raw body, so iterating params in that natural
-// order (not a fixed list) should match what PayFast itself hashed.
+// in the POST body, in that order — and CRITICALLY, PayFast's own ITN
+// verification INCLUDES empty-valued fields (e.g. "custom_str4=") in the
+// string to hash, unlike the outbound payfast-create.js signature which
+// correctly omits them. This asymmetry is undocumented but confirmed by
+// testing: including empty fields produces the exact signature PayFast
+// expects. Do NOT "fix" this to skip empty values — that reintroduces the
+// mismatch.
 function pfSignature(data, passphrase) {
   let pfOutput = "";
   for (const key in data) {
     if (!Object.prototype.hasOwnProperty.call(data, key)) continue;
     if (key === "signature") continue;
     const val = data[key];
-    if (val === "" || val === undefined || val === null) continue;
+    if (val === undefined || val === null) continue;
     pfOutput += `${key}=${encodeURIComponent(String(val).trim()).replace(/%20/g, "+")}&`;
   }
   let getString = pfOutput.slice(0, -1);
   if (passphrase !== undefined && passphrase !== null) {
     getString += `&passphrase=${encodeURIComponent(String(passphrase).trim()).replace(/%20/g, "+")}`;
   }
-  // TEMPORARY DEBUG — log the raw body and computed string so we can see
-  // exactly what PayFast sent and compare byte-for-byte.
-  console.log("ITN RAW BODY:", JSON.stringify(getString));
-  const sig = crypto.createHash("md5").update(getString).digest("hex");
-  console.log("ITN COMPUTED SIGNATURE:", sig);
-  return sig;
+  return crypto.createHash("md5").update(getString).digest("hex");
 }
 
 async function verifyWithPayfast(rawBody, mode) {
@@ -86,7 +85,6 @@ export default async function handler(req, res) {
   }
 
   const rawBody = await getRawBody(req);
-  console.log("ITN RAW BODY FROM PAYFAST:", rawBody);
 
   // Parse the URL-encoded body — params preserves the order fields arrived
   // in, which is what PayFast itself used to generate the signature.
