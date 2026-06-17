@@ -17,6 +17,7 @@ const STEPS = [
   { number:2, label:"Leadership",  icon:"✝"  },
   { number:3, label:"Doctrine",    icon:"📖" },
   { number:4, label:"Review",      icon:"🙏" },
+  { number:5, label:"Banking",     icon:"🏦" },
 ];
 
 const COUNTRIES = ["South Africa","Nigeria","Kenya","Ghana","Ethiopia","Zimbabwe","Uganda","Tanzania","Zambia","Mozambique","USA","UK","Canada","Australia","Brazil","India","Philippines","Indonesia","South Korea","Germany","France","Netherlands","Other"];
@@ -82,12 +83,12 @@ const Toggle = ({ value, onChange, label: lbl, description }) => (
   </div>
 );
 
-const StepBar = ({ current }) => (
+const StepBar = ({ current, totalSteps }) => (
   <div style={{ display:"flex",alignItems:"center",justifyContent:"center",gap:0,marginBottom:32,padding:"0 8px" }}>
-    {STEPS.map((s,i) => {
+    {STEPS.slice(0, totalSteps).map((s,i) => {
       const done=s.number<current, active=s.number===current;
       return (
-        <div key={s.number} style={{ display:"flex",alignItems:"center",flex:i<STEPS.length-1?1:"none" }}>
+        <div key={s.number} style={{ display:"flex",alignItems:"center",flex:i<totalSteps-1?1:"none" }}>
           <div style={{ display:"flex",flexDirection:"column",alignItems:"center",gap:5,flexShrink:0 }}>
             <div style={{ width:36,height:36,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:700,transition:"all .3s",
               background:done||active?"linear-gradient(135deg,#e8b34b,#c8942b)":"rgba(255,255,255,0.05)",
@@ -98,7 +99,7 @@ const StepBar = ({ current }) => (
             </div>
             <span style={{ fontSize:10,letterSpacing:1,whiteSpace:"nowrap",color:active?"#e8b34b":done?"rgba(232,179,75,0.6)":"rgba(255,255,255,0.2)",fontWeight:active?700:400 }}>{s.label}</span>
           </div>
-          {i<STEPS.length-1 && <div style={{ flex:1,height:2,margin:"0 4px",marginBottom:18,background:done?"linear-gradient(90deg,#e8b34b,#c8942b)":"rgba(255,255,255,0.07)",transition:"background .4s" }}/>}
+          {i<totalSteps-1 && <div style={{ flex:1,height:2,margin:"0 4px",marginBottom:18,background:done?"linear-gradient(90deg,#e8b34b,#c8942b)":"rgba(255,255,255,0.07)",transition:"background .4s" }}/>}
         </div>
       );
     })}
@@ -178,26 +179,7 @@ const Step3 = ({ form, set }) => (
   </div>
 );
 
-const Step4 = ({ form, submitting, submitted, onSubmit }) => {
-  if (submitted) {
-    return (
-      <div style={{ textAlign:"center",padding:"20px 0 10px",display:"flex",flexDirection:"column",alignItems:"center",gap:20 }}>
-        <div style={{ width:80,height:80,borderRadius:"50%",background:"rgba(62,207,142,0.12)",border:"2px solid rgba(62,207,142,0.4)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:38 }}>⛪</div>
-        <div>
-          <div style={{ fontSize:26,fontWeight:700,color:"#eef1ff",marginBottom:10 }}>Church Registered</div>
-          <div style={{ fontSize:14,color:"rgba(255,255,255,0.5)",lineHeight:1.8,maxWidth:380 }}>
-            <strong style={{color:"#e8b34b"}}>{form.churchName}</strong> has been submitted for verification.<br/><br/>
-            Our admin team will verify within <strong style={{color:"#e8b34b"}}>3–5 working days</strong>.
-          </div>
-        </div>
-        <div style={{ background:"rgba(232,179,75,0.08)",borderRadius:16,border:"1px solid rgba(232,179,75,0.2)",padding:"16px 24px",width:"100%" }}>
-          <div style={{ fontSize:14,color:"#e8b34b",fontStyle:"italic",marginBottom:4 }}>"Go ye into all the world and preach the gospel to every creature."</div>
-          <div style={{ fontSize:12,color:"rgba(255,255,255,0.3)" }}>Mark 16:15</div>
-        </div>
-      </div>
-    );
-  }
-
+const Step4 = ({ form, submitting, onSubmit }) => {
   const allChecked = ["believesMessage","believesTrinity","believesBible","believesMission","agreesEscrow","agreesAccountability"].every(k=>form[k]);
   const summary = [
     ["Church Name", form.churchName],
@@ -243,6 +225,83 @@ const Step4 = ({ form, submitting, submitted, onSubmit }) => {
   );
 };
 
+// Step 5 — Banking details for the pastor.
+// Only shown after the church has been successfully registered (churchId is set).
+// The pastor can skip this and come back later via PayoutSetup.
+const Step5 = ({ form, set, churchId, bankSaving, bankDone, bankError, onSaveBank, onSkip }) => {
+  if (bankDone) {
+    return (
+      <div style={{ textAlign:"center",padding:"20px 0 10px",display:"flex",flexDirection:"column",alignItems:"center",gap:20 }}>
+        <div style={{ width:80,height:80,borderRadius:"50%",background:"rgba(62,207,142,0.12)",border:"2px solid rgba(62,207,142,0.4)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:38 }}>⛪</div>
+        <div>
+          <div style={{ fontSize:26,fontWeight:700,color:"#eef1ff",marginBottom:10 }}>All Done!</div>
+          <div style={{ fontSize:14,color:"rgba(255,255,255,0.5)",lineHeight:1.8,maxWidth:380 }}>
+            <strong style={{color:"#e8b34b"}}>{form.churchName}</strong> has been registered and your banking details have been saved.<br/><br/>
+            When missionaries you support receive funds, SendMe will pay out to this account.
+          </div>
+        </div>
+        <div style={{ background:"rgba(232,179,75,0.08)",borderRadius:16,border:"1px solid rgba(232,179,75,0.2)",padding:"16px 24px",width:"100%" }}>
+          <div style={{ fontSize:14,color:"#e8b34b",fontStyle:"italic",marginBottom:4 }}>"Go ye into all the world and preach the gospel to every creature."</div>
+          <div style={{ fontSize:12,color:"rgba(255,255,255,0.3)" }}>Mark 16:15</div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display:"flex",flexDirection:"column",gap:4 }}>
+      <div style={sectionTitle}>Church Banking Details</div>
+
+      <div style={{ background:"rgba(91,156,246,0.07)",borderRadius:14,border:"1px solid rgba(91,156,246,0.25)",padding:"14px 18px",marginBottom:18,fontSize:13,color:"rgba(255,255,255,0.55)",lineHeight:1.7 }}>
+        🏦 When a missionary your church supports reaches a funding milestone, SendMe will transfer the released funds to this church account. This information is kept strictly private and never shown publicly.
+      </div>
+
+      <div style={{ background:"rgba(232,179,75,0.07)",borderRadius:12,border:"1px solid rgba(232,179,75,0.2)",padding:"12px 16px",marginBottom:20,fontSize:13,color:"rgba(255,255,255,0.5)",lineHeight:1.7 }}>
+        ✋ Not the pastor? Or banking details not ready yet? You can <strong style={{color:"#e8b34b"}}>skip this step</strong> and submit them later from your profile.
+      </div>
+
+      <FInput label="Full Name of Account Holder *" placeholder="e.g. Eagle Ministry Tabernacle NPC" value={form.bankAccountHolder} onChange={e=>set("bankAccountHolder",e.target.value)}/>
+      <FInput label="Bank Name *" placeholder="e.g. Standard Bank, FNB, Capitec" value={form.bankName} onChange={e=>set("bankName",e.target.value)}/>
+      <FInput label="Account Number *" placeholder="Account number" value={form.bankAccountNumber} onChange={e=>set("bankAccountNumber",e.target.value)}/>
+      <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
+        <FInput label="Branch Code" placeholder="e.g. 051001" value={form.bankBranchCode} onChange={e=>set("bankBranchCode",e.target.value)}/>
+        <div>
+          <label style={label}>Account Type</label>
+          <select value={form.bankAccountType} onChange={e=>set("bankAccountType",e.target.value)}
+            style={{ ...inp, color:"#eef1ff" }}>
+            <option value="cheque" style={{background:"#0c1628"}}>Cheque / Current</option>
+            <option value="savings" style={{background:"#0c1628"}}>Savings</option>
+          </select>
+        </div>
+      </div>
+      <FInput label="Country of Bank Account" placeholder="e.g. South Africa" value={form.bankCountry} onChange={e=>set("bankCountry",e.target.value)}/>
+      <FInput label="SWIFT / IBAN (for international transfers, if applicable)" placeholder="Only needed for international payouts" value={form.bankSwift} onChange={e=>set("bankSwift",e.target.value)}/>
+
+      {bankError && (
+        <div style={{ background:"rgba(232,91,91,0.1)",border:"1px solid rgba(232,91,91,0.3)",borderRadius:10,padding:"10px 14px",color:"#e85b5b",fontSize:13,marginBottom:4 }}>
+          {bankError}
+        </div>
+      )}
+
+      <button onClick={onSaveBank} disabled={bankSaving}
+        style={{ width:"100%",padding:"16px 0",borderRadius:14,border:"none",
+          background:bankSaving?"rgba(255,255,255,0.06)":"linear-gradient(135deg,#e8b34b,#c8942b)",
+          color:bankSaving?"rgba(255,255,255,0.25)":"#000",fontWeight:700,
+          cursor:bankSaving?"default":"pointer",fontSize:16,fontFamily:"Georgia, serif",
+          boxShadow:bankSaving?"none":"0 6px 28px rgba(232,179,75,0.44)",marginBottom:10 }}>
+        {bankSaving?"Saving...":"Save Banking Details"}
+      </button>
+
+      <button onClick={onSkip}
+        style={{ width:"100%",padding:"14px 0",borderRadius:14,border:"1px solid rgba(255,255,255,0.1)",
+          background:"rgba(255,255,255,0.03)",color:"rgba(255,255,255,0.45)",fontWeight:700,
+          cursor:"pointer",fontSize:14,fontFamily:"Georgia, serif" }}>
+        Skip for now — I'll add banking details later
+      </button>
+    </div>
+  );
+};
+
 const validate = (step, form) => {
   if (step===1) {
     if (!form.churchName.trim()) return "Please enter your church name.";
@@ -265,31 +324,44 @@ export default function ChurchRegistration({ onBack, user }) {
   const [step,setStep]               = useState(1);
   const [error,setError]             = useState("");
   const [submitting,setSubmitting]   = useState(false);
-  const [submitted,setSubmitted]     = useState(false);
+  const [submitted,setSubmitted]     = useState(false);  // church row saved
+  const [churchId,setChurchId]       = useState(null);   // id of the saved church row
+  const [bankSaving,setBankSaving]   = useState(false);
+  const [bankDone,setBankDone]       = useState(false);
+  const [bankError,setBankError]     = useState("");
 
   const [form, setForm] = useState({
+    // Church fields
     churchName:"", city:"", province:"", country:"", phone:"", email:"", website:"", size:"",
     pastorName:"", pastorEmail:"", pastorPhone:"", canEndorse:true,
     believesMessage:false, believesTrinity:false, believesBible:false,
     believesMission:false, agreesEscrow:false, agreesAccountability:false,
+    // Banking fields (step 5)
+    bankAccountHolder:"", bankName:"", bankAccountNumber:"",
+    bankBranchCode:"", bankAccountType:"cheque", bankCountry:"South Africa", bankSwift:"",
   });
 
   const set = (key,val) => setForm(f=>({...f,[key]:val}));
 
+  // Total steps shown depends on whether church has been submitted yet.
+  // Before submit: show 4 steps. After submit: show 5 (reveal banking step).
+  const totalSteps = submitted ? 5 : 4;
+
   const nextStep = () => {
     const err = validate(step, form);
     if (err) { setError(err); return; }
-    setError(""); setStep(s=>Math.min(s+1,4));
+    setError(""); setStep(s=>Math.min(s+1, totalSteps));
     window.scrollTo({top:0,behavior:"smooth"});
   };
   const prevStep = () => { setError(""); setStep(s=>Math.max(s-1,1)); window.scrollTo({top:0,behavior:"smooth"}); };
 
+  // Step 4 submit — saves the church row, then advances to step 5 (banking)
   const handleSubmit = async () => {
     setSubmitting(true); setError("");
     try {
       const { lat, lng } = await geocodeLocation(form.city, form.country);
 
-      const { error: dbError } = await supabase.from("churches").insert({
+      const { data, error: dbError } = await supabase.from("churches").insert({
         name:         form.churchName,
         city:         form.city,
         country:      form.country,
@@ -306,13 +378,54 @@ export default function ChurchRegistration({ onBack, user }) {
         user_id:      user?.id || null,
         lat,
         lng,
-      });
+      }).select("id").single();
       if (dbError) throw dbError;
+      setChurchId(data.id);
       setSubmitted(true);
+      // Advance to banking step
+      setStep(5);
+      window.scrollTo({top:0,behavior:"smooth"});
     } catch (e) {
       setError("Submission failed: " + (e.message || "Please try again."));
     }
     setSubmitting(false);
+  };
+
+  // Step 5 — save banking details keyed to church_id
+  const handleSaveBank = async () => {
+    setBankError("");
+    if (!form.bankAccountHolder.trim() || !form.bankName.trim() || !form.bankAccountNumber.trim()) {
+      setBankError("Please fill in Account Holder, Bank Name, and Account Number.");
+      return;
+    }
+    setBankSaving(true);
+    try {
+      const { error: dbError } = await supabase.from("payout_details").upsert({
+        church_id:      churchId,
+        mission_id:     null,
+        recipient_name: form.bankAccountHolder,
+        recipient_type: "church",
+        bank_name:      form.bankName,
+        account_holder: form.bankAccountHolder,
+        account_number: form.bankAccountNumber,
+        branch_code:    form.bankBranchCode,
+        account_type:   form.bankAccountType,
+        country:        form.bankCountry,
+        swift_code:     form.bankSwift,
+        notes:          "",
+        updated_at:     new Date().toISOString(),
+      }, { onConflict: "church_id" });
+      if (dbError) throw dbError;
+      setBankDone(true);
+    } catch (e) {
+      setBankError("Could not save banking details: " + (e.message || "Please try again."));
+    }
+    setBankSaving(false);
+  };
+
+  // Skip banking — just show the final done state without saving bank details
+  const handleSkipBank = () => {
+    setBankDone(true);
   };
 
   return (
@@ -323,10 +436,10 @@ export default function ChurchRegistration({ onBack, user }) {
           <div style={{ fontSize:18,fontWeight:700 }}>Church Registration</div>
           <div style={{ fontSize:11,color:"rgba(255,255,255,0.3)",letterSpacing:2,marginTop:2 }}>SENDME GLOBAL MISSION FUND</div>
         </div>
-        <div style={{ marginLeft:"auto",fontSize:13,color:"rgba(255,255,255,0.3)" }}>Step {step} of 4</div>
+        <div style={{ marginLeft:"auto",fontSize:13,color:"rgba(255,255,255,0.3)" }}>Step {step} of {totalSteps}</div>
       </div>
       <div style={{ maxWidth:640,margin:"0 auto",padding:"32px 20px 80px" }}>
-        <StepBar current={step}/>
+        <StepBar current={step} totalSteps={totalSteps}/>
         {error && (
           <div style={{ background:"rgba(240,82,82,0.1)",border:"1px solid rgba(240,82,82,0.3)",borderRadius:10,padding:"10px 16px",marginBottom:20,fontSize:13,color:"#f05252" }}>
             {error}
@@ -336,20 +449,39 @@ export default function ChurchRegistration({ onBack, user }) {
           {step===1 && <Step1 form={form} set={set}/>}
           {step===2 && <Step2 form={form} set={set}/>}
           {step===3 && <Step3 form={form} set={set}/>}
-          {step===4 && <Step4 form={form} submitting={submitting} submitted={submitted} onSubmit={handleSubmit}/>}
+          {step===4 && <Step4 form={form} submitting={submitting} onSubmit={handleSubmit}/>}
+          {step===5 && (
+            <Step5
+              form={form} set={set}
+              churchId={churchId}
+              bankSaving={bankSaving}
+              bankDone={bankDone}
+              bankError={bankError}
+              onSaveBank={handleSaveBank}
+              onSkip={handleSkipBank}
+            />
+          )}
         </div>
-        {!submitted && (
+        {/* Navigation buttons — hidden on step 4 (has its own submit button)
+            and step 5 (has its own save/skip buttons) */}
+        {!submitted && step < 4 && (
           <div style={{ display:"grid",gridTemplateColumns:step>1?"1fr 1fr":"1fr",gap:12 }}>
             {step>1 && (
               <button onClick={prevStep} style={{ padding:"14px 0",borderRadius:14,border:"1px solid rgba(255,255,255,0.1)",background:"rgba(255,255,255,0.03)",color:"rgba(255,255,255,0.5)",fontWeight:700,cursor:"pointer",fontSize:15,fontFamily:"Georgia, serif" }}>
                 Previous
               </button>
             )}
-            {step<4 && (
-              <button onClick={nextStep} style={{ padding:"14px 0",borderRadius:14,border:"none",background:"linear-gradient(135deg,#e8b34b,#c8942b)",color:"#000",fontWeight:700,cursor:"pointer",fontSize:15,fontFamily:"Georgia, serif",boxShadow:"0 6px 24px rgba(232,179,75,0.4)" }}>
-                Continue
-              </button>
-            )}
+            <button onClick={nextStep} style={{ padding:"14px 0",borderRadius:14,border:"none",background:"linear-gradient(135deg,#e8b34b,#c8942b)",color:"#000",fontWeight:700,cursor:"pointer",fontSize:15,fontFamily:"Georgia, serif",boxShadow:"0 6px 24px rgba(232,179,75,0.4)" }}>
+              Continue
+            </button>
+          </div>
+        )}
+        {/* On step 4, show Previous button only */}
+        {!submitted && step === 4 && (
+          <div style={{ display:"grid",gridTemplateColumns:"1fr",gap:12,marginTop:0 }}>
+            <button onClick={prevStep} style={{ padding:"14px 0",borderRadius:14,border:"1px solid rgba(255,255,255,0.1)",background:"rgba(255,255,255,0.03)",color:"rgba(255,255,255,0.5)",fontWeight:700,cursor:"pointer",fontSize:15,fontFamily:"Georgia, serif" }}>
+              Previous
+            </button>
           </div>
         )}
         <div style={{ textAlign:"center",padding:"32px 0 0",borderTop:"1px solid rgba(255,255,255,0.05)",marginTop:32 }}>
