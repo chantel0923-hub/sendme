@@ -84,98 +84,109 @@ export default async function handler(req, res) {
     return res.status(405).send("Method not allowed");
   }
 
-  const rawBody = await getRawBody(req);
+  try {
+    const rawBody = await getRawBody(req);
 
-  // Parse the URL-encoded body — params preserves the order fields arrived
-  // in, which is what PayFast itself used to generate the signature.
-  const params = Object.fromEntries(new URLSearchParams(rawBody));
+    // Parse the URL-encoded body — params preserves the order fields arrived
+    // in, which is what PayFast itself used to generate the signature.
+    const params = Object.fromEntries(new URLSearchParams(rawBody));
 
-  const mode = (process.env.PAYFAST_MODE || "sandbox").toLowerCase();
-  const passphrase = process.env.PAYFAST_PASSPHRASE || "";
+    const mode = (process.env.PAYFAST_MODE || "sandbox").toLowerCase();
+    const passphrase = process.env.PAYFAST_PASSPHRASE || "";
 
-  // ── 1. Signature check ──────────────────────────────────────────────────────
-  const expectedSig = pfSignature(params, passphrase);
-  if (expectedSig !== params.signature) {
-    console.error("payfast-notify: signature mismatch", { expected: expectedSig, got: params.signature });
-    return res.status(400).send("Invalid signature");
-  }
-
-  // ── 2. IP allowlist (optional belt-and-braces) ──────────────────────────────
-  // PayFast publishes a list of valid IPs — we skip the strict block here so
-  // sandbox testing isn't broken by proxy hops, but log any mismatch.
-  const forwarded = req.headers["x-forwarded-for"] || "";
-  const callerIP = forwarded.split(",")[0].trim();
-  const knownPayfastRange = PAYFAST_VALID_HOSTS; // hostname check done by PayFast validate endpoint
-  console.log("payfast-notify: caller IP", callerIP);
-
-  // ── 3. Server-side validation with PayFast ──────────────────────────────────
-  const isValid = await verifyWithPayfast(rawBody, mode);
-  if (!isValid) {
-    console.error("payfast-notify: PayFast server validation failed");
-    return res.status(400).send("Payment validation failed");
-  }
-
-  // ── 4. Process the notification ─────────────────────────────────────────────
-  const {
-    m_payment_id,
-    payment_status,    // "COMPLETE" | "FAILED" | "PENDING"
-    amount_gross,
-    custom_str1: mission_id,
-    custom_str2: type,
-    custom_str3: user_id,
-    pf_payment_id,
-    name_first,
-    email_address,
-  } = params;
-
-  const supabase = createClient(
-    process.env.REACT_APP_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
-
-  const status =
-    payment_status === "COMPLETE" ? "complete" :
-    payment_status === "FAILED"   ? "failed"   : "pending";
-
-  // Update the donations row
-  const { error: updateError } = await supabase
-    .from("donations")
-    .update({
-      status,
-      pf_payment_id: pf_payment_id || null,
-      amount: Number(amount_gross) || null,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("m_payment_id", m_payment_id);
-
-  if (updateError) {
-    console.error("payfast-notify: failed to update donation row", updateError);
-    // Still return 200 so PayFast doesn't keep retrying — log for manual review
-    return res.status(200).send("OK");
-  }
-
-  // Increment the mission's raised amount on COMPLETE
-  if (status === "complete" && mission_id) {
-    const { error: rpcError } = await supabase.rpc("increment_mission_raised", {
-      p_mission_id: mission_id,
-      p_amount: Number(amount_gross),
-    });
-    if (rpcError) {
-      console.error("payfast-notify: increment_mission_raised failed", rpcError);
+    // ── 1. Signature check ────────────────────────────────────────────────
+    const expectedSig = pfSignature(params, passphrase);
+    if (expectedSig !== params.signature) {
+      console.error("payfast-notify: signature mismatch", { expected: expectedSig, got: params.signature });
+      return res.status(400).send("Invalid signature");
     }
 
-    // Also append to mission_ledger for transparency
-    await supabase.from("mission_ledger").insert({
-      mission_id,
-      amount: Number(amount_gross),
-      description: `Donation via PayFast (${pf_payment_id || m_payment_id})`,
-      category: "donation",
-      donor_name: name_first || null,
-      donor_email: email_address || null,
-      user_id: user_id || null,
-    }).catch((e) => console.error("payfast-notify: ledger insert failed", e));
-  }
+    // ── 2. IP allowlist (optional belt-and-braces) ──────────────────────────
+    // PayFast publishes a list of valid IPs — we skip the strict block here
+    // so sandbox testing isn't broken by proxy hops, but log any mismatch.
+    const forwarded = req.headers["x-forwarded-for"] || "";
+    const callerIP = forwarded.split(",")[0].trim();
+    const knownPayfastRange = PAYFAST_VALID_HOSTS; // hostname check done by PayFast validate endpoint
+    console.log("payfast-notify: caller IP", callerIP);
 
-  console.log("payfast-notify: processed", { m_payment_id, status, amount_gross, mission_id });
-  return res.status(200).send("OK");
+    // ── 3. Server-side validation with PayFast ──────────────────────────────
+    const isValid = await verifyWithPayfast(rawBody, mode);
+    if (!isValid) {
+      console.error("payfast-notify: PayFast server validation failed");
+      return res.status(400).send("Payment validation failed");
+    }
+
+    // ── 4. Process the notification ──────────────────────────────────────────
+    const {
+      m_payment_id,
+      payment_status,    // "COMPLETE" | "FAILED" | "PENDING"
+      amount_gross,
+      custom_str1: mission_id,
+      custom_str2: type,
+      custom_str3: user_id,
+      pf_payment_id,
+      name_first,
+      email_address,
+    } = params;
+
+    const supabase = createClient(
+      process.env.REACT_APP_SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
+
+    const status =
+      payment_status === "COMPLETE" ? "complete" :
+      payment_status === "FAILED"   ? "failed"   : "pending";
+
+    // Update the donations row
+    const { error: updateError } = await supabase
+      .from("donations")
+      .update({
+        status,
+        pf_payment_id: pf_payment_id || null,
+        amount: Number(amount_gross) || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("m_payment_id", m_payment_id);
+
+    if (updateError) {
+      console.error("payfast-notify: failed to update donation row", updateError);
+      // Still return 200 so PayFast doesn't keep retrying — log for manual review
+      return res.status(200).send("OK");
+    }
+
+    // Increment the mission's raised amount on COMPLETE
+    if (status === "complete" && mission_id) {
+      const { error: rpcError } = await supabase.rpc("increment_mission_raised", {
+        p_mission_id: mission_id,
+        p_amount: Number(amount_gross),
+      });
+      if (rpcError) {
+        console.error("payfast-notify: increment_mission_raised failed", rpcError);
+      }
+
+      // Also append to mission_ledger for transparency
+      const { error: ledgerError } = await supabase.from("mission_ledger").insert({
+        mission_id,
+        amount: Number(amount_gross),
+        description: `Donation via PayFast (${pf_payment_id || m_payment_id})`,
+        category: "donation",
+        donor_name: name_first || null,
+        donor_email: email_address || null,
+        user_id: user_id || null,
+      });
+      if (ledgerError) {
+        console.error("payfast-notify: ledger insert failed", ledgerError);
+      }
+    }
+
+    console.log("payfast-notify: processed", { m_payment_id, status, amount_gross, mission_id });
+    return res.status(200).send("OK");
+  } catch (err) {
+    // Catch-all so an unexpected error never surfaces as a raw 500 to
+    // PayFast — log it for investigation and return 200 so PayFast doesn't
+    // endlessly retry a notification we've already partially processed.
+    console.error("payfast-notify: unexpected error", err);
+    return res.status(200).send("OK");
+  }
 }
