@@ -1,11 +1,7 @@
-// ── PAYFAST CLIENT HELPER ─────────────────────────────────────────────────────
-// Calls our serverless /api/payfast-create endpoint to get a signed PayFast
-// payment payload, stashes a note of what we're paying for in sessionStorage
-// (so the return screen can show a friendly amount), then builds and submits
-// a hidden form that redirects the browser to PayFast's hosted checkout.
-//
-// The real confirmation of payment happens server-side via the PayFast ITN
-// webhook in /api/payfast-notify.js — this file only handles the redirect.
+// ── PAYFAST CLIENT HELPER (TEMPORARY DEBUG VERSION) ────────────────────────
+// This version pauses before redirecting and shows an alert with the
+// signature debug info, so it can be read without racing the page redirect.
+// Once the signature issue is fixed, restore the original payfast.js.
 
 export async function startPayfastDonation({ mission, amount, user, type = "once" }) {
   if (!mission) throw new Error("No mission selected");
@@ -41,7 +37,24 @@ export async function startPayfastDonation({ mission, amount, user, type = "once
     throw new Error(msg);
   }
 
-  const { action, fields } = await res.json();
+  const result = await res.json();
+  const { action, fields, _debug_signature_string, _debug_passphrase_set } = result;
+
+  // TEMPORARY DEBUG — pause and show the signature info before redirecting
+  console.log("=== PAYFAST DEBUG ===");
+  console.log("Signature string:", _debug_signature_string);
+  console.log("Passphrase set:", _debug_passphrase_set);
+  console.log("Fields:", fields);
+
+  window.alert(
+    "DEBUG INFO (copy this):\n\n" +
+    "Signature string:\n" + _debug_signature_string + "\n\n" +
+    "Passphrase set: " + _debug_passphrase_set + "\n\n" +
+    "Signature hash: " + fields.signature
+  );
+  // Remove the line below (or comment it out) to stop the redirect entirely
+  // while you copy the debug info, then refresh and try again without it.
+  // return;
 
   const form = document.createElement("form");
   form.method = "POST";
