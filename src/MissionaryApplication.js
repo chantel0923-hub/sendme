@@ -72,7 +72,7 @@ const convertToUSD = async (amount, fromCurrency) => {
       // Today's file not yet published — try yesterday
       rate = await fetchRate(yesterday);
     }
-    return Number(amount) * rate;
+    return Number(amount) / rate;
   } catch {
     return null;
   }
