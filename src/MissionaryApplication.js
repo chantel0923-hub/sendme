@@ -40,19 +40,24 @@ const CURRENCIES = [
   { code:"GBP", label:"British Pound (GBP)" },
 ];
 
-// Converts an amount in fromCurrency to USD using frankfurter.app (free,
-// no API key required). Returns null on any failure so the caller can show
-// a clear "couldn't fetch rate" state rather than a silently wrong number.
+// Converts an amount in fromCurrency to USD using Frankfurter's exchange
+// rate API (free, no key required). The provider migrated their domain
+// from api.frankfurter.app to api.frankfurter.dev — the old domain is no
+// longer reliable, so this uses the current v1 endpoint at the new domain.
+// We fetch the RATE (not a pre-converted amount) and multiply locally,
+// since that's the more stable form of the v1 API across both domains.
 const convertToUSD = async (amount, fromCurrency) => {
   if (!amount || Number(amount) <= 0) return null;
   if (fromCurrency === "USD") return Number(amount);
   try {
     const res = await fetch(
-      `https://api.frankfurter.app/latest?amount=${amount}&from=${fromCurrency}&to=USD`
+      `https://api.frankfurter.dev/v1/latest?base=${fromCurrency}&symbols=USD`
     );
     if (!res.ok) return null;
     const data = await res.json();
-    return data?.rates?.USD ?? null;
+    const rate = data?.rates?.USD;
+    if (!rate) return null;
+    return Number(amount) * rate;
   } catch {
     return null;
   }
