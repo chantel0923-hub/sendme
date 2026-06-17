@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "./supabase";
 
 const inp = {
@@ -19,6 +19,44 @@ const STEPS = [
   { number:4, label:"Mission",  icon:"📋" },
   { number:5, label:"Submit",   icon:"🙏" },
 ];
+
+// Currencies missionaries commonly need, grouped roughly by region.
+// USD is included so missionaries already thinking in dollars can skip
+// conversion entirely.
+const CURRENCIES = [
+  { code:"USD", label:"US Dollar (USD)" },
+  { code:"ZAR", label:"South African Rand (ZAR)" },
+  { code:"NGN", label:"Nigerian Naira (NGN)" },
+  { code:"KES", label:"Kenyan Shilling (KES)" },
+  { code:"GHS", label:"Ghanaian Cedi (GHS)" },
+  { code:"UGX", label:"Ugandan Shilling (UGX)" },
+  { code:"TZS", label:"Tanzanian Shilling (TZS)" },
+  { code:"ZMW", label:"Zambian Kwacha (ZMW)" },
+  { code:"INR", label:"Indian Rupee (INR)" },
+  { code:"PHP", label:"Philippine Peso (PHP)" },
+  { code:"IDR", label:"Indonesian Rupiah (IDR)" },
+  { code:"BRL", label:"Brazilian Real (BRL)" },
+  { code:"EUR", label:"Euro (EUR)" },
+  { code:"GBP", label:"British Pound (GBP)" },
+];
+
+// Converts an amount in fromCurrency to USD using frankfurter.app (free,
+// no API key required). Returns null on any failure so the caller can show
+// a clear "couldn't fetch rate" state rather than a silently wrong number.
+const convertToUSD = async (amount, fromCurrency) => {
+  if (!amount || Number(amount) <= 0) return null;
+  if (fromCurrency === "USD") return Number(amount);
+  try {
+    const res = await fetch(
+      `https://api.frankfurter.app/latest?amount=${amount}&from=${fromCurrency}&to=USD`
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.rates?.USD ?? null;
+  } catch {
+    return null;
+  }
+};
 
 const ROLES    = ["Missionary","Evangelist","Pastor","Church Planter","Bible Distributor","Medical Missionary","Children's Minister","Other"];
 const REGIONS  = ["Africa","Asia","South America","Middle East","Europe","North America","Pacific Islands","Central Asia","Other"];
@@ -150,6 +188,83 @@ const Step3 = ({ form, set }) => (
   </div>
 );
 
+// Lets a missionary enter their funding goal in their own local currency.
+// Converts to USD live (debounced) via convertToUSD(), shows the converted
+// amount clearly, and once the missionary moves on or the value settles,
+// the USD figure is what gets locked in and stored — donors only ever see
+// USD, and the rate never changes after this point even if it fluctuates
+// later, so a $500 goal stays $500 regardless of what the Naira does next.
+const FundingGoalCurrency = ({ form, set }) => {
+  const [converting, setConverting] = useState(false);
+  const [rateError, setRateError] = useState(false);
+
+  useEffect(() => {
+    if (!form.localAmount || Number(form.localAmount) <= 0) {
+      set("fundingGoal", "");
+      return;
+    }
+    if (form.localCurrency === "USD") {
+      set("fundingGoal", form.localAmount);
+      setRateError(false);
+      return;
+    }
+    setConverting(true);
+    setRateError(false);
+    const timer = setTimeout(async () => {
+      const usd = await convertToUSD(form.localAmount, form.localCurrency);
+      if (usd === null) {
+        setRateError(true);
+        set("fundingGoal", "");
+      } else {
+        set("fundingGoal", Math.round(usd).toString());
+      }
+      setConverting(false);
+    }, 600); // debounce so we don't call the API on every keystroke
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.localAmount, form.localCurrency]);
+
+  return (
+    <div style={{ marginBottom:14 }}>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+        <div>
+          <label style={label}>Your Funding Goal *</label>
+          <input type="number" placeholder="0" value={form.localAmount}
+            onChange={e=>set("localAmount", e.target.value)}
+            style={{ ...inp, marginBottom:0 }}/>
+        </div>
+        <div>
+          <label style={label}>In Currency *</label>
+          <select value={form.localCurrency} onChange={e=>set("localCurrency", e.target.value)}
+            style={{ ...inp, marginBottom:0, color:"#eef1ff" }}>
+            {CURRENCIES.map(c=>(
+              <option key={c.code} value={c.code} style={{background:"#0c1628"}}>{c.label}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div style={{ marginTop:10, minHeight:48 }}>
+        {form.localCurrency !== "USD" && Number(form.localAmount) > 0 && (
+          <div style={{ background:"rgba(232,179,75,0.07)",borderRadius:10,border:"1px solid rgba(232,179,75,0.2)",padding:"10px 14px",display:"flex",alignItems:"center",gap:10 }}>
+            {converting ? (
+              <span style={{ fontSize:13,color:"rgba(255,255,255,0.45)" }}>Converting to USD...</span>
+            ) : rateError ? (
+              <span style={{ fontSize:13,color:"#f05252" }}>Couldn't fetch a live exchange rate. Please check your connection and try again, or enter your goal directly in USD above.</span>
+            ) : form.fundingGoal ? (
+              <>
+                <span style={{ fontSize:13,color:"rgba(255,255,255,0.5)" }}>≈</span>
+                <span style={{ fontSize:18,fontWeight:700,color:"#e8b34b" }}>${Number(form.fundingGoal).toLocaleString()} USD</span>
+                <span style={{ fontSize:12,color:"rgba(255,255,255,0.35)",marginLeft:"auto" }}>This USD amount will be locked in once you submit</span>
+              </>
+            ) : null}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const Step4 = ({ form, set }) => (
   <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
     <div style={sectionTitle}>Mission Details</div>
@@ -166,18 +281,13 @@ const Step4 = ({ form, set }) => (
       <label style={label}>Describe your mission *</label>
       <textarea placeholder="What will you do? Who are you reaching?" value={form.missionDescription} onChange={e=>set("missionDescription",e.target.value)} style={{...textarea,minHeight:140}}/>
     </div>
-    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12 }}>
-      <div>
-        <label style={label}>Funding Goal (USD) *</label>
-        <div style={{ display:"flex",borderRadius:12,overflow:"hidden",border:"1px solid rgba(255,255,255,0.1)",marginBottom:14 }}>
-          <div style={{ padding:"13px 12px",background:"rgba(255,255,255,0.04)",color:"rgba(255,255,255,0.35)",fontSize:15 }}>$</div>
-          <input type="number" placeholder="0" value={form.fundingGoal} onChange={e=>set("fundingGoal",e.target.value)}
-            style={{ flex:1,padding:"13px 12px",background:"rgba(255,255,255,0.03)",border:"none",color:"#eef1ff",fontSize:15,fontFamily:"Georgia, serif",outline:"none" }}/>
-        </div>
-      </div>
+    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
       <FInput label="Mission Start Date" type="date" value={form.startDate} onChange={e=>set("startDate",e.target.value)}/>
       <FInput label="Expected Duration" placeholder="e.g. 12 months" value={form.duration} onChange={e=>set("duration",e.target.value)}/>
     </div>
+
+    {/* Multi-currency funding goal */}
+    <FundingGoalCurrency form={form} set={set}/>
 
     {/* Platform surcharge disclosure */}
     <div style={{ background:"rgba(91,156,246,0.07)",borderRadius:14,border:"1px solid rgba(91,156,246,0.25)",padding:"16px 18px",marginBottom:14 }}>
@@ -241,7 +351,8 @@ const Step5 = ({ form, set, submitted, submitting, onSubmit }) => {
     ["Pastor email",  form.pastorEmail],
     ["Mission title", form.missionTitle],
     ["Target country",form.targetCountry],
-    ["Funding goal",  form.fundingGoal?`$${Number(form.fundingGoal).toLocaleString()}`:null],
+    ["Your funding goal", (form.localCurrency!=="USD" && form.localAmount) ? `${Number(form.localAmount).toLocaleString()} ${form.localCurrency}` : null],
+    ["Funding goal",  form.fundingGoal?`$${Number(form.fundingGoal).toLocaleString()} USD`:null],
     ["Platform surcharge (10%)", form.fundingGoal?`$${Math.round(Number(form.fundingGoal)*0.1).toLocaleString()}`:null],
     ["Total donors asked for", form.fundingGoal?`$${Math.round(Number(form.fundingGoal)*1.1).toLocaleString()}`:null],
     ["Shadow mode",   form.shadowMode?"Requested":"No"],
@@ -318,7 +429,7 @@ const validate = (step, form) => {
     if (!form.targetRegion)              return "Please select a target region.";
     if (!form.targetCountry.trim())      return "Please enter the target country.";
     if (!form.missionDescription.trim()) return "Please describe your mission.";
-    if (!form.fundingGoal||Number(form.fundingGoal)<100) return "Please enter a funding goal of at least $100.";
+    if (!form.fundingGoal||Number(form.fundingGoal)<100) return "Please enter a funding goal equivalent to at least $100 USD, and wait for the conversion to complete if using a local currency.";
   }
   if (step===5) {
     if (!form.surchargeAcknowledged) return "Please acknowledge the 10% platform surcharge before submitting.";
@@ -339,7 +450,7 @@ export default function MissionaryApplication({ onBack, user }) {
     churchName:"", pastorName:"", pastorEmail:"", pastorPhone:"",
     churchCity:"", churchCountry:"", churchWebsite:"",
     missionTitle:"", targetRegion:"", targetCountry:"", targetArea:"",
-    missionDescription:"", fundingGoal:"", startDate:"", duration:"",
+    missionDescription:"", fundingGoal:"", localAmount:"", localCurrency:"USD", startDate:"", duration:"",
     milestone1:"", milestone2:"", milestone3:"", surchargeAcknowledged:false,
   });
 
@@ -375,6 +486,8 @@ export default function MissionaryApplication({ onBack, user }) {
         area:             form.targetArea,
         blurb:            form.missionDescription,
         goal:             goal,
+        local_amount:     form.localCurrency === "USD" ? null : Number(form.localAmount) || null,
+        local_currency:   form.localCurrency,
         collection_target: collectionTarget,
         platform_surcharge: platformSurcharge,
         surcharge_acknowledged: form.surchargeAcknowledged,
