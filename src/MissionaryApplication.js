@@ -40,23 +40,38 @@ const CURRENCIES = [
   { code:"GBP", label:"British Pound (GBP)" },
 ];
 
-// Converts an amount in fromCurrency to USD using Frankfurter's exchange
-// rate API (free, no key required). The provider migrated their domain
-// from api.frankfurter.app to api.frankfurter.dev — the old domain is no
-// longer reliable, so this uses the current v1 endpoint at the new domain.
-// We fetch the RATE (not a pre-converted amount) and multiply locally,
-// since that's the more stable form of the v1 API across both domains.
+// Converts an amount in fromCurrency to USD using the fawazahmed0 currency API
+// (free, no API key required, 170+ currencies including all African currencies).
+// Served via jsDelivr CDN. Falls back to yesterday's date if today's data
+// isn't published yet (CDN sometimes lags by one day).
 const convertToUSD = async (amount, fromCurrency) => {
   if (!amount || Number(amount) <= 0) return null;
   if (fromCurrency === "USD") return Number(amount);
-  try {
+  const lowerCurrency = fromCurrency.toLowerCase();
+  const toDateString = (d) => d.toISOString().split("T")[0];
+  const today = toDateString(new Date());
+  const yesterday = toDateString(new Date(Date.now() - 86400000));
+
+  const fetchRate = async (dateStr) => {
     const res = await fetch(
-      `https://api.frankfurter.dev/v1/latest?base=${fromCurrency}&symbols=USD`
+      `https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@${dateStr}/v1/currencies/usd.json`
     );
-    if (!res.ok) return null;
+    if (!res.ok) throw new Error("fetch failed");
     const data = await res.json();
-    const rate = data?.rates?.USD;
-    if (!rate) return null;
+    // data.usd is a map of currency-code -> how many USD = 1 unit of that currency
+    const rate = data?.usd?.[lowerCurrency];
+    if (!rate) throw new Error("Currency not found: " + lowerCurrency);
+    return rate;
+  };
+
+  try {
+    let rate;
+    try {
+      rate = await fetchRate(today);
+    } catch {
+      // Today's file not yet published — try yesterday
+      rate = await fetchRate(yesterday);
+    }
     return Number(amount) * rate;
   } catch {
     return null;
