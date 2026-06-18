@@ -20,9 +20,6 @@ const STEPS = [
   { number:5, label:"Submit",   icon:"🙏" },
 ];
 
-// Currencies missionaries commonly need, grouped roughly by region.
-// USD is included so missionaries already thinking in dollars can skip
-// conversion entirely.
 const CURRENCIES = [
   { code:"USD", label:"US Dollar (USD)" },
   { code:"ZAR", label:"South African Rand (ZAR)" },
@@ -42,8 +39,6 @@ const CURRENCIES = [
 
 // Converts an amount in fromCurrency to USD using the fawazahmed0 currency API
 // (free, no API key required, 170+ currencies including all African currencies).
-// Served via jsDelivr CDN. Falls back to yesterday's date if today's data
-// isn't published yet (CDN sometimes lags by one day).
 const convertToUSD = async (amount, fromCurrency) => {
   if (!amount || Number(amount) <= 0) return null;
   if (fromCurrency === "USD") return Number(amount);
@@ -58,7 +53,6 @@ const convertToUSD = async (amount, fromCurrency) => {
     );
     if (!res.ok) throw new Error("fetch failed");
     const data = await res.json();
-    // data.usd is a map of currency-code -> how many USD = 1 unit of that currency
     const rate = data?.usd?.[lowerCurrency];
     if (!rate) throw new Error("Currency not found: " + lowerCurrency);
     return rate;
@@ -66,20 +60,16 @@ const convertToUSD = async (amount, fromCurrency) => {
 
   try {
     let rate;
-    try {
-      rate = await fetchRate(today);
-    } catch {
-      // Today's file not yet published — try yesterday
-      rate = await fetchRate(yesterday);
-    }
+    try { rate = await fetchRate(today); }
+    catch { rate = await fetchRate(yesterday); }
     return Number(amount) / rate;
   } catch {
     return null;
   }
 };
 
-const ROLES    = ["Missionary","Evangelist","Pastor","Church Planter","Bible Distributor","Medical Missionary","Children's Minister","Other"];
-const REGIONS  = ["Africa","Asia","South America","Middle East","Europe","North America","Pacific Islands","Central Asia","Other"];
+const ROLES   = ["Missionary","Evangelist","Pastor","Church Planter","Bible Distributor","Medical Missionary","Children's Minister","Other"];
+const REGIONS = ["Africa","Asia","South America","Middle East","Europe","North America","Pacific Islands","Central Asia","Other"];
 
 const FInput = ({ label: lbl, ...props }) => {
   const [focused, setFocused] = useState(false);
@@ -190,30 +180,138 @@ const Step2 = ({ form, set }) => (
   </div>
 );
 
-const Step3 = ({ form, set }) => (
-  <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
-    <div style={sectionTitle}>Church & Endorsement</div>
-    <div style={{ background:"rgba(232,179,75,0.07)",borderRadius:12,border:"1px solid rgba(232,179,75,0.2)",padding:"12px 16px",marginBottom:18 }}>
-      <div style={{ fontSize:13,color:"rgba(255,255,255,0.5)",lineHeight:1.7 }}>All missionaries must be endorsed by a <strong style={{color:"#e8b34b"}}>verified Message-believing church</strong>.</div>
-    </div>
-    <FInput label="Home Church Name *" placeholder="e.g. Eagle Ministry Tabernacle" value={form.churchName} onChange={e=>set("churchName",e.target.value)}/>
-    <FInput label="Pastor / Minister Name *" placeholder="Full name of your pastor" value={form.pastorName} onChange={e=>set("pastorName",e.target.value)}/>
-    <FInput label="Pastor's Email Address *" type="email" placeholder="pastor@yourchurch.org" value={form.pastorEmail} onChange={e=>set("pastorEmail",e.target.value)}/>
-    <FInput label="Pastor's Phone Number" type="tel" placeholder="+27 82 000 0000" value={form.pastorPhone} onChange={e=>set("pastorPhone",e.target.value)}/>
-    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-      <FInput label="Church City" placeholder="City" value={form.churchCity} onChange={e=>set("churchCity",e.target.value)}/>
-      <FInput label="Church Country" placeholder="Country" value={form.churchCountry} onChange={e=>set("churchCountry",e.target.value)}/>
-    </div>
-    <FInput label="Church Website (optional)" placeholder="https://www.yourchurch.org" value={form.churchWebsite} onChange={e=>set("churchWebsite",e.target.value)}/>
-  </div>
-);
+// Step 3 — Church & Endorsement
+// Loads registered SendMe churches from Supabase and lets the missionary
+// select their church from a dropdown. This links the mission to the church's
+// banking details so payouts go to the right account automatically.
+// If their church is not yet registered, they can toggle to manual entry —
+// the mission is saved with church_verified=false and flagged in AdminPayouts.
+const Step3 = ({ form, set, churches, churchesLoading }) => {
+  const manualMode = form.churchNotOnSendMe;
 
-// Lets a missionary enter their funding goal in their own local currency.
-// Converts to USD live (debounced) via convertToUSD(), shows the converted
-// amount clearly, and once the missionary moves on or the value settles,
-// the USD figure is what gets locked in and stored — donors only ever see
-// USD, and the rate never changes after this point even if it fluctuates
-// later, so a $500 goal stays $500 regardless of what the Naira does next.
+  const handleChurchSelect = (e) => {
+    const selectedId = e.target.value;
+    if (!selectedId) {
+      set("churchId", "");
+      set("churchName", "");
+      set("pastorName", "");
+      set("pastorEmail", "");
+      set("pastorPhone", "");
+      set("churchCity", "");
+      set("churchCountry", "");
+      set("churchVerified", false);
+      return;
+    }
+    const church = churches.find(c => c.id === selectedId);
+    if (church) {
+      set("churchId", church.id);
+      set("churchName", church.name);
+      set("pastorName", church.pastor_name || "");
+      set("pastorEmail", church.pastor_email || "");
+      set("pastorPhone", church.pastor_phone || "");
+      set("churchCity", church.city || "");
+      set("churchCountry", church.country || "");
+      set("churchVerified", true);
+    }
+  };
+
+  const toggleManual = () => {
+    const next = !manualMode;
+    set("churchNotOnSendMe", next);
+    // Clear any previously selected church when switching modes
+    set("churchId", "");
+    set("churchName", "");
+    set("pastorName", "");
+    set("pastorEmail", "");
+    set("pastorPhone", "");
+    set("churchCity", "");
+    set("churchCountry", "");
+    set("churchVerified", false);
+  };
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
+      <div style={sectionTitle}>Church & Endorsement</div>
+
+      {/* Accountability notice */}
+      <div style={{ background:"rgba(232,179,75,0.07)",borderRadius:12,border:"1px solid rgba(232,179,75,0.2)",padding:"14px 16px",marginBottom:18 }}>
+        <div style={{ fontSize:13,color:"rgba(255,255,255,0.6)",lineHeight:1.7 }}>
+          All missionaries must be endorsed by a <strong style={{color:"#e8b34b"}}>verified Message-believing church</strong>.<br/>
+          <strong style={{color:"#e8b34b"}}>Mission funds are paid directly to the church</strong> — the church takes financial accountability for this mission.
+        </div>
+      </div>
+
+      {!manualMode ? (
+        <>
+          {/* Registered church dropdown */}
+          <label style={label}>Select Your Sending Church *</label>
+          {churchesLoading ? (
+            <div style={{ ...inp, color:"rgba(255,255,255,0.3)", display:"flex", alignItems:"center" }}>Loading registered churches...</div>
+          ) : (
+            <select value={form.churchId || ""} onChange={handleChurchSelect}
+              style={{ ...inp, color: form.churchId ? "#eef1ff" : "rgba(255,255,255,0.35)" }}>
+              <option value="" style={{background:"#0c1628"}}>— Select your church —</option>
+              {churches.map(c => (
+                <option key={c.id} value={c.id} style={{background:"#0c1628"}}>
+                  {c.name} — {c.city}, {c.country}
+                </option>
+              ))}
+            </select>
+          )}
+
+          {/* Show selected church details as confirmation */}
+          {form.churchId && (
+            <div style={{ background:"rgba(62,207,142,0.07)",borderRadius:12,border:"1px solid rgba(62,207,142,0.25)",padding:"14px 16px",marginBottom:14 }}>
+              <div style={{ fontSize:12,color:"rgba(62,207,142,0.8)",letterSpacing:1,textTransform:"uppercase",marginBottom:8 }}>✓ Church Selected</div>
+              <div style={{ fontSize:13,color:"rgba(255,255,255,0.7)",lineHeight:1.8 }}>
+                <strong style={{color:"#eef1ff"}}>{form.churchName}</strong><br/>
+                Pastor: {form.pastorName} · {form.pastorEmail}<br/>
+                {form.churchCity && <>{form.churchCity}, {form.churchCountry}</>}
+              </div>
+              <div style={{ fontSize:12,color:"rgba(62,207,142,0.7)",marginTop:8 }}>
+                🏦 Funds will be paid to this church's registered bank account upon milestone completion.
+              </div>
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          {/* Manual fallback — church not yet on SendMe */}
+          <div style={{ background:"rgba(232,179,75,0.07)",borderRadius:12,border:"1px solid rgba(232,179,75,0.2)",padding:"12px 16px",marginBottom:14 }}>
+            <div style={{ fontSize:13,color:"rgba(255,255,255,0.5)",lineHeight:1.7 }}>
+              ⚠️ Your application will be marked as <strong style={{color:"#e8b34b"}}>pending church registration</strong>. SendMe admin will contact your pastor to register the church before your mission can be approved.
+            </div>
+          </div>
+          <FInput label="Home Church Name *" placeholder="e.g. Eagle Ministry Tabernacle" value={form.churchName} onChange={e=>set("churchName",e.target.value)}/>
+          <FInput label="Pastor / Minister Name *" placeholder="Full name of your pastor" value={form.pastorName} onChange={e=>set("pastorName",e.target.value)}/>
+          <FInput label="Pastor's Email Address *" type="email" placeholder="pastor@yourchurch.org" value={form.pastorEmail} onChange={e=>set("pastorEmail",e.target.value)}/>
+          <FInput label="Pastor's Phone Number" type="tel" placeholder="+27 82 000 0000" value={form.pastorPhone} onChange={e=>set("pastorPhone",e.target.value)}/>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+            <FInput label="Church City" placeholder="City" value={form.churchCity} onChange={e=>set("churchCity",e.target.value)}/>
+            <FInput label="Church Country" placeholder="Country" value={form.churchCountry} onChange={e=>set("churchCountry",e.target.value)}/>
+          </div>
+          <FInput label="Church Website (optional)" placeholder="https://www.yourchurch.org" value={form.churchWebsite} onChange={e=>set("churchWebsite",e.target.value)}/>
+        </>
+      )}
+
+      {/* Toggle between modes */}
+      <div onClick={toggleManual}
+        style={{ display:"flex",gap:14,alignItems:"center",padding:"12px 16px",borderRadius:12,cursor:"pointer",marginTop:4,
+          background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.07)",transition:"all .2s" }}>
+        <div style={{ width:20,height:20,borderRadius:4,flexShrink:0,
+          background:manualMode?"linear-gradient(135deg,#e8b34b,#c8942b)":"rgba(255,255,255,0.05)",
+          border:manualMode?"none":"1px solid rgba(255,255,255,0.15)",
+          display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,color:"#000",fontWeight:700 }}>
+          {manualMode?"✓":""}
+        </div>
+        <span style={{ fontSize:13,color:"rgba(255,255,255,0.45)",lineHeight:1.5 }}>
+          My church is not yet registered on SendMe — I will enter details manually
+        </span>
+      </div>
+    </div>
+  );
+};
+
 const FundingGoalCurrency = ({ form, set }) => {
   const [converting, setConverting] = useState(false);
   const [rateError, setRateError] = useState(false);
@@ -239,7 +337,7 @@ const FundingGoalCurrency = ({ form, set }) => {
         set("fundingGoal", Math.round(usd).toString());
       }
       setConverting(false);
-    }, 600); // debounce so we don't call the API on every keystroke
+    }, 600);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.localAmount, form.localCurrency]);
@@ -263,7 +361,6 @@ const FundingGoalCurrency = ({ form, set }) => {
           </select>
         </div>
       </div>
-
       <div style={{ marginTop:10, minHeight:48 }}>
         {form.localCurrency !== "USD" && Number(form.localAmount) > 0 && (
           <div style={{ background:"rgba(232,179,75,0.07)",borderRadius:10,border:"1px solid rgba(232,179,75,0.2)",padding:"10px 14px",display:"flex",alignItems:"center",gap:10 }}>
@@ -305,11 +402,7 @@ const Step4 = ({ form, set }) => (
       <FInput label="Mission Start Date" type="date" value={form.startDate} onChange={e=>set("startDate",e.target.value)}/>
       <FInput label="Expected Duration" placeholder="e.g. 12 months" value={form.duration} onChange={e=>set("duration",e.target.value)}/>
     </div>
-
-    {/* Multi-currency funding goal */}
     <FundingGoalCurrency form={form} set={set}/>
-
-    {/* Platform surcharge disclosure */}
     <div style={{ background:"rgba(91,156,246,0.07)",borderRadius:14,border:"1px solid rgba(91,156,246,0.25)",padding:"16px 18px",marginBottom:14 }}>
       <div style={{ display:"flex",gap:10,marginBottom:8 }}>
         <span style={{ fontSize:18,flexShrink:0 }}>🌐</span>
@@ -334,7 +427,6 @@ const Step4 = ({ form, set }) => (
         </div>
       )}
     </div>
-
     <FInput label="Milestone 1 — First goal" placeholder="e.g. First open-air crusade" value={form.milestone1} onChange={e=>set("milestone1",e.target.value)}/>
     <FInput label="Milestone 2 — Mid-mission goal" placeholder="e.g. Plant first congregation" value={form.milestone2} onChange={e=>set("milestone2",e.target.value)}/>
     <FInput label="Milestone 3 — Final goal" placeholder="e.g. Local leadership trained" value={form.milestone3} onChange={e=>set("milestone3",e.target.value)}/>
@@ -350,7 +442,10 @@ const Step5 = ({ form, set, submitted, submitting, onSubmit }) => {
           <div style={{ fontSize:26,fontWeight:700,color:"#eef1ff",marginBottom:10 }}>Application Submitted</div>
           <div style={{ fontSize:14,color:"rgba(255,255,255,0.5)",lineHeight:1.8,maxWidth:380 }}>
             Thank you, <strong style={{color:"#e8b34b"}}>{form.fullName}</strong>. Your application has been received.<br/><br/>
-            An endorsement request has been sent to <strong style={{color:"#eef1ff"}}>{form.pastorName}</strong>.<br/><br/>
+            {form.churchVerified
+              ? <>An endorsement request has been sent to <strong style={{color:"#eef1ff"}}>{form.pastorName}</strong> at <strong style={{color:"#eef1ff"}}>{form.churchName}</strong>.</>
+              : <>Our admin team will contact <strong style={{color:"#eef1ff"}}>{form.pastorName}</strong> to register <strong style={{color:"#eef1ff"}}>{form.churchName}</strong> on SendMe before your mission can be approved.</>
+            }<br/><br/>
             Our admin team will review within <strong style={{color:"#e8b34b"}}>3–5 working days</strong>.
           </div>
         </div>
@@ -363,19 +458,20 @@ const Step5 = ({ form, set, submitted, submitting, onSubmit }) => {
   }
 
   const fields = [
-    ["Name",          form.fullName],
-    ["Email",         form.email],
-    ["Role",          form.role],
-    ["Church",        form.churchName],
-    ["Pastor",        form.pastorName],
-    ["Pastor email",  form.pastorEmail],
-    ["Mission title", form.missionTitle],
-    ["Target country",form.targetCountry],
+    ["Name",           form.fullName],
+    ["Email",          form.email],
+    ["Role",           form.role],
+    ["Church",         form.churchName],
+    ["Church status",  form.churchVerified ? "✓ Registered on SendMe" : "⚠️ Pending church registration"],
+    ["Pastor",         form.pastorName],
+    ["Pastor email",   form.pastorEmail],
+    ["Mission title",  form.missionTitle],
+    ["Target country", form.targetCountry],
     ["Your funding goal", (form.localCurrency!=="USD" && form.localAmount) ? `${Number(form.localAmount).toLocaleString()} ${form.localCurrency}` : null],
-    ["Funding goal",  form.fundingGoal?`$${Number(form.fundingGoal).toLocaleString()} USD`:null],
+    ["Funding goal",   form.fundingGoal?`$${Number(form.fundingGoal).toLocaleString()} USD`:null],
     ["Platform surcharge (10%)", form.fundingGoal?`$${Math.round(Number(form.fundingGoal)*0.1).toLocaleString()}`:null],
     ["Total donors asked for", form.fundingGoal?`$${Math.round(Number(form.fundingGoal)*1.1).toLocaleString()}`:null],
-    ["Shadow mode",   form.shadowMode?"Requested":"No"],
+    ["Shadow mode",    form.shadowMode?"Requested":"No"],
   ];
 
   return (
@@ -387,11 +483,18 @@ const Step5 = ({ form, set, submitted, submitting, onSubmit }) => {
           {fields.map(([k,v]) => v ? (
             <div key={k} style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,borderBottom:"1px solid rgba(255,255,255,0.05)",paddingBottom:8 }}>
               <span style={{ fontSize:12,color:"rgba(255,255,255,0.35)",flexShrink:0,minWidth:110 }}>{k}</span>
-              <span style={{ fontSize:13,color:"#eef1ff",textAlign:"right" }}>{v}</span>
+              <span style={{ fontSize:13,color:v.startsWith?.("⚠️")?"#e8b34b":v.startsWith?.("✓")?"#3ecf8e":"#eef1ff",textAlign:"right" }}>{v}</span>
             </div>
           ) : null)}
         </div>
       </div>
+
+      {/* Payout accountability notice */}
+      <div style={{ background:"rgba(91,156,246,0.07)",borderRadius:12,border:"1px solid rgba(91,156,246,0.25)",padding:"14px 18px",fontSize:13,color:"rgba(255,255,255,0.5)",lineHeight:1.7 }}>
+        🏦 <strong style={{color:"#5b9cf6"}}>Payout accountability:</strong> All mission funds will be released to{" "}
+        <strong style={{color:"#eef1ff"}}>{form.churchName || "your church"}</strong>'s registered bank account upon verified milestone completion.
+      </div>
+
       <div style={{ background:"rgba(232,179,75,0.07)",borderRadius:12,border:"1px solid rgba(232,179,75,0.2)",padding:"14px 18px",display:"flex",gap:10 }}>
         <span style={{ fontSize:18,flexShrink:0 }}>📬</span>
         <div style={{ fontSize:13,color:"rgba(255,255,255,0.5)",lineHeight:1.7 }}>
@@ -412,7 +515,7 @@ const Step5 = ({ form, set, submitted, submitting, onSubmit }) => {
           {form.surchargeAcknowledged?"✓":""}
         </div>
         <span style={{ fontSize:13,color:form.surchargeAcknowledged?"#eef1ff":"rgba(255,255,255,0.45)",lineHeight:1.65,transition:"color .2s" }}>
-          I understand that SendMe will collect 10% above my stated funding goal from donors to cover platform and international payment processing costs. My full requested amount will be released to me upon verified milestone completion — regardless of currency or country.
+          I understand that SendMe will collect 10% above my stated funding goal from donors to cover platform and international payment processing costs. My full requested amount will be released to my church upon verified milestone completion — regardless of currency or country.
         </span>
       </div>
 
@@ -435,12 +538,12 @@ const validate = (step, form) => {
     if (!form.role)            return "Please select your missionary role.";
   }
   if (step===2) {
-    if (!form.calling.trim())      return "Please describe your calling.";
-    if (!form.testimony.trim())    return "Please share your testimony.";
-    if (!form.yearsBeliever.trim())return "Please enter how long you have been a believer.";
+    if (!form.calling.trim())       return "Please describe your calling.";
+    if (!form.testimony.trim())     return "Please share your testimony.";
+    if (!form.yearsBeliever.trim()) return "Please enter how long you have been a believer.";
   }
   if (step===3) {
-    if (!form.churchName.trim())  return "Please enter your church name.";
+    if (!form.churchName.trim())  return "Please enter or select your church name.";
     if (!form.pastorName.trim())  return "Please enter your pastor's name.";
     if (!form.pastorEmail.trim()) return "Please enter your pastor's email.";
   }
@@ -458,23 +561,43 @@ const validate = (step, form) => {
 };
 
 export default function MissionaryApplication({ onBack, user }) {
-  const [step, setStep]           = useState(1);
-  const [error, setError]         = useState("");
+  const [step, setStep]             = useState(1);
+  const [error, setError]           = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
+  const [submitted, setSubmitted]   = useState(false);
+  const [churches, setChurches]     = useState([]);
+  const [churchesLoading, setChurchesLoading] = useState(true);
 
   const [form, setForm] = useState({
     fullName: user?.user_metadata?.full_name||"", email: user?.email||"",
     phone:"", birthCountry:"", currentCountry:"", address:"", role:"",
     yearsBeliever:"", calling:"", testimony:"", experience:"", shadowMode:false,
-    churchName:"", pastorName:"", pastorEmail:"", pastorPhone:"",
+    // Church fields — churchId + churchVerified are new
+    churchId:"", churchName:"", pastorName:"", pastorEmail:"", pastorPhone:"",
     churchCity:"", churchCountry:"", churchWebsite:"",
+    churchNotOnSendMe: false, churchVerified: false,
+    // Mission fields
     missionTitle:"", targetRegion:"", targetCountry:"", targetArea:"",
-    missionDescription:"", fundingGoal:"", localAmount:"", localCurrency:"USD", startDate:"", duration:"",
+    missionDescription:"", fundingGoal:"", localAmount:"", localCurrency:"USD",
+    startDate:"", duration:"",
     milestone1:"", milestone2:"", milestone3:"", surchargeAcknowledged:false,
   });
 
   const set = (key, val) => setForm(f => ({...f,[key]:val}));
+
+  // Load registered churches on mount for Step 3 dropdown
+  useEffect(() => {
+    const loadChurches = async () => {
+      const { data } = await supabase
+        .from("churches")
+        .select("id, name, city, country, pastor_name, pastor_email, pastor_phone")
+        .eq("verified", true)
+        .order("name", { ascending: true });
+      setChurches(data || []);
+      setChurchesLoading(false);
+    };
+    loadChurches();
+  }, []);
 
   const nextStep = () => {
     const err = validate(step, form);
@@ -492,12 +615,13 @@ export default function MissionaryApplication({ onBack, user }) {
       const platformSurcharge = Math.round(goal * 0.1);
       const collectionTarget = goal + platformSurcharge;
 
-      // Only insert columns that exist in the missions table
       const { error: dbError } = await supabase.from("missions").insert({
         missionary_name:  form.shadowMode ? null : form.fullName,
         missionary_email: form.email,
         missionary_role:  form.role,
         church_name:      form.churchName,
+        church_id:        form.churchId || null,
+        church_verified:  form.churchVerified,
         pastor_name:      form.pastorName,
         pastor_email:     form.pastorEmail,
         title:            form.missionTitle,
@@ -512,7 +636,7 @@ export default function MissionaryApplication({ onBack, user }) {
         platform_surcharge: platformSurcharge,
         surcharge_acknowledged: form.surchargeAcknowledged,
         raised:           0,
-        status:           "pending",
+        status:           form.churchVerified ? "pending" : "pending_church",
         milestone:        0,
         souls:            0,
         bibles:           0,
@@ -548,7 +672,7 @@ export default function MissionaryApplication({ onBack, user }) {
         <div style={{ background:"#0c1628",borderRadius:20,border:"1px solid rgba(255,255,255,0.08)",padding:"28px 24px",marginBottom:20 }}>
           {step===1 && <Step1 form={form} set={set}/>}
           {step===2 && <Step2 form={form} set={set}/>}
-          {step===3 && <Step3 form={form} set={set}/>}
+          {step===3 && <Step3 form={form} set={set} churches={churches} churchesLoading={churchesLoading}/>}
           {step===4 && <Step4 form={form} set={set}/>}
           {step===5 && <Step5 form={form} set={set} submitted={submitted} submitting={submitting} onSubmit={handleSubmit}/>}
         </div>
