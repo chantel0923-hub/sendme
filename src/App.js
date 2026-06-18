@@ -1073,7 +1073,7 @@ useEffect(()=>{
   if(screen==="pray")        return <PrayerWall missions={DEMO_MISSIONS} onBack={()=>setScreen("home")}/>;
   if(screen==="churches")    return <ChurchesTab onBack={()=>setScreen("home")}/>;
   if(screen==="apply")       return <MissionaryApplication onBack={()=>setScreen("home")} user={user}/>;
-  if(screen==="if(screen==="church")      return (isPastor||isAdminUser) ? <ChurchRegistration onBack={()=>setScreen("home")} user={user}/> : null;
+  if(screen==="church")      return (isPastor||isAdminUser) ? <ChurchRegistration onBack={()=>setScreen("home")} user={user}/> : null;
   if(screen==="profile")     return <DonorProfile user={user} onBack={()=>setScreen("home")}/>;
   if(screen==="emergency")   return <EmergencyRequests onBack={()=>setScreen("home")} user={user}/>;
   if(screen==="matching")    return <MissionMatching missions={DEMO_MISSIONS} onMission={openMission} onBack={()=>setScreen("home")}/>;
