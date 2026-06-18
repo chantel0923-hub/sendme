@@ -876,7 +876,7 @@ const NavDropdown = ({ user,onProfile,onEmergency,onTestimonies,onWorker,onMatch
 };
 
 // ── HOME SCREEN ───────────────────────────────────────────────────────────────
-const HomeScreen = ({ onMission,user,onSignOut,onApply,onChurch,onChurches,onProfile,onEmergency,onMatching,onPray,onTestimonies,onWorker,onQR,onFaq,onPayout,onAdminPayouts,isAdmin }) => {
+const HomeScreen = ({ onMission,user,onSignOut,onApply,onChurch,onChurches,onProfile,onEmergency,onMatching,onPray,onTestimonies,onWorker,onQR,onFaq,onPayout,onAdminPayouts,isAdmin,isPastor }) => {
   const [region,setRegion]       = useState("All");
   const [missions,setMissions]   = useState([]);
   const [loading,setLoading]     = useState(true);
@@ -910,7 +910,7 @@ const HomeScreen = ({ onMission,user,onSignOut,onApply,onChurch,onChurches,onPro
           <button onClick={onPray} style={{ background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"8px 16px",color:"rgba(255,255,255,0.6)",cursor:"pointer",fontSize:13 }}>Pray</button>
           <button onClick={onChurches} style={{ background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"8px 16px",color:"rgba(255,255,255,0.6)",cursor:"pointer",fontSize:13 }}>Churches</button>
           <button onClick={onApply} style={{ background:"linear-gradient(135deg,#e8b34b,#c8942b)",border:"none",borderRadius:10,padding:"8px 16px",color:"#000",cursor:"pointer",fontSize:13,fontWeight:700 }}>Apply</button>
-          <button onClick={onChurch} style={{ background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"8px 16px",color:"rgba(255,255,255,0.6)",cursor:"pointer",fontSize:13 }}>Register Church</button>
+          {isPastor && <button onClick={onChurch} style={{ background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"8px 16px",color:"rgba(255,255,255,0.6)",cursor:"pointer",fontSize:13 }}>Register Church</button>}
           <NavDropdown user={user} onProfile={onProfile} onEmergency={onEmergency} onTestimonies={onTestimonies} onWorker={onWorker} onMatching={onMatching} onQR={onQR} onFaq={onFaq} onPayout={onPayout}/>
           {isAdmin&&<button onClick={onAdminPayouts} style={{ background:"rgba(232,91,91,0.1)",border:"1px solid rgba(232,91,91,0.3)",borderRadius:10,padding:"8px 14px",color:"#e85b5b",cursor:"pointer",fontSize:12,fontWeight:700 }}>💰 Payouts</button>}
           {user&&<button onClick={onSignOut} style={{ background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:10,padding:"8px 14px",color:"rgba(255,255,255,0.4)",cursor:"pointer",fontSize:12 }}>Sign Out</button>}
@@ -1007,17 +1007,35 @@ const HomeScreen = ({ onMission,user,onSignOut,onApply,onChurch,onChurches,onPro
 
 export default function App() {
   const [user,setUser]                         = useState(null);
-  const [authReady,setAuthReady]               = useState(false);
+const [userRole,setUserRole]                 = useState(null);
+const [authReady,setAuthReady]               = useState(false);
   const [screen,setScreen]                     = useState("home");
   const [selectedMission,setSelectedMission]   = useState(null);
   const [guest,setGuest]                       = useState(false);
   const [pfReturn,setPfReturn]                 = useState(null);
 
-  useEffect(()=>{
-    supabase.auth.getSession().then(({data:{session}})=>{setUser(session?.user??null);setAuthReady(true);});
-    const {data:{subscription}} = supabase.auth.onAuthStateChange((_,session)=>{setUser(session?.user??null);});
-    return ()=>subscription.unsubscribe();
-  },[]);
+  const loadRole = async (u) => {
+  if (!u) { setUserRole(null); return; }
+  try {
+    const { data } = await supabase.from("profiles").select("role").eq("id", u.id).single();
+    setUserRole(data?.role || u.user_metadata?.role || null);
+  } catch {
+    setUserRole(u.user_metadata?.role || null);
+  }
+};
+
+useEffect(()=>{
+  supabase.auth.getSession().then(({data:{session}})=>{
+    const u = session?.user ?? null;
+    setUser(u); loadRole(u); setAuthReady(true);
+  });
+  const {data:{subscription}} = supabase.auth.onAuthStateChange((_,session)=>{
+    const u = session?.user ?? null;
+    setUser(u); loadRole(u);
+  });
+  return ()=>subscription.unsubscribe();
+// eslint-disable-next-line react-hooks/exhaustive-deps
+},[]);
 
   // ── PAYFAST RETURN HANDLING ──────────────────────────────────────────────
   // PayFast redirects the browser back to return_url / cancel_url with
@@ -1039,7 +1057,9 @@ export default function App() {
     }
   },[]);
 
-  const signOut       = async()=>{await supabase.auth.signOut();setUser(null);setGuest(false);setScreen("home");};
+  const signOut       = async()=>{await supabase.auth.signOut();setUser(null);setUserRole(null);setGuest(false);setScreen("home");};
+  const isPastor      = userRole === "pastor";
+  const isAdminUser   = user?.email === ADMIN_EMAIL;
   const openMission   = (m)  =>{setSelectedMission(m);setScreen("detail");};
   const openDonate    = ()   =>{setScreen("donate");};
   const handlePayfastDonate = (amt) => startPayfastDonation({ mission: selectedMission, amount: amt, user });
@@ -1053,7 +1073,7 @@ export default function App() {
   if(screen==="pray")        return <PrayerWall missions={DEMO_MISSIONS} onBack={()=>setScreen("home")}/>;
   if(screen==="churches")    return <ChurchesTab onBack={()=>setScreen("home")}/>;
   if(screen==="apply")       return <MissionaryApplication onBack={()=>setScreen("home")} user={user}/>;
-  if(screen==="church")      return <ChurchRegistration onBack={()=>setScreen("home")} user={user}/>;
+  if(screen==="if(screen==="church")      return (isPastor||isAdminUser) ? <ChurchRegistration onBack={()=>setScreen("home")} user={user}/> : null;
   if(screen==="profile")     return <DonorProfile user={user} onBack={()=>setScreen("home")}/>;
   if(screen==="emergency")   return <EmergencyRequests onBack={()=>setScreen("home")} user={user}/>;
   if(screen==="matching")    return <MissionMatching missions={DEMO_MISSIONS} onMission={openMission} onBack={()=>setScreen("home")}/>;
@@ -1075,6 +1095,7 @@ export default function App() {
       onPayout={()=>setScreen("payout")}
       onAdminPayouts={()=>setScreen("admin-payouts")}
       isAdmin={user?.email===ADMIN_EMAIL}
+      isPastor={isPastor||isAdminUser}
     />
   );
 }
