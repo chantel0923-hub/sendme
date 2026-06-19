@@ -18,6 +18,8 @@ import AdminPayouts, { ADMIN_EMAIL } from './AdminPayouts';
 import YouTubeEmbed from './YouTubeEmbed';
 import { FEATURED_VIDEOS, SENDME_CHANNEL_URL } from './sendmeVideos';
 import { startPayfastDonation } from './payfast';
+import MilestoneProof from './MilestoneProof';
+import PastorReview from './PastorReview';
 
 const DEMO_MISSIONS = [
   { id:1, name:"Rev. Samuel Osei",   role:"Missionary",  church:"Accra Redemption Church",   city:"Addis Ababa", country:"Ethiopia", area:"Merkato District",         region:"Africa",      lat:9.03,  lng:38.74, title:"Gospel & Food Aid — Merkato",     blurb:"Feeding 400 families weekly while planting the Word in one of Addis Ababa's most densely populated slums.",           raised:9840,  goal:15000, color:"#e8b34b", status:"active",   milestone:2, souls:312, bibles:200, churches:1, prayers:87,  protected:false, trustLevel:2, journeyStep:4, riskLevel:1, budget:[{label:"Food parcels",amount:4000},{label:"Bibles & Tracts",amount:2500},{label:"Transport",amount:1500},{label:"Accommodation",amount:1840}] },
@@ -39,7 +41,6 @@ const DEMO_UPDATES = [
 const COLORS = ["#e8b34b","#4caf7d","#5b9cf6","#e85b5b","#b06cf5","#f5a44a","#3ecf8e","#f06292"];
 const getColor = (id) => COLORS[id % COLORS.length];
 
-// ── FIX: mapRow now correctly reads name from DB columns ──────────────────────
 const mapRow = (row, i) => ({
   id:row.id,
   name: [row.full_name, row.name, row.pastor_name, row.title].find(v => v && String(v).trim().toLowerCase() !== "null") ||
@@ -62,7 +63,6 @@ const AMOUNTS = [25,50,100,250,500];
 const pct = (r,g) => Math.min(100,Math.round((r/g)*100));
 const fmt = (n) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g,",");
 
-// ── TRUST BADGE ───────────────────────────────────────────────────────────────
 const TRUST_LEVELS = [
   {level:0,label:"Unverified",      color:"rgba(255,255,255,0.3)",bg:"rgba(255,255,255,0.05)"},
   {level:1,label:"Verified Mission",color:"#e8b34b",             bg:"rgba(232,179,75,0.12)" },
@@ -80,7 +80,6 @@ const TrustBadge = ({ level=0 }) => {
   );
 };
 
-// ── FEATURE 7: RISK LEVEL ─────────────────────────────────────────────────────
 const RISK_LEVELS = [
   {level:0,label:"Unknown",         color:"rgba(255,255,255,0.3)",dot:"⚪"},
   {level:1,label:"Easy Access",     color:"#3ecf8e",              dot:"🟢"},
@@ -98,7 +97,6 @@ const RiskBadge = ({ level=1 }) => {
   );
 };
 
-// ── JOURNEY TIMELINE ──────────────────────────────────────────────────────────
 const JOURNEY_STEPS = [
   {step:1,icon:"✅",label:"Application Approved"},
   {step:2,icon:"💝",label:"Funding Goal Reached"},
@@ -140,7 +138,6 @@ const JourneyTimeline = ({ currentStep, color }) => (
   </div>
 );
 
-// ── BUDGET BREAKDOWN ──────────────────────────────────────────────────────────
 const BudgetBreakdown = ({ budget=[], goal, color }) => {
   if (!budget||budget.length===0) return null;
   const total = budget.reduce((acc,b)=>acc+b.amount,0);
@@ -172,7 +169,6 @@ const BudgetBreakdown = ({ budget=[], goal, color }) => {
   );
 };
 
-// ── FEATURE 8: LIVE MISSION UPDATES FEED ─────────────────────────────────────
 const UpdatesFeed = ({ missionId, missionColor, missionName }) => {
   const [updates, setUpdates]   = useState([]);
   const [loading, setLoading]   = useState(true);
@@ -219,7 +215,6 @@ const UpdatesFeed = ({ missionId, missionColor, missionName }) => {
     <div style={{ padding:"24px 0", borderBottom:"1px solid rgba(255,255,255,0.06)" }}>
       <div style={{ fontSize:16,fontWeight:700,color:"#eef1ff",marginBottom:6 }}>Live Mission Updates</div>
       <div style={{ fontSize:12,color:"rgba(255,255,255,0.35)",marginBottom:16 }}>Field reports, photos and prayer requests from the missionary.</div>
-
       <div style={{ background:"rgba(255,255,255,0.03)",borderRadius:14,border:"1px solid rgba(255,255,255,0.08)",padding:16,marginBottom:16 }}>
         <div style={{ display:"flex",gap:8,marginBottom:10 }}>
           {[["update","📋 Field Report"],["prayer","🙏 Prayer Request"]].map(([t,l]) => (
@@ -237,7 +232,6 @@ const UpdatesFeed = ({ missionId, missionColor, missionName }) => {
           {posting?"Posting...":"Post Update"}
         </button>
       </div>
-
       {loading ? (
         <div style={{ textAlign:"center",padding:"20px 0",color:"rgba(255,255,255,0.3)",fontSize:13 }}>Loading updates...</div>
       ) : updates.length === 0 ? (
@@ -265,7 +259,6 @@ const UpdatesFeed = ({ missionId, missionColor, missionName }) => {
   );
 };
 
-// ── FEATURE 9: PRAYER CHAIN ───────────────────────────────────────────────────
 const PrayerChain = ({ missionId, missionColor, initialCount=0 }) => {
   const [praying, setPraying]   = useState(false);
   const [count, setCount]       = useState(initialCount);
@@ -276,9 +269,7 @@ const PrayerChain = ({ missionId, missionColor, initialCount=0 }) => {
   const joinChain = async () => {
     if (joined) return;
     setPraying(true);
-    try {
-      await supabase.from("mission_prayers").insert({ mission_id:missionId, type:"chain" });
-    } catch {}
+    try { await supabase.from("mission_prayers").insert({ mission_id:missionId, type:"chain" }); } catch {}
     setCount(c => c+1); setJoined(true); setPraying(false);
   };
 
@@ -291,7 +282,6 @@ const PrayerChain = ({ missionId, missionColor, initialCount=0 }) => {
   return (
     <div style={{ padding:"20px 0", borderBottom:"1px solid rgba(255,255,255,0.06)" }}>
       <div style={{ fontSize:14,fontWeight:700,color:"#eef1ff",marginBottom:4 }}>Prayer Chain</div>
-
       <div style={{ background:`${missionColor}0e`,borderRadius:14,border:`1px solid ${missionColor}22`,padding:"16px 18px",marginBottom:14,display:"flex",justifyContent:"space-between",alignItems:"center" }}>
         <div>
           <div style={{ fontSize:22,fontWeight:700,color:missionColor }}>{fmt(count)} believers praying</div>
@@ -306,7 +296,6 @@ const PrayerChain = ({ missionId, missionColor, initialCount=0 }) => {
           {joined?"✓ Praying":"🙏 Join Prayer Chain"}
         </button>
       </div>
-
       {!submitted ? (
         <div style={{ background:"rgba(255,255,255,0.02)",borderRadius:12,border:"1px solid rgba(255,255,255,0.07)",padding:14 }}>
           <div style={{ fontSize:13,color:"rgba(255,255,255,0.4)",marginBottom:8 }}>Share a specific prayer request for this mission</div>
@@ -327,7 +316,6 @@ const PrayerChain = ({ missionId, missionColor, initialCount=0 }) => {
   );
 };
 
-// ── FEATURE 10: ADOPT A MISSION ───────────────────────────────────────────────
 const AdoptMission = ({ mission: m }) => {
   const [selected, setSelected] = useState(null);
   const [adopted, setAdopted]   = useState(false);
@@ -413,8 +401,6 @@ const DonateScreen = ({ mission: m, onBack, onPayfast }) => {
     setError("");
     try {
       await onPayfast(amt);
-      // onPayfast redirects the browser to PayFast, so execution
-      // normally won't continue past this point.
     } catch {
       setError("Could not start PayFast checkout. Please try again.");
       setSubmitting(false);
@@ -485,11 +471,6 @@ const DonateScreen = ({ mission: m, onBack, onPayfast }) => {
   );
 };
 
-// ── PAYFAST RETURN SCREEN ─────────────────────────────────────────────────────
-// Shown when the browser comes back from PayFast after a redirect-based
-// checkout (return_url / cancel_url). The real confirmation of payment
-// happens server-side via the ITN webhook in /api/payfast-notify — this
-// screen just gives the donor a friendly landing page.
 const PayfastResultScreen = ({ status, amount, onContinue }) => (
   <div style={{ minHeight:"100vh",background:"#060c18",color:"#eef1ff",fontFamily:"Georgia, serif",display:"flex",alignItems:"center",justifyContent:"center",padding:32 }}>
     <div style={{ textAlign:"center",maxWidth:480,display:"flex",flexDirection:"column",gap:20,alignItems:"center" }}>
@@ -637,7 +618,6 @@ const MissionDetail = ({ mission: m, onBack, onDonate, onLedger }) => {
   );
 };
 
-// ── PRAYER WALL ───────────────────────────────────────────────────────────────
 const PrayerWall = ({ missions, onBack }) => {
   const [joined, setJoined] = useState({});
   const allRequests = [
@@ -648,9 +628,7 @@ const PrayerWall = ({ missions, onBack }) => {
     { id:5, mission:"Refugee Camp Gospel Mission",    country:"Myanmar",  text:"Pray for the Karen families receiving Bibles. Many have never seen the written Word.", urgent:true, prayers:63  },
     { id:6, mission:"Dalit Women's Bible Mission",    country:"India",    text:"Please pray for Sister Priya as she begins literacy classes in the 8th village. Many women are eager.", urgent:false, prayers:77  },
   ];
-
   const totalPraying = allRequests.reduce((acc,r) => acc + r.prayers, 0);
-
   return (
     <div style={{ minHeight:"100vh", background:"#060c18", color:"#eef1ff", fontFamily:"Georgia, serif" }}>
       <div style={{ background:"#09111f", borderBottom:"1px solid rgba(255,255,255,0.07)", padding:"16px 24px", display:"flex", alignItems:"center", gap:14, position:"sticky", top:0, zIndex:100 }}>
@@ -661,20 +639,14 @@ const PrayerWall = ({ missions, onBack }) => {
         </div>
         <div style={{ marginLeft:"auto", fontSize:13, color:"rgba(255,255,255,0.3)" }}>{fmt(totalPraying)} believers praying</div>
       </div>
-
       <div style={{ maxWidth:680, margin:"0 auto", padding:"28px 20px 60px" }}>
         <div style={{ background:"rgba(232,179,75,0.08)", borderRadius:16, border:"1px solid rgba(232,179,75,0.2)", padding:"20px 24px", marginBottom:24, textAlign:"center" }}>
           <div style={{ fontSize:32, marginBottom:8 }}>🙏</div>
           <div style={{ fontSize:18, fontWeight:700, color:"#eef1ff", marginBottom:8 }}>The effectual fervent prayer of a righteous man availeth much.</div>
           <div style={{ fontSize:13, color:"#e8b34b", fontWeight:700 }}>James 5:16</div>
         </div>
-
         <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12, marginBottom:24 }}>
-          {[
-            ["🙏", fmt(totalPraying), "Believers Praying", "#e8b34b"],
-            ["🌍", allRequests.length, "Active Requests",  "#5b9cf6"],
-            ["✝",  allRequests.filter(r=>r.urgent).length, "Urgent Needs", "#e85b5b"],
-          ].map(([icon,val,label,c]) => (
+          {[["🙏",fmt(totalPraying),"Believers Praying","#e8b34b"],["🌍",allRequests.length,"Active Requests","#5b9cf6"],["✝",allRequests.filter(r=>r.urgent).length,"Urgent Needs","#e85b5b"]].map(([icon,val,label,c]) => (
             <div key={label} style={{ background:"rgba(255,255,255,0.03)", borderRadius:14, border:"1px solid rgba(255,255,255,0.07)", padding:"14px 10px", textAlign:"center" }}>
               <div style={{ fontSize:22 }}>{icon}</div>
               <div style={{ fontSize:20, fontWeight:700, color:c, marginTop:4 }}>{val}</div>
@@ -682,7 +654,6 @@ const PrayerWall = ({ missions, onBack }) => {
             </div>
           ))}
         </div>
-
         <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
           {allRequests.map(r => {
             const isJoined = joined[r.id];
@@ -701,14 +672,8 @@ const PrayerWall = ({ missions, onBack }) => {
                 </div>
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:12 }}>
                   <span style={{ fontSize:13, color:"rgba(255,255,255,0.4)" }}>{fmt(count)} believers praying</span>
-                  <button
-                    onClick={() => setJoined(j => ({...j,[r.id]:true}))}
-                    disabled={isJoined}
-                    style={{ padding:"8px 20px", borderRadius:10, border:"none",
-                      background: isJoined ? "rgba(62,207,142,0.12)" : "linear-gradient(135deg,#e8b34b,#c8942b)",
-                      color: isJoined ? "#3ecf8e" : "#000",
-                      fontWeight:700, cursor: isJoined ? "default" : "pointer",
-                      fontSize:13, fontFamily:"Georgia, serif" }}>
+                  <button onClick={() => setJoined(j => ({...j,[r.id]:true}))} disabled={isJoined}
+                    style={{ padding:"8px 20px", borderRadius:10, border:"none", background:isJoined?"rgba(62,207,142,0.12)":"linear-gradient(135deg,#e8b34b,#c8942b)", color:isJoined?"#3ecf8e":"#000", fontWeight:700, cursor:isJoined?"default":"pointer", fontSize:13, fontFamily:"Georgia, serif" }}>
                     {isJoined ? "✓ Praying" : "Join Prayer"}
                   </button>
                 </div>
@@ -716,7 +681,6 @@ const PrayerWall = ({ missions, onBack }) => {
             );
           })}
         </div>
-
         <div style={{ textAlign:"center", padding:"32px 0 0", borderTop:"1px solid rgba(255,255,255,0.05)", marginTop:32 }}>
           <div style={{ fontSize:13, color:"#e8b34b", fontStyle:"italic" }}>"Pray without ceasing." — 1 Thessalonians 5:17</div>
         </div>
@@ -813,7 +777,7 @@ const DonorProfile = ({ user, onBack }) => {
 };
 
 // ── NAV "MORE" DROPDOWN ──────────────────────────────────────────────────────
-const NavDropdown = ({ user,onProfile,onEmergency,onTestimonies,onWorker,onMatching,onQR,onFaq,onPayout }) => {
+const NavDropdown = ({ user, userRole, onProfile, onEmergency, onTestimonies, onWorker, onMatching, onQR, onFaq, onPayout, onMilestoneProof, onPastorReview }) => {
   const [open,setOpen] = useState(false);
   const ref = useRef(null);
 
@@ -823,15 +787,20 @@ const NavDropdown = ({ user,onProfile,onEmergency,onTestimonies,onWorker,onMatch
     return ()=>document.removeEventListener("mousedown",handler);
   },[]);
 
+  const isMissionary = userRole === "missionary";
+  const isPastor     = userRole === "pastor";
+
   const items = [
-    user && { label:"My Profile",     icon:"✝",  color:"#e8b34b",             onClick:onProfile },
-    { label:"🚨 Emergency",  color:"#e85b5b",             onClick:onEmergency },
-    { label:"Testimonies",   color:"#3ecf8e",             onClick:onTestimonies },
-    { label:"Send Worker",   color:"#b06cf5",             onClick:onWorker },
-    { label:"Find Mission",  color:"#5b9cf6",             onClick:onMatching },
-    { label:"QR Share",      color:"rgba(255,255,255,0.65)", onClick:onQR },
-    { label:"FAQ",           color:"#e8b34b",             onClick:onFaq },
-    user && { label:"Payout Details", color:"rgba(255,255,255,0.65)", onClick:onPayout },
+    user && { label:"My Profile",        icon:"✝",  color:"#e8b34b",                onClick:onProfile },
+    { label:"🚨 Emergency",              color:"#e85b5b",                            onClick:onEmergency },
+    { label:"Testimonies",               color:"#3ecf8e",                            onClick:onTestimonies },
+    { label:"Send Worker",               color:"#b06cf5",                            onClick:onWorker },
+    { label:"Find Mission",              color:"#5b9cf6",                            onClick:onMatching },
+    { label:"QR Share",                  color:"rgba(255,255,255,0.65)",             onClick:onQR },
+    { label:"FAQ",                       color:"#e8b34b",                            onClick:onFaq },
+    user && { label:"Payout Details",    color:"rgba(255,255,255,0.65)",             onClick:onPayout },
+    (isMissionary||isPastor) && user && { label:"📋 Submit Proof",  color:"#5b9cf6", onClick:onMilestoneProof },
+    isPastor && user &&                  { label:"⛪ Review Proofs", color:"#3ecf8e", onClick:onPastorReview },
   ].filter(Boolean);
 
   return (
@@ -876,7 +845,7 @@ const NavDropdown = ({ user,onProfile,onEmergency,onTestimonies,onWorker,onMatch
 };
 
 // ── HOME SCREEN ───────────────────────────────────────────────────────────────
-const HomeScreen = ({ onMission,user,onSignOut,onApply,onChurch,onChurches,onProfile,onEmergency,onMatching,onPray,onTestimonies,onWorker,onQR,onFaq,onPayout,onAdminPayouts,isAdmin,isPastor }) => {
+const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, onChurches, onProfile, onEmergency, onMatching, onPray, onTestimonies, onWorker, onQR, onFaq, onPayout, onAdminPayouts, isAdmin, isPastor, onMilestoneProof, onPastorReview }) => {
   const [region,setRegion]       = useState("All");
   const [missions,setMissions]   = useState([]);
   const [loading,setLoading]     = useState(true);
@@ -911,7 +880,12 @@ const HomeScreen = ({ onMission,user,onSignOut,onApply,onChurch,onChurches,onPro
           <button onClick={onChurches} style={{ background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"8px 16px",color:"rgba(255,255,255,0.6)",cursor:"pointer",fontSize:13 }}>Churches</button>
           <button onClick={onApply} style={{ background:"linear-gradient(135deg,#e8b34b,#c8942b)",border:"none",borderRadius:10,padding:"8px 16px",color:"#000",cursor:"pointer",fontSize:13,fontWeight:700 }}>Apply</button>
           {isPastor && <button onClick={onChurch} style={{ background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"8px 16px",color:"rgba(255,255,255,0.6)",cursor:"pointer",fontSize:13 }}>Register Church</button>}
-          <NavDropdown user={user} onProfile={onProfile} onEmergency={onEmergency} onTestimonies={onTestimonies} onWorker={onWorker} onMatching={onMatching} onQR={onQR} onFaq={onFaq} onPayout={onPayout}/>
+          <NavDropdown
+            user={user} userRole={userRole}
+            onProfile={onProfile} onEmergency={onEmergency} onTestimonies={onTestimonies}
+            onWorker={onWorker} onMatching={onMatching} onQR={onQR} onFaq={onFaq}
+            onPayout={onPayout} onMilestoneProof={onMilestoneProof} onPastorReview={onPastorReview}
+          />
           {isAdmin&&<button onClick={onAdminPayouts} style={{ background:"rgba(232,91,91,0.1)",border:"1px solid rgba(232,91,91,0.3)",borderRadius:10,padding:"8px 14px",color:"#e85b5b",cursor:"pointer",fontSize:12,fontWeight:700 }}>💰 Payouts</button>}
           {user&&<button onClick={onSignOut} style={{ background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:10,padding:"8px 14px",color:"rgba(255,255,255,0.4)",cursor:"pointer",fontSize:12 }}>Sign Out</button>}
         </div>
@@ -1007,40 +981,36 @@ const HomeScreen = ({ onMission,user,onSignOut,onApply,onChurch,onChurches,onPro
 
 export default function App() {
   const [user,setUser]                         = useState(null);
-const [userRole,setUserRole]                 = useState(null);
-const [authReady,setAuthReady]               = useState(false);
+  const [userRole,setUserRole]                 = useState(null);
+  const [authReady,setAuthReady]               = useState(false);
   const [screen,setScreen]                     = useState("home");
   const [selectedMission,setSelectedMission]   = useState(null);
   const [guest,setGuest]                       = useState(false);
   const [pfReturn,setPfReturn]                 = useState(null);
 
   const loadRole = async (u) => {
-  if (!u) { setUserRole(null); return; }
-  try {
-    const { data } = await supabase.from("profiles").select("role").eq("id", u.id).single();
-    setUserRole(data?.role || u.user_metadata?.role || null);
-  } catch {
-    setUserRole(u.user_metadata?.role || null);
-  }
-};
+    if (!u) { setUserRole(null); return; }
+    try {
+      const { data } = await supabase.from("profiles").select("role").eq("id", u.id).single();
+      setUserRole(data?.role || u.user_metadata?.role || null);
+    } catch {
+      setUserRole(u.user_metadata?.role || null);
+    }
+  };
 
-useEffect(()=>{
-  supabase.auth.getSession().then(({data:{session}})=>{
-    const u = session?.user ?? null;
-    setUser(u); loadRole(u); setAuthReady(true);
-  });
-  const {data:{subscription}} = supabase.auth.onAuthStateChange((_,session)=>{
-    const u = session?.user ?? null;
-    setUser(u); loadRole(u);
-  });
-  return ()=>subscription.unsubscribe();
-// eslint-disable-next-line react-hooks/exhaustive-deps
-},[]);
+  useEffect(()=>{
+    supabase.auth.getSession().then(({data:{session}})=>{
+      const u = session?.user ?? null;
+      setUser(u); loadRole(u); setAuthReady(true);
+    });
+    const {data:{subscription}} = supabase.auth.onAuthStateChange((_,session)=>{
+      const u = session?.user ?? null;
+      setUser(u); loadRole(u);
+    });
+    return ()=>subscription.unsubscribe();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[]);
 
-  // ── PAYFAST RETURN HANDLING ──────────────────────────────────────────────
-  // PayFast redirects the browser back to return_url / cancel_url with
-  // ?payfast=success|cancel after checkout. Catch that here, recall the
-  // pending donation we stashed in sessionStorage, then clean the URL.
   useEffect(()=>{
     const params = new URLSearchParams(window.location.search);
     const pf = params.get("payfast");
@@ -1067,25 +1037,29 @@ useEffect(()=>{
   if(!authReady) return(<div style={{ minHeight:"100vh",background:"#060c18",display:"flex",alignItems:"center",justifyContent:"center" }}><div style={{ fontSize:48,color:"#e8b34b" }}>✝</div></div>);
   if(pfReturn) return <PayfastResultScreen status={pfReturn.status} amount={pfReturn.amount} onContinue={()=>setPfReturn(null)}/>;
   if(!user && !guest) return <Auth onLogin={(u)=>setUser(u)} onGuest={()=>setGuest(true)}/>;
-  if(screen==="faq")         return <FAQScreen onBack={()=>setScreen("home")}/>;
-  if(screen==="payout")      return <PayoutSetup onBack={()=>setScreen("home")}/>;
-  if(screen==="admin-payouts") return user?.email===ADMIN_EMAIL ? <AdminPayouts onBack={()=>setScreen("home")}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
-  if(screen==="pray")        return <PrayerWall missions={DEMO_MISSIONS} onBack={()=>setScreen("home")}/>;
-  if(screen==="churches")    return <ChurchesTab onBack={()=>setScreen("home")}/>;
-  if(screen==="apply")       return <MissionaryApplication onBack={()=>setScreen("home")} user={user}/>;
-  if(screen==="church")      return (isPastor||isAdminUser) ? <ChurchRegistration onBack={()=>setScreen("home")} user={user}/> : null;
-  if(screen==="profile")     return <DonorProfile user={user} onBack={()=>setScreen("home")}/>;
-  if(screen==="emergency")   return <EmergencyRequests onBack={()=>setScreen("home")} user={user}/>;
-  if(screen==="matching")    return <MissionMatching missions={DEMO_MISSIONS} onMission={openMission} onBack={()=>setScreen("home")}/>;
-  if(screen==="testimonies") return <TestimonyEngine onBack={()=>setScreen("home")} onMission={openMission}/>;
-  if(screen==="worker")      return <SendAWorker onBack={()=>setScreen("home")} user={user}/>;
-  if(screen==="qr")          return <QRShare missions={DEMO_MISSIONS} onBack={()=>setScreen("home")}/>;
+
+  if(screen==="faq")              return <FAQScreen onBack={()=>setScreen("home")}/>;
+  if(screen==="payout")           return <PayoutSetup onBack={()=>setScreen("home")}/>;
+  if(screen==="admin-payouts")    return user?.email===ADMIN_EMAIL ? <AdminPayouts onBack={()=>setScreen("home")}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
+  if(screen==="pray")             return <PrayerWall missions={DEMO_MISSIONS} onBack={()=>setScreen("home")}/>;
+  if(screen==="churches")         return <ChurchesTab onBack={()=>setScreen("home")}/>;
+  if(screen==="apply")            return <MissionaryApplication onBack={()=>setScreen("home")} user={user}/>;
+  if(screen==="church")           return (isPastor||isAdminUser) ? <ChurchRegistration onBack={()=>setScreen("home")} user={user}/> : null;
+  if(screen==="profile")          return <DonorProfile user={user} onBack={()=>setScreen("home")}/>;
+  if(screen==="emergency")        return <EmergencyRequests onBack={()=>setScreen("home")} user={user}/>;
+  if(screen==="matching")         return <MissionMatching missions={DEMO_MISSIONS} onMission={openMission} onBack={()=>setScreen("home")}/>;
+  if(screen==="testimonies")      return <TestimonyEngine onBack={()=>setScreen("home")} onMission={openMission}/>;
+  if(screen==="worker")           return <SendAWorker onBack={()=>setScreen("home")} user={user}/>;
+  if(screen==="qr")               return <QRShare missions={DEMO_MISSIONS} onBack={()=>setScreen("home")}/>;
+  if(screen==="milestone-proof")  return <MilestoneProof onBack={()=>setScreen("home")} user={user}/>;
+  if(screen==="pastor-review")    return (isPastor||isAdminUser) ? <PastorReview onBack={()=>setScreen("home")} user={user}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
   if(screen==="ledger"&&selectedMission)  return <TransparencyLedger mission={selectedMission} onBack={()=>setScreen("detail")}/>;
   if(screen==="detail"&&selectedMission)  return <MissionDetail mission={selectedMission} onBack={()=>setScreen("home")} onDonate={openDonate} onLedger={()=>setScreen("ledger")}/>;
   if(screen==="donate"&&selectedMission)  return <DonateScreen mission={selectedMission} onBack={()=>setScreen("detail")} onPayfast={handlePayfastDonate}/>;
+
   return(
     <HomeScreen
-      onMission={openMission} user={user} onSignOut={signOut}
+      onMission={openMission} user={user} userRole={userRole} onSignOut={signOut}
       onApply={()=>setScreen("apply")} onChurch={()=>setScreen("church")}
       onChurches={()=>setScreen("churches")} onProfile={()=>setScreen("profile")}
       onEmergency={()=>setScreen("emergency")} onMatching={()=>setScreen("matching")}
@@ -1094,6 +1068,8 @@ useEffect(()=>{
       onFaq={()=>setScreen("faq")}
       onPayout={()=>setScreen("payout")}
       onAdminPayouts={()=>setScreen("admin-payouts")}
+      onMilestoneProof={()=>setScreen("milestone-proof")}
+      onPastorReview={()=>setScreen("pastor-review")}
       isAdmin={user?.email===ADMIN_EMAIL}
       isPastor={isPastor||isAdminUser}
     />
