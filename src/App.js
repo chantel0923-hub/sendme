@@ -20,6 +20,7 @@ import { FEATURED_VIDEOS, SENDME_CHANNEL_URL } from './sendmeVideos';
 import { startPayfastDonation } from './payfast';
 import MilestoneProof from './MilestoneProof';
 import PastorReview from './PastorReview';
+import MissionaryDashboard from './MissionaryDashboard';
 
 const DEMO_MISSIONS = [
   { id:1, name:"Rev. Samuel Osei",   role:"Missionary",  church:"Accra Redemption Church",   city:"Addis Ababa", country:"Ethiopia", area:"Merkato District",         region:"Africa",      lat:9.03,  lng:38.74, title:"Gospel & Food Aid — Merkato",     blurb:"Feeding 400 families weekly while planting the Word in one of Addis Ababa's most densely populated slums.",           raised:9840,  goal:15000, color:"#e8b34b", status:"active",   milestone:2, souls:312, bibles:200, churches:1, prayers:87,  protected:false, trustLevel:2, journeyStep:4, riskLevel:1, budget:[{label:"Food parcels",amount:4000},{label:"Bibles & Tracts",amount:2500},{label:"Transport",amount:1500},{label:"Accommodation",amount:1840}] },
@@ -777,7 +778,7 @@ const DonorProfile = ({ user, onBack }) => {
 };
 
 // ── NAV "MORE" DROPDOWN ──────────────────────────────────────────────────────
-const NavDropdown = ({ user, userRole, onProfile, onEmergency, onTestimonies, onWorker, onMatching, onQR, onFaq, onPayout, onMilestoneProof, onPastorReview }) => {
+const NavDropdown = ({ user, userRole, onProfile, onEmergency, onTestimonies, onWorker, onMatching, onQR, onFaq, onPayout, onMilestoneProof, onPastorReview, onMissionaryDashboard }) => {
   const [open,setOpen] = useState(false);
   const ref = useRef(null);
 
@@ -792,6 +793,7 @@ const NavDropdown = ({ user, userRole, onProfile, onEmergency, onTestimonies, on
 
   const items = [
     user && { label:"My Profile",        icon:"✝",  color:"#e8b34b",                onClick:onProfile },
+    isMissionary && user &&              { label:"📊 My Dashboard",  color:"#e8b34b", onClick:onMissionaryDashboard },
     { label:"🚨 Emergency",              color:"#e85b5b",                            onClick:onEmergency },
     { label:"Testimonies",               color:"#3ecf8e",                            onClick:onTestimonies },
     { label:"Send Worker",               color:"#b06cf5",                            onClick:onWorker },
@@ -845,7 +847,7 @@ const NavDropdown = ({ user, userRole, onProfile, onEmergency, onTestimonies, on
 };
 
 // ── HOME SCREEN ───────────────────────────────────────────────────────────────
-const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, onChurches, onProfile, onEmergency, onMatching, onPray, onTestimonies, onWorker, onQR, onFaq, onPayout, onAdminPayouts, isAdmin, isPastor, onMilestoneProof, onPastorReview }) => {
+const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, onChurches, onProfile, onEmergency, onMatching, onPray, onTestimonies, onWorker, onQR, onFaq, onPayout, onAdminPayouts, isAdmin, isPastor, onMilestoneProof, onPastorReview, onMissionaryDashboard }) => {
   const [region,setRegion]       = useState("All");
   const [missions,setMissions]   = useState([]);
   const [loading,setLoading]     = useState(true);
@@ -885,6 +887,7 @@ const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, o
             onProfile={onProfile} onEmergency={onEmergency} onTestimonies={onTestimonies}
             onWorker={onWorker} onMatching={onMatching} onQR={onQR} onFaq={onFaq}
             onPayout={onPayout} onMilestoneProof={onMilestoneProof} onPastorReview={onPastorReview}
+            onMissionaryDashboard={onMissionaryDashboard}
           />
           {isAdmin&&<button onClick={onAdminPayouts} style={{ background:"rgba(232,91,91,0.1)",border:"1px solid rgba(232,91,91,0.3)",borderRadius:10,padding:"8px 14px",color:"#e85b5b",cursor:"pointer",fontSize:12,fontWeight:700 }}>💰 Payouts</button>}
           {user&&<button onClick={onSignOut} style={{ background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:10,padding:"8px 14px",color:"rgba(255,255,255,0.4)",cursor:"pointer",fontSize:12 }}>Sign Out</button>}
@@ -898,6 +901,18 @@ const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, o
           <div style={{ background:"rgba(232,179,75,0.06)",borderRadius:12,border:"1px solid rgba(232,179,75,0.15)",padding:"10px 16px",marginBottom:16,display:"flex",gap:10,alignItems:"center" }}>
             <span style={{ fontSize:16 }}>📋</span>
             <span style={{ fontSize:13,color:"rgba(255,255,255,0.4)" }}>Showing <strong style={{ color:"#e8b34b" }}>demo missions</strong> — no approved missions in database yet.</span>
+          </div>
+        )}
+        {userRole==="missionary"&&user&&(
+          <div onClick={onMissionaryDashboard} style={{ background:"rgba(232,179,75,0.08)",borderRadius:14,border:"1px solid rgba(232,179,75,0.25)",padding:"14px 18px",marginBottom:16,display:"flex",gap:14,alignItems:"center",cursor:"pointer",transition:"background .15s" }}
+            onMouseEnter={e=>{e.currentTarget.style.background="rgba(232,179,75,0.13)";}}
+            onMouseLeave={e=>{e.currentTarget.style.background="rgba(232,179,75,0.08)";}}>
+            <span style={{ fontSize:24 }}>📊</span>
+            <div style={{ flex:1 }}>
+              <div style={{ fontSize:14,fontWeight:700,color:"#e8b34b" }}>View Your Missionary Dashboard</div>
+              <div style={{ fontSize:12,color:"rgba(255,255,255,0.4)",marginTop:2 }}>Check your mission's progress, current milestone, and submitted proofs</div>
+            </div>
+            <span style={{ fontSize:18,color:"#e8b34b" }}>→</span>
           </div>
         )}
         <div style={{ background:"rgba(232,179,75,0.08)",borderRadius:16,border:"1px solid rgba(232,179,75,0.2)",padding:"16px 20px",textAlign:"center",marginBottom:24 }}>
@@ -1053,6 +1068,7 @@ export default function App() {
   if(screen==="qr")               return <QRShare missions={DEMO_MISSIONS} onBack={()=>setScreen("home")}/>;
   if(screen==="milestone-proof")  return <MilestoneProof onBack={()=>setScreen("home")} user={user}/>;
   if(screen==="pastor-review")    return (isPastor||isAdminUser) ? <PastorReview onBack={()=>setScreen("home")} user={user}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
+  if(screen==="missionary-dashboard") return <MissionaryDashboard onBack={()=>setScreen("home")} user={user} onSubmitProof={()=>setScreen("milestone-proof")}/>;
   if(screen==="ledger"&&selectedMission)  return <TransparencyLedger mission={selectedMission} onBack={()=>setScreen("detail")}/>;
   if(screen==="detail"&&selectedMission)  return <MissionDetail mission={selectedMission} onBack={()=>setScreen("home")} onDonate={openDonate} onLedger={()=>setScreen("ledger")}/>;
   if(screen==="donate"&&selectedMission)  return <DonateScreen mission={selectedMission} onBack={()=>setScreen("detail")} onPayfast={handlePayfastDonate}/>;
@@ -1070,6 +1086,7 @@ export default function App() {
       onAdminPayouts={()=>setScreen("admin-payouts")}
       onMilestoneProof={()=>setScreen("milestone-proof")}
       onPastorReview={()=>setScreen("pastor-review")}
+      onMissionaryDashboard={()=>setScreen("missionary-dashboard")}
       isAdmin={user?.email===ADMIN_EMAIL}
       isPastor={isPastor||isAdminUser}
     />

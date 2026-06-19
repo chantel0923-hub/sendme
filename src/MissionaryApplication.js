@@ -642,7 +642,7 @@ export default function MissionaryApplication({ onBack, user }) {
         bibles:           0,
         churches:         0,
         protected:        form.shadowMode,
-        user_id:          user?.id || null,
+        missionary_id:    user?.id || null,
       });
       if (dbError) throw dbError;
       setSubmitted(true);
