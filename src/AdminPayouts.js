@@ -10,58 +10,60 @@ const MILESTONE_LABELS = ["Milestone 1", "Milestone 2", "Milestone 3"];
 
 export default function AdminPayouts({ onBack }) {
   const [missions, setMissions]           = useState([]);
-  const [payoutDetails, setPayoutDetails] = useState({});  // keyed by mission_id
-  const [churchDetails, setChurchDetails] = useState({});  // keyed by church_id
+  const [payoutDetails, setPayoutDetails] = useState({});
+  const [churchDetails, setChurchDetails] = useState({});
   const [payoutRecords, setPayoutRecords] = useState({});
+  const [approvedProofs, setApprovedProofs] = useState([]);  // ← NEW: pastor-approved proofs
   const [loading, setLoading]             = useState(true);
-  const [filter, setFilter]               = useState("due");
+  const [filter, setFilter]               = useState("approved"); // ← default to approved queue
+  const [markingPaid, setMarkingPaid]     = useState(null);
+  const [error, setError]                 = useState("");
 
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      try {
-        const { data: missionsData } = await supabase
-          .from("missions")
-          .select("*")
-          .order("created_at", { ascending: false });
+  useEffect(() => { load(); }, []);
 
-        const { data: detailsData } = await supabase
-          .from("payout_details")
-          .select("*");
+  const load = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const [missionsRes, detailsRes, recordsRes, proofsRes] = await Promise.all([
+        supabase.from("missions").select("*").order("created_at", { ascending: false }),
+        supabase.from("payout_details").select("*"),
+        supabase.from("payout_records").select("*"),
+        // ── NEW: fetch pastor-approved proofs joined with mission info ──
+        supabase.from("milestone_proofs")
+          .select(`
+            id, mission_id, milestone_number, description, media_url,
+            submitted_at, reviewed_at, pastor_notes, status,
+            missions ( id, title, country, city, church_id, church_name, goal, current_milestone, missionary_role )
+          `)
+          .eq("status", "approved")
+          .order("reviewed_at", { ascending: false }),
+      ]);
 
-        const { data: recordsData } = await supabase
-          .from("payout_records")
-          .select("*");
+      const missionDetailsMap = {};
+      const churchDetailsMap  = {};
+      (detailsRes.data || []).forEach(d => {
+        if (d.mission_id) missionDetailsMap[d.mission_id] = d;
+        if (d.church_id)  churchDetailsMap[d.church_id]   = d;
+      });
 
-        // Map payout_details by mission_id (for missionaries without a church link)
-        const missionDetailsMap = {};
-        const churchDetailsMap  = {};
-        (detailsData || []).forEach(d => {
-          if (d.mission_id) missionDetailsMap[d.mission_id] = d;
-          if (d.church_id)  churchDetailsMap[d.church_id]   = d;
-        });
+      const recordsMap = {};
+      (recordsRes.data || []).forEach(r => {
+        if (!recordsMap[r.mission_id]) recordsMap[r.mission_id] = {};
+        recordsMap[r.mission_id][r.milestone_number] = r;
+      });
 
-        const recordsMap = {};
-        (recordsData || []).forEach(r => {
-          if (!recordsMap[r.mission_id]) recordsMap[r.mission_id] = {};
-          recordsMap[r.mission_id][r.milestone_number] = r;
-        });
+      setMissions(missionsRes.data || []);
+      setPayoutDetails(missionDetailsMap);
+      setChurchDetails(churchDetailsMap);
+      setPayoutRecords(recordsMap);
+      setApprovedProofs(proofsRes.data || []);
+    } catch (e) {
+      setError("Could not load payout data: " + (e.message || ""));
+    }
+    setLoading(false);
+  };
 
-        setMissions(missionsData || []);
-        setPayoutDetails(missionDetailsMap);
-        setChurchDetails(churchDetailsMap);
-        setPayoutRecords(recordsMap);
-      } catch (e) {
-        console.error(e);
-      }
-      setLoading(false);
-    };
-    load();
-  }, []);
-
-  // For a given mission, find the right banking details:
-  // 1. If mission has a church_id → use the church's payout_details (preferred)
-  // 2. Fall back to mission's own payout_details (for unlinked/independent missionaries)
   const getBankingDetails = (mission) => {
     if (mission.church_id && churchDetails[mission.church_id]) {
       return { details: churchDetails[mission.church_id], source: "church" };
@@ -80,6 +82,8 @@ export default function AdminPayouts({ onBack }) {
   };
 
   const markPaid = async (missionId, milestoneNum, amount, isPaid) => {
+    setMarkingPaid(`${missionId}-${milestoneNum}`);
+    setError("");
     const newStatus = isPaid ? "pending" : "paid";
     const payload = {
       mission_id: missionId,
@@ -99,25 +103,56 @@ export default function AdminPayouts({ onBack }) {
         [missionId]: { ...(prev[missionId] || {}), [milestoneNum]: payload },
       }));
     } catch (e) {
-      alert("Could not update payment status. Please try again.");
+      setError("Could not update payment status: " + (e.message || ""));
     }
+    setMarkingPaid(null);
   };
 
-  // Build payout rows
-  const rows = [];
+  // ── Build approved-proof rows (the new "Ready to Pay" queue) ──────────────
+  const approvedRows = approvedProofs.map(proof => {
+    const m = proof.missions || {};
+    const records = payoutRecords[proof.mission_id] || {};
+    const record  = records[proof.milestone_number];
+    const isPaid  = record?.status === "paid";
+    const { details, source } = m.id
+      ? getBankingDetails(m)
+      : { details: null, source: null };
+    return {
+      proofId:      proof.id,
+      missionId:    proof.mission_id,
+      missionTitle: m.title || "Untitled Mission",
+      churchName:   m.church_name || "",
+      churchId:     m.church_id || null,
+      country:      m.country || m.city || "",
+      milestoneNum: proof.milestone_number,
+      amount:       milestoneAmount(m.goal, proof.milestone_number),
+      isPaid,
+      paidAt:       record?.paid_at,
+      details,
+      bankingSource: source,
+      reviewedAt:   proof.reviewed_at,
+      pastorNotes:  proof.pastor_notes,
+      description:  proof.description,
+      mediaUrl:     proof.media_url,
+    };
+  });
+
+  // ── Build legacy milestone rows (from missions.current_milestone) ─────────
+  const legacyRows = [];
   missions.forEach(m => {
-    const currentMilestone = m.milestone || 0;
+    // Use current_milestone (new column); fall back to old milestone field
+    const currentMilestone = m.current_milestone || m.milestone || 0;
     const { details, source } = getBankingDetails(m);
     const records = payoutRecords[m.id] || {};
     for (let i = 1; i <= currentMilestone; i++) {
       const amount  = milestoneAmount(m.goal, i);
       const record  = records[i];
       const isPaid  = record?.status === "paid";
-      rows.push({
+      legacyRows.push({
         missionId:    m.id,
         missionTitle: m.title || "Untitled Mission",
         churchName:   m.church_name || "",
-        churchId:     m.church_id   || null,
+        churchId:     m.church_id || null,
         churchVerified: m.church_verified || false,
         country:      m.country || m.region || "",
         status:       m.status || "pending",
@@ -126,64 +161,82 @@ export default function AdminPayouts({ onBack }) {
         isPaid,
         paidAt:       record?.paid_at,
         details,
-        bankingSource: source,  // "church" | "missionary" | null
+        bankingSource: source,
       });
     }
   });
 
-  const filtered = rows.filter(r => {
-    if (filter === "due")     return !r.isPaid;
-    if (filter === "paid")    return r.isPaid;
-    if (filter === "pending") return r.status === "pending_church";
-    return true;
-  });
+  // Filter tabs
+  const filteredRows = filter === "approved"
+    ? approvedRows
+    : filter === "due"
+    ? legacyRows.filter(r => !r.isPaid)
+    : filter === "paid"
+    ? legacyRows.filter(r => r.isPaid)
+    : legacyRows;
 
-  const totalDue  = rows.filter(r => !r.isPaid).reduce((acc, r) => acc + r.amount, 0);
-  const totalPaid = rows.filter(r =>  r.isPaid).reduce((acc, r) => acc + r.amount, 0);
+  const totalDue      = legacyRows.filter(r => !r.isPaid).reduce((acc, r) => acc + r.amount, 0);
+  const totalPaid     = legacyRows.filter(r =>  r.isPaid).reduce((acc, r) => acc + r.amount, 0);
+  const approvedUnpaid = approvedRows.filter(r => !r.isPaid).length;
 
-  // Missions that have hit a milestone but have NO banking details at all
   const missingBanking = missions.filter(m => {
-    if ((m.milestone || 0) === 0) return false;
+    if ((m.current_milestone || m.milestone || 0) === 0) return false;
     const { details } = getBankingDetails(m);
     return !details;
   });
 
-  // Missions waiting for their church to register on SendMe
   const pendingChurch = missions.filter(m => m.status === "pending_church");
+
+  const timeAgo = (dateStr) => {
+    if (!dateStr) return "";
+    const diff = Math.floor((new Date() - new Date(dateStr)) / 1000);
+    if (diff < 3600) return `${Math.floor(diff/60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff/3600)}h ago`;
+    return `${Math.floor(diff/86400)}d ago`;
+  };
 
   return (
     <div style={{ minHeight:"100vh", background:"#060c18", color:"#eef1ff", fontFamily:"Georgia, serif" }}>
       <div style={{ background:"#09111f", borderBottom:"1px solid rgba(255,255,255,0.07)", padding:"16px 24px", display:"flex", alignItems:"center", gap:14, position:"sticky", top:0, zIndex:100 }}>
-        <button onClick={onBack} style={{ background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:10, padding:"8px 16px", color:"rgba(255,255,255,0.6)", cursor:"pointer", fontSize:14 }}>Back</button>
-        <div>
+        <button onClick={onBack} style={{ background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:10, padding:"8px 16px", color:"rgba(255,255,255,0.6)", cursor:"pointer", fontSize:14, fontFamily:"Georgia, serif" }}>Back</button>
+        <div style={{ flex:1 }}>
           <div style={{ fontSize:18, fontWeight:700 }}>Payout Dashboard</div>
-          <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", letterSpacing:2, marginTop:2 }}>ADMIN ONLY — SENDME</div>
+          <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", letterSpacing:2, marginTop:2 }}>SENDME ADMIN · CONFIDENTIAL</div>
         </div>
+        {approvedUnpaid > 0 && (
+          <div style={{ background:"rgba(62,207,142,0.15)", border:"1px solid rgba(62,207,142,0.4)", borderRadius:999, padding:"4px 14px", fontSize:13, color:"#3ecf8e", fontWeight:700 }}>
+            {approvedUnpaid} ready to pay
+          </div>
+        )}
+        <button onClick={load} style={{ background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:10, padding:"8px 14px", color:"rgba(255,255,255,0.5)", cursor:"pointer", fontSize:12, fontFamily:"Georgia, serif" }}>↻ Refresh</button>
       </div>
 
-      <div style={{ maxWidth:900, margin:"0 auto", padding:"24px 20px 60px" }}>
+      <div style={{ maxWidth:800, margin:"0 auto", padding:"28px 20px 60px" }}>
 
-        {/* Summary cards */}
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12, marginBottom:20 }}>
-          <div style={{ background:"rgba(232,91,91,0.08)", borderRadius:14, border:"1px solid rgba(232,91,91,0.25)", padding:16, textAlign:"center" }}>
-            <div style={{ fontSize:22, fontWeight:700, color:"#e85b5b" }}>${fmt(totalDue)}</div>
-            <div style={{ fontSize:12, color:"rgba(255,255,255,0.4)", marginTop:4 }}>Outstanding</div>
-          </div>
-          <div style={{ background:"rgba(62,207,142,0.08)", borderRadius:14, border:"1px solid rgba(62,207,142,0.25)", padding:16, textAlign:"center" }}>
-            <div style={{ fontSize:22, fontWeight:700, color:"#3ecf8e" }}>${fmt(totalPaid)}</div>
-            <div style={{ fontSize:12, color:"rgba(255,255,255,0.4)", marginTop:4 }}>Paid Out</div>
-          </div>
-          <div style={{ background:"rgba(232,179,75,0.08)", borderRadius:14, border:"1px solid rgba(232,179,75,0.25)", padding:16, textAlign:"center" }}>
-            <div style={{ fontSize:22, fontWeight:700, color:"#e8b34b" }}>{rows.filter(r=>!r.isPaid).length}</div>
-            <div style={{ fontSize:12, color:"rgba(255,255,255,0.4)", marginTop:4 }}>Payments Due</div>
-          </div>
-          <div style={{ background:"rgba(176,108,245,0.08)", borderRadius:14, border:"1px solid rgba(176,108,245,0.25)", padding:16, textAlign:"center" }}>
-            <div style={{ fontSize:22, fontWeight:700, color:"#b06cf5" }}>{pendingChurch.length}</div>
-            <div style={{ fontSize:12, color:"rgba(255,255,255,0.4)", marginTop:4 }}>Pending Church</div>
-          </div>
+        {/* Stats row */}
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12, marginBottom:24 }}>
+          {[
+            ["✅", approvedRows.filter(r=>!r.isPaid).length, "Pastor Approved", "#3ecf8e"],
+            ["⏳", legacyRows.filter(r=>!r.isPaid).length,  "Due (legacy)",    "#e8b34b"],
+            ["💝", "$"+fmt(totalDue),                        "Amount Due",      "#5b9cf6"],
+            ["✓",  "$"+fmt(totalPaid),                       "Total Paid Out",  "#b06cf5"],
+          ].map(([icon,val,label,c]) => (
+            <div key={label} style={{ background:"rgba(255,255,255,0.03)", borderRadius:14, border:"1px solid rgba(255,255,255,0.07)", padding:"14px 10px", textAlign:"center" }}>
+              <div style={{ fontSize:18 }}>{icon}</div>
+              <div style={{ fontSize:18, fontWeight:700, color:c, marginTop:4 }}>{val}</div>
+              <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", marginTop:2 }}>{label}</div>
+            </div>
+          ))}
         </div>
 
-        {/* Pending church registration banner */}
+        {/* Error */}
+        {error && (
+          <div style={{ background:"rgba(240,82,82,0.1)", border:"1px solid rgba(240,82,82,0.3)", borderRadius:10, padding:"10px 14px", marginBottom:16, fontSize:13, color:"#f05252" }}>
+            ⚠ {error}
+          </div>
+        )}
+
+        {/* Pending church banner */}
         {pendingChurch.length > 0 && (
           <div style={{ background:"rgba(176,108,245,0.07)", border:"1px solid rgba(176,108,245,0.25)", borderRadius:12, padding:"14px 18px", marginBottom:16 }}>
             <div style={{ fontSize:13, color:"#b06cf5", fontWeight:700, marginBottom:6 }}>
@@ -200,7 +253,7 @@ export default function AdminPayouts({ onBack }) {
           </div>
         )}
 
-        {/* Missing banking details banner */}
+        {/* Missing banking banner */}
         {missingBanking.length > 0 && (
           <div style={{ background:"rgba(232,179,75,0.07)", border:"1px solid rgba(232,179,75,0.25)", borderRadius:12, padding:"14px 18px", marginBottom:16 }}>
             <div style={{ fontSize:13, color:"#e8b34b", fontWeight:700, marginBottom:6 }}>
@@ -215,129 +268,262 @@ export default function AdminPayouts({ onBack }) {
         )}
 
         {/* Filter tabs */}
-        <div style={{ display:"flex", gap:8, marginBottom:18 }}>
-          {[["due","Payments Due"],["paid","Paid"],["pending","Pending Church"],["all","All"]].map(([key,lbl]) => (
+        <div style={{ display:"flex", gap:8, marginBottom:18, flexWrap:"wrap" }}>
+          {[
+            ["approved", `✅ Pastor Approved${approvedUnpaid > 0 ? ` (${approvedUnpaid})` : ""}`],
+            ["due",      "Payments Due"],
+            ["paid",     "Paid"],
+            ["all",      "All (legacy)"],
+          ].map(([key,lbl]) => (
             <button key={key} onClick={()=>setFilter(key)}
               style={{ padding:"8px 18px", borderRadius:999,
-                border:`1px solid ${filter===key?"#e8b34b":"rgba(255,255,255,0.1)"}`,
-                background:filter===key?"rgba(232,179,75,0.15)":"rgba(255,255,255,0.03)",
-                color:filter===key?"#e8b34b":"rgba(255,255,255,0.5)",
-                cursor:"pointer", fontSize:13, fontWeight:600 }}>
+                border:`1px solid ${filter===key?(key==="approved"?"#3ecf8e":"#e8b34b"):"rgba(255,255,255,0.1)"}`,
+                background:filter===key?(key==="approved"?"rgba(62,207,142,0.15)":"rgba(232,179,75,0.15)"):"rgba(255,255,255,0.03)",
+                color:filter===key?(key==="approved"?"#3ecf8e":"#e8b34b"):"rgba(255,255,255,0.5)",
+                cursor:"pointer", fontSize:13, fontWeight:600, fontFamily:"Georgia, serif" }}>
               {lbl}
             </button>
           ))}
         </div>
 
-        {/* Payout rows */}
-        {loading ? (
-          <div style={{ textAlign:"center", padding:"40px 0", color:"rgba(255,255,255,0.3)" }}>Loading payout data...</div>
-        ) : filtered.length === 0 ? (
-          <div style={{ textAlign:"center", padding:"40px 0", color:"rgba(255,255,255,0.3)", fontSize:14 }}>
-            {filter==="due" ? "🙏 Nothing outstanding — all caught up!" : "No records to show."}
-          </div>
-        ) : (
-          <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
-            {filtered.map((r, i) => (
-              <div key={i} style={{ background:"#0c1628", borderRadius:14,
-                border:`1px solid ${r.isPaid?"rgba(62,207,142,0.2)":"rgba(232,179,75,0.2)"}`,
-                padding:"16px 18px" }}>
+        {/* ── APPROVED PROOFS (new pastor-approved queue) ── */}
+        {filter === "approved" && (
+          loading ? (
+            <div style={{ textAlign:"center", padding:"40px 0", color:"rgba(255,255,255,0.3)" }}>Loading...</div>
+          ) : approvedRows.length === 0 ? (
+            <div style={{ textAlign:"center", padding:"40px 0", color:"rgba(255,255,255,0.3)", fontSize:14 }}>
+              🙏 No pastor-approved milestones yet. Once a pastor approves a missionary's proof, it will appear here for payout.
+            </div>
+          ) : (
+            <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+              {approvedRows.map((r, i) => {
+                const isActing = markingPaid === `${r.missionId}-${r.milestoneNum}`;
+                return (
+                  <div key={r.proofId || i} style={{ background:"#0c1628", borderRadius:16,
+                    border:`1px solid ${r.isPaid ? "rgba(62,207,142,0.2)" : "rgba(62,207,142,0.4)"}`,
+                    borderLeft:`3px solid ${r.isPaid ? "rgba(62,207,142,0.3)" : "#3ecf8e"}`,
+                    padding:"18px 20px" }}>
 
-                {/* Header row */}
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:12, flexWrap:"wrap" }}>
-                  <div style={{ flex:1, minWidth:220 }}>
-                    <div style={{ fontSize:14, fontWeight:700, color:"#eef1ff" }}>{r.missionTitle}</div>
-                    {r.churchName && (
-                      <div style={{ fontSize:12, color:"rgba(255,255,255,0.45)", marginTop:2 }}>
-                        ⛪ {r.churchName}
-                        {r.churchVerified
-                          ? <span style={{ marginLeft:6, color:"#3ecf8e", fontSize:11 }}>✓ verified</span>
-                          : <span style={{ marginLeft:6, color:"#e8b34b", fontSize:11 }}>⚠️ pending registration</span>
-                        }
+                    {/* Status badge */}
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:12, marginBottom:14 }}>
+                      <div style={{ flex:1 }}>
+                        <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:6, flexWrap:"wrap" }}>
+                          <span style={{ fontSize:11, padding:"3px 10px", borderRadius:999,
+                            background: r.isPaid ? "rgba(62,207,142,0.1)" : "rgba(62,207,142,0.2)",
+                            color:"#3ecf8e", border:"1px solid rgba(62,207,142,0.4)", fontWeight:700 }}>
+                            {r.isPaid ? "✓ Paid" : "✅ Pastor Approved — Ready to Pay"}
+                          </span>
+                          <span style={{ fontSize:11, padding:"3px 10px", borderRadius:999,
+                            background:"rgba(91,156,246,0.1)", color:"#5b9cf6",
+                            border:"1px solid rgba(91,156,246,0.25)" }}>
+                            {MILESTONE_LABELS[r.milestoneNum-1]||`Milestone ${r.milestoneNum}`}
+                          </span>
+                          {r.reviewedAt && (
+                            <span style={{ fontSize:11, color:"rgba(255,255,255,0.3)" }}>
+                              Approved {timeAgo(r.reviewedAt)}
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ fontSize:15, fontWeight:700, color:"#eef1ff" }}>{r.missionTitle}</div>
+                        {r.churchName && (
+                          <div style={{ fontSize:12, color:"rgba(255,255,255,0.45)", marginTop:3 }}>⛪ {r.churchName}</div>
+                        )}
+                        <div style={{ fontSize:12, color:"rgba(255,255,255,0.35)", marginTop:2 }}>📍 {r.country}</div>
+                      </div>
+                      <div style={{ textAlign:"right", flexShrink:0 }}>
+                        <div style={{ fontSize:26, fontWeight:700, color: r.isPaid ? "#3ecf8e" : "#e8b34b" }}>${fmt(r.amount)}</div>
+                        {r.bankingSource && (
+                          <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", marginTop:4 }}>
+                            {r.bankingSource === "church" ? "🏦 to church" : "👤 to missionary"}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Proof summary */}
+                    {r.description && (
+                      <div style={{ background:"rgba(255,255,255,0.03)", borderRadius:10, border:"1px solid rgba(255,255,255,0.06)", padding:"10px 14px", marginBottom:12 }}>
+                        <div style={{ fontSize:11, color:"rgba(255,255,255,0.25)", marginBottom:4 }}>Missionary's field report</div>
+                        <div style={{ fontSize:13, color:"rgba(255,255,255,0.6)", lineHeight:1.7 }}>{r.description}</div>
+                        {r.mediaUrl && (
+                          <a href={r.mediaUrl} target="_blank" rel="noopener noreferrer"
+                            style={{ display:"inline-block", marginTop:8, fontSize:12, color:"#5b9cf6", textDecoration:"none" }}>
+                            📎 View evidence ↗
+                          </a>
+                        )}
                       </div>
                     )}
-                    <div style={{ fontSize:12, color:"rgba(255,255,255,0.35)", marginTop:2 }}>📍 {r.country}</div>
-                    <div style={{ marginTop:8, display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
-                      <span style={{ fontSize:11, padding:"2px 10px", borderRadius:999,
-                        background:"rgba(91,156,246,0.12)", color:"#5b9cf6",
-                        border:"1px solid rgba(91,156,246,0.25)" }}>
-                        {MILESTONE_LABELS[r.milestoneNum-1]||`Milestone ${r.milestoneNum}`}
+
+                    {/* Pastor notes */}
+                    {r.pastorNotes && (
+                      <div style={{ background:"rgba(62,207,142,0.05)", borderRadius:10, border:"1px solid rgba(62,207,142,0.15)", padding:"8px 12px", marginBottom:12, fontSize:12, color:"rgba(255,255,255,0.5)" }}>
+                        <span style={{ color:"#3ecf8e", fontWeight:700 }}>Pastor's notes: </span>{r.pastorNotes}
+                      </div>
+                    )}
+
+                    {/* Banking details */}
+                    <div style={{ paddingTop:12, borderTop:"1px solid rgba(255,255,255,0.06)", marginBottom:14 }}>
+                      {r.details ? (
+                        <>
+                          <div style={{ fontSize:11, color:"rgba(255,255,255,0.25)", letterSpacing:1, textTransform:"uppercase", marginBottom:8 }}>
+                            {r.bankingSource === "church" ? "Church Banking Details" : "Missionary Banking Details"}
+                          </div>
+                          <div style={{ fontSize:12, color:"rgba(255,255,255,0.5)", lineHeight:1.8,
+                            display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:"4px 16px" }}>
+                            <div><strong style={{color:"rgba(255,255,255,0.7)"}}>Recipient:</strong> {r.details.recipient_name}</div>
+                            <div><strong style={{color:"rgba(255,255,255,0.7)"}}>Bank:</strong> {r.details.bank_name}</div>
+                            <div><strong style={{color:"rgba(255,255,255,0.7)"}}>Account Holder:</strong> {r.details.account_holder}</div>
+                            <div><strong style={{color:"rgba(255,255,255,0.7)"}}>Account No:</strong> {r.details.account_number}</div>
+                            <div><strong style={{color:"rgba(255,255,255,0.7)"}}>Branch Code:</strong> {r.details.branch_code||"—"}</div>
+                            <div><strong style={{color:"rgba(255,255,255,0.7)"}}>Type:</strong> {r.details.account_type} · {r.details.country}</div>
+                            {r.details.swift_code && <div><strong style={{color:"rgba(255,255,255,0.7)"}}>SWIFT/IBAN:</strong> {r.details.swift_code}</div>}
+                            {r.details.notes && <div style={{gridColumn:"1 / -1"}}><strong style={{color:"rgba(255,255,255,0.7)"}}>Notes:</strong> {r.details.notes}</div>}
+                          </div>
+                        </>
+                      ) : (
+                        <div style={{ fontSize:12, color:"#e85b5b" }}>
+                          ⚠️ No banking details found. {r.churchId ? "The church has not submitted their banking details yet." : "No banking details submitted for this mission."}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Mark paid button */}
+                    <button onClick={()=>markPaid(r.missionId, r.milestoneNum, r.amount, r.isPaid)}
+                      disabled={isActing}
+                      style={{ padding:"10px 24px", borderRadius:10, border:"none",
+                        background: r.isPaid ? "rgba(255,255,255,0.06)" : "linear-gradient(135deg,#3ecf8e,#2aaf74)",
+                        color: r.isPaid ? "rgba(255,255,255,0.5)" : "#000",
+                        fontWeight:700, cursor: isActing ? "default" : "pointer",
+                        fontSize:13, fontFamily:"Georgia, serif",
+                        opacity: isActing ? 0.7 : 1 }}>
+                      {isActing ? "Saving..." : r.isPaid ? "↩ Mark as Unpaid" : "✓ Mark as Paid (EFT Done)"}
+                    </button>
+                    {r.isPaid && r.paidAt && (
+                      <span style={{ marginLeft:12, fontSize:12, color:"rgba(255,255,255,0.3)" }}>
+                        Paid {new Date(r.paidAt).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"})}
                       </span>
-                      {/* Badge showing who gets paid */}
-                      {r.bankingSource === "church" && (
-                        <span style={{ fontSize:11, padding:"2px 10px", borderRadius:999,
-                          background:"rgba(176,108,245,0.12)", color:"#b06cf5",
-                          border:"1px solid rgba(176,108,245,0.25)" }}>
-                          🏦 Pay to church account
-                        </span>
-                      )}
-                      {r.bankingSource === "missionary" && (
-                        <span style={{ fontSize:11, padding:"2px 10px", borderRadius:999,
-                          background:"rgba(232,179,75,0.12)", color:"#e8b34b",
-                          border:"1px solid rgba(232,179,75,0.25)" }}>
-                          👤 Pay to missionary account
-                        </span>
-                      )}
-                      {r.isPaid && (
-                        <span style={{ fontSize:11, padding:"2px 10px", borderRadius:999,
-                          background:"rgba(62,207,142,0.12)", color:"#3ecf8e",
-                          border:"1px solid rgba(62,207,142,0.25)" }}>
-                          ✓ Paid {r.paidAt ? new Date(r.paidAt).toLocaleDateString("en-GB",{day:"numeric",month:"short"}) : ""}
-                        </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )
+        )}
+
+        {/* ── LEGACY ROWS (due / paid / all) ── */}
+        {filter !== "approved" && (
+          loading ? (
+            <div style={{ textAlign:"center", padding:"40px 0", color:"rgba(255,255,255,0.3)" }}>Loading payout data...</div>
+          ) : filteredRows.length === 0 ? (
+            <div style={{ textAlign:"center", padding:"40px 0", color:"rgba(255,255,255,0.3)", fontSize:14 }}>
+              {filter==="due" ? "🙏 Nothing outstanding — all caught up!" : "No records to show."}
+            </div>
+          ) : (
+            <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+              {filteredRows.map((r, i) => {
+                const isActing = markingPaid === `${r.missionId}-${r.milestoneNum}`;
+                return (
+                  <div key={i} style={{ background:"#0c1628", borderRadius:14,
+                    border:`1px solid ${r.isPaid?"rgba(62,207,142,0.2)":"rgba(232,179,75,0.2)"}`,
+                    padding:"16px 18px" }}>
+
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:12, flexWrap:"wrap" }}>
+                      <div style={{ flex:1, minWidth:220 }}>
+                        <div style={{ fontSize:14, fontWeight:700, color:"#eef1ff" }}>{r.missionTitle}</div>
+                        {r.churchName && (
+                          <div style={{ fontSize:12, color:"rgba(255,255,255,0.45)", marginTop:2 }}>
+                            ⛪ {r.churchName}
+                            {r.churchVerified
+                              ? <span style={{ marginLeft:6, color:"#3ecf8e", fontSize:11 }}>✓ verified</span>
+                              : <span style={{ marginLeft:6, color:"#e8b34b", fontSize:11 }}>⚠️ pending</span>
+                            }
+                          </div>
+                        )}
+                        <div style={{ fontSize:12, color:"rgba(255,255,255,0.35)", marginTop:2 }}>📍 {r.country}</div>
+                        <div style={{ marginTop:8, display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
+                          <span style={{ fontSize:11, padding:"2px 10px", borderRadius:999,
+                            background:"rgba(91,156,246,0.12)", color:"#5b9cf6",
+                            border:"1px solid rgba(91,156,246,0.25)" }}>
+                            {MILESTONE_LABELS[r.milestoneNum-1]||`Milestone ${r.milestoneNum}`}
+                          </span>
+                          {r.bankingSource === "church" && (
+                            <span style={{ fontSize:11, padding:"2px 10px", borderRadius:999,
+                              background:"rgba(176,108,245,0.12)", color:"#b06cf5",
+                              border:"1px solid rgba(176,108,245,0.25)" }}>
+                              🏦 Pay to church
+                            </span>
+                          )}
+                          {r.bankingSource === "missionary" && (
+                            <span style={{ fontSize:11, padding:"2px 10px", borderRadius:999,
+                              background:"rgba(232,179,75,0.12)", color:"#e8b34b",
+                              border:"1px solid rgba(232,179,75,0.25)" }}>
+                              👤 Pay to missionary
+                            </span>
+                          )}
+                          {r.isPaid && (
+                            <span style={{ fontSize:11, padding:"2px 10px", borderRadius:999,
+                              background:"rgba(62,207,142,0.12)", color:"#3ecf8e",
+                              border:"1px solid rgba(62,207,142,0.25)" }}>
+                              ✓ Paid {r.paidAt ? new Date(r.paidAt).toLocaleDateString("en-GB",{day:"numeric",month:"short"}) : ""}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div style={{ textAlign:"right" }}>
+                        <div style={{ fontSize:22, fontWeight:700, color:r.isPaid?"#3ecf8e":"#e8b34b" }}>${fmt(r.amount)}</div>
+                      </div>
+                    </div>
+
+                    <div style={{ marginTop:12, paddingTop:12, borderTop:"1px solid rgba(255,255,255,0.06)" }}>
+                      {r.details ? (
+                        <>
+                          <div style={{ fontSize:11, color:"rgba(255,255,255,0.25)", letterSpacing:1, textTransform:"uppercase", marginBottom:8 }}>
+                            {r.bankingSource === "church" ? "Church Banking Details" : "Missionary Banking Details"}
+                          </div>
+                          <div style={{ fontSize:12, color:"rgba(255,255,255,0.5)", lineHeight:1.8,
+                            display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:"4px 16px" }}>
+                            <div><strong style={{color:"rgba(255,255,255,0.7)"}}>Recipient:</strong> {r.details.recipient_name}</div>
+                            <div><strong style={{color:"rgba(255,255,255,0.7)"}}>Bank:</strong> {r.details.bank_name}</div>
+                            <div><strong style={{color:"rgba(255,255,255,0.7)"}}>Account Holder:</strong> {r.details.account_holder}</div>
+                            <div><strong style={{color:"rgba(255,255,255,0.7)"}}>Account No:</strong> {r.details.account_number}</div>
+                            <div><strong style={{color:"rgba(255,255,255,0.7)"}}>Branch Code:</strong> {r.details.branch_code||"—"}</div>
+                            <div><strong style={{color:"rgba(255,255,255,0.7)"}}>Type:</strong> {r.details.account_type} · {r.details.country}</div>
+                            {r.details.swift_code && <div><strong style={{color:"rgba(255,255,255,0.7)"}}>SWIFT/IBAN:</strong> {r.details.swift_code}</div>}
+                            {r.details.notes && <div style={{gridColumn:"1 / -1"}}><strong style={{color:"rgba(255,255,255,0.7)"}}>Notes:</strong> {r.details.notes}</div>}
+                          </div>
+                        </>
+                      ) : (
+                        <div style={{ fontSize:12, color:"#e85b5b" }}>
+                          ⚠️ No banking details found.
+                          {r.churchId ? " Church not set up banking yet." : " No banking details submitted."}
+                        </div>
                       )}
                     </div>
-                  </div>
-                  <div style={{ textAlign:"right" }}>
-                    <div style={{ fontSize:22, fontWeight:700, color:r.isPaid?"#3ecf8e":"#e8b34b" }}>${fmt(r.amount)}</div>
-                  </div>
-                </div>
 
-                {/* Banking details section */}
-                <div style={{ marginTop:12, paddingTop:12, borderTop:"1px solid rgba(255,255,255,0.06)" }}>
-                  {r.details ? (
-                    <>
-                      <div style={{ fontSize:11, color:"rgba(255,255,255,0.25)", letterSpacing:1, textTransform:"uppercase", marginBottom:8 }}>
-                        {r.bankingSource === "church" ? "Church Banking Details" : "Missionary Banking Details"}
-                      </div>
-                      <div style={{ fontSize:12, color:"rgba(255,255,255,0.5)", lineHeight:1.8,
-                        display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:"4px 16px" }}>
-                        <div><strong style={{color:"rgba(255,255,255,0.7)"}}>Recipient:</strong> {r.details.recipient_name}</div>
-                        <div><strong style={{color:"rgba(255,255,255,0.7)"}}>Bank:</strong> {r.details.bank_name}</div>
-                        <div><strong style={{color:"rgba(255,255,255,0.7)"}}>Account Holder:</strong> {r.details.account_holder}</div>
-                        <div><strong style={{color:"rgba(255,255,255,0.7)"}}>Account No:</strong> {r.details.account_number}</div>
-                        <div><strong style={{color:"rgba(255,255,255,0.7)"}}>Branch Code:</strong> {r.details.branch_code||"—"}</div>
-                        <div><strong style={{color:"rgba(255,255,255,0.7)"}}>Type:</strong> {r.details.account_type} · {r.details.country}</div>
-                        {r.details.swift_code && <div><strong style={{color:"rgba(255,255,255,0.7)"}}>SWIFT/IBAN:</strong> {r.details.swift_code}</div>}
-                        {r.details.notes && <div style={{gridColumn:"1 / -1"}}><strong style={{color:"rgba(255,255,255,0.7)"}}>Notes:</strong> {r.details.notes}</div>}
-                      </div>
-                    </>
-                  ) : (
-                    <div style={{ fontSize:12, color:"#e85b5b" }}>
-                      ⚠️ No banking details found.
-                      {r.churchId ? " The church has not submitted their banking details yet." : " No banking details submitted for this mission."}
+                    <div style={{ marginTop:14 }}>
+                      <button onClick={()=>markPaid(r.missionId, r.milestoneNum, r.amount, r.isPaid)}
+                        disabled={isActing}
+                        style={{ padding:"9px 20px", borderRadius:10, border:"none",
+                          background:r.isPaid?"rgba(255,255,255,0.06)":"linear-gradient(135deg,#3ecf8e,#2aaf74)",
+                          color:r.isPaid?"rgba(255,255,255,0.5)":"#000", fontWeight:700,
+                          cursor: isActing ? "default" : "pointer",
+                          fontSize:13, fontFamily:"Georgia, serif",
+                          opacity: isActing ? 0.7 : 1 }}>
+                        {isActing ? "Saving..." : r.isPaid ? "Mark as Unpaid" : "✓ Mark as Paid"}
+                      </button>
                     </div>
-                  )}
-                </div>
-
-                {/* Mark as paid */}
-                <div style={{ marginTop:14 }}>
-                  <button onClick={()=>markPaid(r.missionId, r.milestoneNum, r.amount, r.isPaid)}
-                    style={{ padding:"9px 20px", borderRadius:10, border:"none",
-                      background:r.isPaid?"rgba(255,255,255,0.06)":"linear-gradient(135deg,#3ecf8e,#2aaf74)",
-                      color:r.isPaid?"rgba(255,255,255,0.5)":"#000", fontWeight:700,
-                      cursor:"pointer", fontSize:13, fontFamily:"Georgia, serif" }}>
-                    {r.isPaid ? "Mark as Unpaid" : "✓ Mark as Paid"}
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
+                  </div>
+                );
+              })}
+            </div>
+          )
         )}
 
         <div style={{ textAlign:"center", padding:"32px 0 0", borderTop:"1px solid rgba(255,255,255,0.05)", marginTop:32 }}>
           <div style={{ fontSize:12, color:"rgba(255,255,255,0.3)", lineHeight:1.7 }}>
-            Each mission's goal is split into 3 milestone payments. Banking details are pulled from
-            the church's registered account first, falling back to the missionary's own details.
-            Click "Mark as Paid" once the EFT is complete — this updates the Transparency Ledger.
+            Each mission's goal is split into 3 milestone payments. Pastor-approved proofs appear in the
+            "Pastor Approved" tab. Banking details are pulled from the church account first, falling back
+            to the missionary's own details. Click "Mark as Paid" once the EFT is complete.
           </div>
         </div>
       </div>
