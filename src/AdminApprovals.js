@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "./supabase";
 import { ADMIN_EMAIL } from "./AdminPayouts";
+import { sendNotification } from "./notifications";
 
 const fmt = (n) => String(Math.round(n || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 
@@ -70,6 +71,10 @@ export default function AdminApprovals({ onBack, user }) {
         })
         .eq("id", m.id);
       if (error) throw error;
+      sendNotification("application_approved", m.missionary_email, {
+        missionaryName: m.missionary_name,
+        missionTitle: m.title,
+      });
       await load();
     } catch (e) {
       setError("Could not approve application. (" + (e.message || "") + ")");
@@ -91,6 +96,11 @@ export default function AdminApprovals({ onBack, user }) {
         })
         .eq("id", m.id);
       if (error) throw error;
+      sendNotification("application_rejected", m.missionary_email, {
+        missionaryName: m.missionary_name,
+        missionTitle: m.title,
+        reason: reasons[m.id]?.trim() || null,
+      });
       await load();
     } catch (e) {
       setError("Could not reject application. (" + (e.message || "") + ")");

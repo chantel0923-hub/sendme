@@ -1,6 +1,7 @@
 // AdminPayouts.js — Br Donald's private payout management dashboard
 import React, { useState, useEffect } from "react";
 import { supabase } from "./supabase";
+import { sendNotification } from "./notifications";
 
 const fmt = (n) => String(Math.round(n || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 
@@ -34,7 +35,7 @@ export default function AdminPayouts({ onBack }) {
           .select(`
             id, mission_id, milestone_number, description, media_url,
             submitted_at, reviewed_at, pastor_notes, status,
-            missions ( id, title, country, city, church_id, church_name, goal, current_milestone, missionary_role )
+            missions ( id, title, country, city, church_id, church_name, goal, current_milestone, missionary_role, missionary_email )
           `)
           .eq("status", "approved")
           .order("reviewed_at", { ascending: false }),
@@ -81,7 +82,7 @@ export default function AdminPayouts({ onBack }) {
     return goalNum - third * 2;
   };
 
-  const markPaid = async (missionId, milestoneNum, amount, isPaid) => {
+  const markPaid = async (missionId, milestoneNum, amount, isPaid, missionTitle, missionaryEmail, recipientName) => {
     setMarkingPaid(`${missionId}-${milestoneNum}`);
     setError("");
     const newStatus = isPaid ? "pending" : "paid";
@@ -102,6 +103,14 @@ export default function AdminPayouts({ onBack }) {
         ...prev,
         [missionId]: { ...(prev[missionId] || {}), [milestoneNum]: payload },
       }));
+      // Only notify when transitioning TO paid, not when undoing a mistaken click
+      if (newStatus === "paid") {
+        sendNotification("payout_sent", missionaryEmail, {
+          missionTitle,
+          amount,
+          recipientName,
+        });
+      }
     } catch (e) {
       setError("Could not update payment status: " + (e.message || ""));
     }
@@ -121,6 +130,7 @@ export default function AdminPayouts({ onBack }) {
       proofId:      proof.id,
       missionId:    proof.mission_id,
       missionTitle: m.title || "Untitled Mission",
+      missionaryEmail: m.missionary_email || null,
       churchName:   m.church_name || "",
       churchId:     m.church_id || null,
       country:      m.country || m.city || "",
@@ -151,6 +161,7 @@ export default function AdminPayouts({ onBack }) {
       legacyRows.push({
         missionId:    m.id,
         missionTitle: m.title || "Untitled Mission",
+        missionaryEmail: m.missionary_email || null,
         churchName:   m.church_name || "",
         churchId:     m.church_id || null,
         churchVerified: m.church_verified || false,
@@ -388,7 +399,7 @@ export default function AdminPayouts({ onBack }) {
                     </div>
 
                     {/* Mark paid button */}
-                    <button onClick={()=>markPaid(r.missionId, r.milestoneNum, r.amount, r.isPaid)}
+                    <button onClick={()=>markPaid(r.missionId, r.milestoneNum, r.amount, r.isPaid, r.missionTitle, r.missionaryEmail, r.details?.recipient_name)}
                       disabled={isActing}
                       style={{ padding:"10px 24px", borderRadius:10, border:"none",
                         background: r.isPaid ? "rgba(255,255,255,0.06)" : "linear-gradient(135deg,#3ecf8e,#2aaf74)",
@@ -501,7 +512,7 @@ export default function AdminPayouts({ onBack }) {
                     </div>
 
                     <div style={{ marginTop:14 }}>
-                      <button onClick={()=>markPaid(r.missionId, r.milestoneNum, r.amount, r.isPaid)}
+                      <button onClick={()=>markPaid(r.missionId, r.milestoneNum, r.amount, r.isPaid, r.missionTitle, r.missionaryEmail, r.details?.recipient_name)}
                         disabled={isActing}
                         style={{ padding:"9px 20px", borderRadius:10, border:"none",
                           background:r.isPaid?"rgba(255,255,255,0.06)":"linear-gradient(135deg,#3ecf8e,#2aaf74)",

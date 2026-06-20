@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "./supabase";
+import { sendNotification } from "./notifications";
 
 export default function MilestoneProof({ onBack, user }) {
   const [missions, setMissions]     = useState([]);
@@ -17,7 +18,7 @@ export default function MilestoneProof({ onBack, user }) {
       try {
         const { data, error } = await supabase
           .from("missions")
-          .select("id, title, country, city, current_milestone, status, missionary_id")
+          .select("id, title, country, city, current_milestone, status, missionary_id, pastor_email, pastor_name")
           .eq("status", "active");
         if (error) throw error;
         // If user is logged in, try to filter to their missions
@@ -50,6 +51,12 @@ export default function MilestoneProof({ onBack, user }) {
         submitted_at: new Date().toISOString(),
       });
       if (error) throw error;
+      sendNotification("proof_submitted", selected.pastor_email, {
+        pastorName: selected.pastor_name,
+        missionaryName: user?.user_metadata?.full_name,
+        missionTitle: selected.title,
+        milestoneNumber: selected.current_milestone || 1,
+      });
       setSuccess(true);
     } catch (e) {
       setError("Could not submit proof. Please try again. (" + (e.message || "") + ")");

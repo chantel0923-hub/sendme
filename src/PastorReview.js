@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "./supabase";
+import { sendNotification } from "./notifications";
 
 export default function PastorReview({ onBack, user }) {
   const [proofs, setProofs]     = useState([]);
@@ -25,7 +26,7 @@ export default function PastorReview({ onBack, user }) {
         .select(`
           id, mission_id, milestone_number, description, media_url,
           submitted_at, status, reviewed_at, pastor_notes,
-          missions ( id, title, country, city, church_id, church_name, current_milestone, missionary_role )
+          missions ( id, title, country, city, church_id, church_name, current_milestone, missionary_role, missionary_email )
         `)
         .order("submitted_at", { ascending: false });
 
@@ -82,6 +83,16 @@ export default function PastorReview({ onBack, user }) {
           .update({ current_milestone: nextMilestone })
           .eq("id", proof.missions.id);
       }
+
+      sendNotification(
+        decision === "approved" ? "proof_approved" : "proof_rejected",
+        proof.missions?.missionary_email,
+        {
+          missionTitle: proof.missions?.title,
+          milestoneNumber: proof.milestone_number,
+          reason: notes[proof.id]?.trim() || null,
+        }
+      );
 
       // Refresh list
       await loadProofs();
