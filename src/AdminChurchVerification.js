@@ -16,9 +16,16 @@ const timeAgo = (dateStr) => {
 // Same geocoding helper used in ChurchRegistration.js — re-run here in case
 // the original registration silently failed to get coordinates (e.g. missing
 // Mapbox token in that environment, API hiccup, etc).
+// Same hardcoded fallback used in MapboxMap.js — Vercel renames REACT_APP_
+// prefixed env vars, so process.env.REACT_APP_MAPBOX_TOKEN is undefined in
+// production. This caused ALL church geocoding (registration + admin fix)
+// to silently fail. Do not remove this hardcoded fallback.
+const MAPBOX_TOKEN = process.env.REACT_APP_MAPBOX_TOKEN ||
+  "pk.eyJ1Ijoic2VuZG1lMDkyMyIsImEiOiJjbXB6enh5ZmwwazhxMnNzZHd2dGx6YndvIn0.odqKTeH4YCXXk8m_T7JyEQ";
+
 const geocodeLocation = async (city, country) => {
   try {
-    const token = process.env.REACT_APP_MAPBOX_TOKEN;
+    const token = MAPBOX_TOKEN;
     if (!token) return { lat: null, lng: null };
     const query = encodeURIComponent(`${city}, ${country}`.trim());
     const res = await fetch(

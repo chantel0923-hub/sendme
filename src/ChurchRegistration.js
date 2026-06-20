@@ -23,9 +23,16 @@ const STEPS = [
 const COUNTRIES = ["South Africa","Nigeria","Kenya","Ghana","Ethiopia","Zimbabwe","Uganda","Tanzania","Zambia","Mozambique","USA","UK","Canada","Australia","Brazil","India","Philippines","Indonesia","South Korea","Germany","France","Netherlands","Other"];
 const SIZES     = ["Under 50","50 – 100","100 – 300","300 – 500","500 – 1,000","Over 1,000"];
 
+// Same hardcoded fallback used in MapboxMap.js — Vercel renames REACT_APP_
+// prefixed env vars, so process.env.REACT_APP_MAPBOX_TOKEN is undefined in
+// production. This caused new church registrations to always save with
+// lat: null, lng: null. Do not remove this hardcoded fallback.
+const MAPBOX_TOKEN = process.env.REACT_APP_MAPBOX_TOKEN ||
+  "pk.eyJ1Ijoic2VuZG1lMDkyMyIsImEiOiJjbXB6enh5ZmwwazhxMnNzZHd2dGx6YndvIn0.odqKTeH4YCXXk8m_T7JyEQ";
+
 const geocodeLocation = async (city, country) => {
   try {
-    const token = process.env.REACT_APP_MAPBOX_TOKEN;
+    const token = MAPBOX_TOKEN;
     if (!token) return { lat: null, lng: null };
     const query = encodeURIComponent(`${city}, ${country}`.trim());
     const res = await fetch(
