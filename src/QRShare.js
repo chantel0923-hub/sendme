@@ -12,11 +12,11 @@ const QRCode = ({ url, size = 200, color = "#e8b34b" }) => {
 };
 
 const SHARE_TYPES = [
-  { key:"app",      label:"SendMe App",          desc:"Share the SendMe platform with your church",         url:"https://sendme.org" },
-  { key:"missions", label:"View All Missions",   desc:"Direct link to the active missions list",            url:"https://sendme.org/missions" },
-  { key:"apply",    label:"Apply as Missionary", desc:"For believers called to the mission field",          url:"https://sendme.org/apply" },
-  { key:"church",   label:"Register Your Church",desc:"For Message churches wanting to endorse missionaries",url:"https://sendme.org/register-church" },
-  { key:"emergency",label:"Emergency Requests",  desc:"For urgent mission needs requiring quick response",  url:"https://sendme.org/emergency" },
+  { key:"app",      label:"SendMe App",          desc:"Share the SendMe platform with your church",         url:"https://sendme-nine.vercel.app" },
+  { key:"missions", label:"View All Missions",   desc:"Direct link to the active missions list",            url:"https://sendme-nine.vercel.app/missions" },
+  { key:"apply",    label:"Apply as Missionary", desc:"For believers called to the mission field",          url:"https://sendme-nine.vercel.app/apply" },
+  { key:"church",   label:"Register Your Church",desc:"For Message churches wanting to endorse missionaries",url:"https://sendme-nine.vercel.app/register-church" },
+  { key:"emergency",label:"Emergency Requests",  desc:"For urgent mission needs requiring quick response",  url:"https://sendme-nine.vercel.app/emergency" },
 ];
 
 export default function QRShare({ missions = [], onBack }) {
@@ -25,8 +25,8 @@ export default function QRShare({ missions = [], onBack }) {
   const [copied, setCopied] = useState(false);
 
   const currentUrl = selectedMission
-    ? `https://sendme.org/mission/${selectedMission.id}`
-    : SHARE_TYPES.find(t => t.key === activeType)?.url || "https://sendme.org";
+    ? `https://sendme-nine.vercel.app/mission/${selectedMission.id}`
+    : SHARE_TYPES.find(t => t.key === activeType)?.url || "https://sendme-nine.vercel.app";
 
   const currentLabel = selectedMission
     ? selectedMission.title
