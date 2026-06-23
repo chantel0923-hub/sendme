@@ -885,7 +885,7 @@ const NavDropdown = ({ user, userRole, onProfile, onEmergency, onTestimonies, on
 };
 
 // ── HOME SCREEN ───────────────────────────────────────────────────────────────
-const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, onChurches, onProfile, onEmergency, onMatching, onPray, onTestimonies, onWorker, onQR, onFaq, onPayout, onAdminPayouts, isAdmin, isPastor, onMilestoneProof, onPastorReview, onMissionaryDashboard, onAdminApprovals, onAdminChurchVerification, guest, onSignIn, onDonate }) => {
+const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, onChurches, onProfile, onEmergency, onMatching, onPray, onTestimonies, onWorker, onQR, onFaq, onPayout, onAdminPayouts, isAdmin, isPastor, onMilestoneProof, onPastorReview, onMissionaryDashboard, onAdminApprovals, onAdminChurchVerification, guest, onSignIn, onDonate, onAdminWorkers }) => {
   const [region,setRegion]       = useState("All");
   const [missions,setMissions]   = useState([]);
   const [loading,setLoading]     = useState(true);
@@ -929,6 +929,7 @@ const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, o
             onMissionaryDashboard={onMissionaryDashboard}
           />
           {isAdmin&&<button onClick={onAdminChurchVerification} style={{ background:"rgba(91,156,246,0.1)",border:"1px solid rgba(91,156,246,0.3)",borderRadius:10,padding:"8px 14px",color:"#5b9cf6",cursor:"pointer",fontSize:12,fontWeight:700 }}>⛪ Churches</button>}
+          {isAdmin&&<button onClick={onAdminWorkers} style={{ background:"rgba(91,156,246,0.1)",border:"1px solid rgba(91,156,246,0.3)",borderRadius:10,padding:"8px 14px",color:"#5b9cf6",cursor:"pointer",fontSize:12,fontWeight:700 }}>👥 Workers</button>}
           {isAdmin&&<button onClick={onAdminApprovals} style={{ background:"rgba(232,179,75,0.1)",border:"1px solid rgba(232,179,75,0.3)",borderRadius:10,padding:"8px 14px",color:"#e8b34b",cursor:"pointer",fontSize:12,fontWeight:700 }}>📋 Approvals</button>}
           {isAdmin&&<button onClick={onAdminPayouts} style={{ background:"rgba(232,91,91,0.1)",border:"1px solid rgba(232,91,91,0.3)",borderRadius:10,padding:"8px 14px",color:"#e85b5b",cursor:"pointer",fontSize:12,fontWeight:700 }}>💰 Payouts</button>}
           {user&&<button onClick={onSignOut} style={{ background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:10,padding:"8px 14px",color:"rgba(255,255,255,0.4)",cursor:"pointer",fontSize:12 }}>Sign Out</button>}
@@ -1397,6 +1398,7 @@ export default function App() {
   if(screen==="missionary-dashboard") return <MissionaryDashboard onBack={()=>setScreen("home")} user={user} onSubmitProof={()=>setScreen("milestone-proof")}/>;
   if(screen==="admin-approvals")  return isAdminUser ? <AdminApprovals onBack={()=>setScreen("home")} user={user}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
   if(screen==="admin-church-verification") return isAdminUser ? <AdminChurchVerification onBack={()=>setScreen("home")} user={user}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
+  if(screen==="admin-workers")        return isAdminUser ? <AdminWorkerRequests onBack={()=>setScreen("home")}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
   if(screen==="ledger"&&selectedMission)  return <TransparencyLedger mission={selectedMission} onBack={()=>setScreen("detail")}/>;
   if(screen==="detail"&&selectedMission)  return <MissionDetail mission={selectedMission} onBack={()=>setScreen("home")} onDonate={openDonate} onLedger={()=>setScreen("ledger")}/>;
   if(screen==="donate"&&selectedMission)  return <DonateScreen mission={selectedMission} onBack={()=>setScreen("detail")} onPayfast={handlePayfastDonate}/>;
@@ -1422,6 +1424,7 @@ export default function App() {
       guest={guest}
       onSignIn={()=>setGuest(false)}
       onDonate={()=>setScreen("donor-browse")}
+      onAdminWorkers={()=>setScreen("admin-workers")}
     />
   );
 }

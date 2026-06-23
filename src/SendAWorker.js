@@ -169,7 +169,8 @@ export default function SendAWorker({ onBack, user }) {
                       <span style={{ fontSize:11, color:"rgba(255,255,255,0.3)" }}>📍 {req.country} · {timeAgo(req.created_at)}</span>
                     </div>
                     <div style={{ fontSize:15, fontWeight:700, color:"#eef1ff", marginBottom:4 }}>{req.title}</div>
-                    <div style={{ fontSize:12, color:"rgba(255,255,255,0.4)", marginBottom:10 }}>{req.church}</div>
+                    <div style={{ fontSize:12, color:"rgba(255,255,255,0.4)", marginBottom:4 }}>{req.church}</div>
+                    {req.contact_email && <div style={{ fontSize:12, color:"rgba(232,179,75,0.7)", marginBottom:10 }}>✉ {req.contact_email}{req.contact_phone?" · "+req.contact_phone:""}</div>}
                     <div style={{ fontSize:13, color:"rgba(255,255,255,0.6)", lineHeight:1.7, marginBottom:12 }}>{req.description}</div>
                     {req.needs && req.needs.length > 0 && (
                       <div style={{ display:"flex", flexDirection:"column", gap:6, marginBottom:12 }}>
