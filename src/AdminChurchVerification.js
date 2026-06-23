@@ -236,6 +236,24 @@ export default function AdminChurchVerification({ onBack, user }) {
                     <div><strong style={{ color: "rgba(255,255,255,0.8)" }}>Congregation Size:</strong> {c.size || "Not specified"}</div>
                   </div>
 
+                  {/* Pastor References */}
+                  {(c.reference_1_name || c.reference_2_name) && (
+                    <div style={{ background: "rgba(232,179,75,0.07)", borderRadius: 12, border: "1px solid rgba(232,179,75,0.2)", padding: "14px 16px", marginBottom: 14, fontSize: 13, color: "rgba(255,255,255,0.6)", lineHeight: 1.9 }}>
+                      <div style={{ fontSize: 12, color: "#e8b34b", fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 8 }}>Pastor References</div>
+                      {c.reference_1_name && (
+                        <div><strong style={{ color: "rgba(255,255,255,0.8)" }}>Reference 1:</strong> {c.reference_1_name}{c.reference_1_contact ? ` · ${c.reference_1_contact}` : ""}</div>
+                      )}
+                      {c.reference_2_name && (
+                        <div><strong style={{ color: "rgba(255,255,255,0.8)" }}>Reference 2:</strong> {c.reference_2_name}{c.reference_2_contact ? ` · ${c.reference_2_contact}` : ""}</div>
+                      )}
+                    </div>
+                  )}
+                  {!c.reference_1_name && !c.reference_2_name && (
+                    <div style={{ background: "rgba(232,91,91,0.07)", borderRadius: 12, border: "1px solid rgba(232,91,91,0.2)", padding: "10px 14px", marginBottom: 14, fontSize: 12, color: "#e85b5b" }}>
+                      ⚠ No pastor references provided — contact church before verifying.
+                    </div>
+                  )}
+
                   {/* Coordinates status */}
                   <div style={{ background: missingCoords ? "rgba(232,91,91,0.08)" : "rgba(62,207,142,0.07)", borderRadius: 12, border: `1px solid ${missingCoords ? "rgba(232,91,91,0.25)" : "rgba(62,207,142,0.2)"}`, padding: "12px 16px", marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
                     <div>

@@ -13,11 +13,12 @@ const label = { fontSize:12, color:"rgba(255,255,255,0.4)", letterSpacing:1.5, t
 const sectionTitle = { fontSize:16, fontWeight:700, color:"#eef1ff", marginBottom:18, paddingBottom:10, borderBottom:"1px solid rgba(255,255,255,0.07)" };
 
 const STEPS = [
-  { number:1, label:"Church Info", icon:"⛪" },
-  { number:2, label:"Leadership",  icon:"✝"  },
-  { number:3, label:"Doctrine",    icon:"📖" },
-  { number:4, label:"Review",      icon:"🙏" },
-  { number:5, label:"Banking",     icon:"🏦" },
+  { number:1, label:"Church Info",  icon:"⛪" },
+  { number:2, label:"Leadership",   icon:"✝"  },
+  { number:3, label:"References",   icon:"👥" },
+  { number:4, label:"Doctrine",     icon:"📖" },
+  { number:5, label:"Review",       icon:"🙏" },
+  { number:6, label:"Banking",      icon:"🏦" },
 ];
 
 const COUNTRIES = ["South Africa","Nigeria","Kenya","Ghana","Ethiopia","Zimbabwe","Uganda","Tanzania","Zambia","Mozambique","USA","UK","Canada","Australia","Brazil","India","Philippines","Indonesia","South Korea","Germany","France","Netherlands","Other"];
@@ -148,6 +149,9 @@ const Step2 = ({ form, set }) => (
       <FInput label="Pastor's Email *" type="email" placeholder="pastor@yourchurch.org" value={form.pastorEmail} onChange={e=>set("pastorEmail",e.target.value)}/>
       <FInput label="Pastor's Phone" type="tel" placeholder="+27 82 000 0000" value={form.pastorPhone} onChange={e=>set("pastorPhone",e.target.value)}/>
     </div>
+    <Toggle value={form.showPhonePublic} onChange={v=>set("showPhonePublic",v)}
+      label="Display Phone Number Publicly"
+      description="I consent to my phone number being visible to all visitors in the Church Directory. Email will always be shown."/>
     <Toggle value={form.canEndorse} onChange={v=>set("canEndorse",v)}
       label="Endorsement Authority"
       description="This church can endorse missionary applications on SendMe."/>
@@ -155,6 +159,24 @@ const Step2 = ({ form, set }) => (
 );
 
 const Step3 = ({ form, set }) => (
+  <div>
+    <div style={sectionTitle}>Pastor References</div>
+    <div style={{ background:"rgba(232,179,75,0.07)",borderRadius:12,border:"1px solid rgba(232,179,75,0.2)",padding:"12px 16px",marginBottom:20 }}>
+      <div style={{ fontSize:13,color:"rgba(255,255,255,0.5)",lineHeight:1.7 }}>
+        Please provide <strong style={{color:"#e8b34b"}}>two independent Message pastor references</strong> who can confirm your church's legitimacy. Admin will contact them before verifying your church.
+      </div>
+    </div>
+    <div style={{ fontSize:14,fontWeight:700,color:"#e8b34b",marginBottom:12 }}>Reference 1</div>
+    <FInput label="Pastor Name *" placeholder="e.g. Pastor Johan van der Merwe" value={form.reference1Name} onChange={e=>set("reference1Name",e.target.value)}/>
+    <FInput label="Contact (Email or Phone) *" placeholder="e.g. pastor@church.org or +27 82 000 0000" value={form.reference1Contact} onChange={e=>set("reference1Contact",e.target.value)}/>
+    <div style={{ height:1,background:"rgba(255,255,255,0.07)",margin:"16px 0 20px" }}/>
+    <div style={{ fontSize:14,fontWeight:700,color:"#e8b34b",marginBottom:12 }}>Reference 2</div>
+    <FInput label="Pastor Name *" placeholder="e.g. Pastor Frikkie Pretorius" value={form.reference2Name} onChange={e=>set("reference2Name",e.target.value)}/>
+    <FInput label="Contact (Email or Phone) *" placeholder="e.g. pastor@church.org or +27 83 000 0000" value={form.reference2Contact} onChange={e=>set("reference2Contact",e.target.value)}/>
+  </div>
+);
+
+const Step4 = ({ form, set }) => (
   <div>
     <div style={sectionTitle}>Doctrinal Statement</div>
     <div style={{ background:"rgba(232,179,75,0.07)",borderRadius:12,border:"1px solid rgba(232,179,75,0.2)",padding:"12px 16px",marginBottom:20 }}>
@@ -186,7 +208,7 @@ const Step3 = ({ form, set }) => (
   </div>
 );
 
-const Step4 = ({ form, submitting, onSubmit }) => {
+const Step5 = ({ form, submitting, onSubmit }) => {
   const allChecked = ["believesMessage","believesTrinity","believesBible","believesMission","agreesEscrow","agreesAccountability"].every(k=>form[k]);
   const summary = [
     ["Church Name", form.churchName],
@@ -235,7 +257,7 @@ const Step4 = ({ form, submitting, onSubmit }) => {
 // Step 5 — Banking details for the pastor.
 // Only shown after the church has been successfully registered (churchId is set).
 // The pastor can skip this and come back later via PayoutSetup.
-const Step5 = ({ form, set, churchId, bankSaving, bankDone, bankError, onSaveBank, onSkip }) => {
+const Step6 = ({ form, set, churchId, bankSaving, bankDone, bankError, onSaveBank, onSkip }) => {
   if (bankDone) {
     return (
       <div style={{ textAlign:"center",padding:"20px 0 10px",display:"flex",flexDirection:"column",alignItems:"center",gap:20 }}>
@@ -321,6 +343,12 @@ const validate = (step, form) => {
     if (!form.pastorEmail.trim()) return "Please enter your pastor's email.";
   }
   if (step===3) {
+    if (!form.reference1Name.trim())    return "Please enter your first reference pastor's name.";
+    if (!form.reference1Contact.trim()) return "Please enter your first reference pastor's contact.";
+    if (!form.reference2Name.trim())    return "Please enter your second reference pastor's name.";
+    if (!form.reference2Contact.trim()) return "Please enter your second reference pastor's contact.";
+  }
+  if (step===4) {
     const allChecked = ["believesMessage","believesTrinity","believesBible","believesMission","agreesEscrow","agreesAccountability"].every(k=>form[k]);
     if (!allChecked) return "Please confirm all doctrinal statements to continue.";
   }
@@ -340,7 +368,8 @@ export default function ChurchRegistration({ onBack, user }) {
   const [form, setForm] = useState({
     // Church fields
     churchName:"", city:"", province:"", country:"", phone:"", email:"", website:"", size:"",
-    pastorName:"", pastorEmail:"", pastorPhone:"", canEndorse:true,
+    pastorName:"", pastorEmail:"", pastorPhone:"", canEndorse:true, showPhonePublic:false,
+    reference1Name:"", reference1Contact:"", reference2Name:"", reference2Contact:"",
     believesMessage:false, believesTrinity:false, believesBible:false,
     believesMission:false, agreesEscrow:false, agreesAccountability:false,
     // Banking fields (step 5)
@@ -352,7 +381,7 @@ export default function ChurchRegistration({ onBack, user }) {
 
   // Total steps shown depends on whether church has been submitted yet.
   // Before submit: show 4 steps. After submit: show 5 (reveal banking step).
-  const totalSteps = submitted ? 5 : 4;
+  const totalSteps = submitted ? 6 : 5;
 
   const nextStep = () => {
     const err = validate(step, form);
@@ -380,7 +409,12 @@ export default function ChurchRegistration({ onBack, user }) {
         pastor_name:  form.pastorName,
         pastor_email: form.pastorEmail,
         pastor_phone: form.pastorPhone,
-        can_endorse:  form.canEndorse,
+        can_endorse:         form.canEndorse,
+        show_phone_public:   form.showPhonePublic,
+        reference_1_name:    form.reference1Name,
+        reference_1_contact: form.reference1Contact,
+        reference_2_name:    form.reference2Name,
+        reference_2_contact: form.reference2Contact,
         verified:     false,
         user_id:      user?.id || null,
         lat,
@@ -390,7 +424,7 @@ export default function ChurchRegistration({ onBack, user }) {
       setChurchId(data.id);
       setSubmitted(true);
       // Advance to banking step
-      setStep(5);
+      setStep(6);
       window.scrollTo({top:0,behavior:"smooth"});
     } catch (e) {
       setError("Submission failed: " + (e.message || "Please try again."));
@@ -456,9 +490,10 @@ export default function ChurchRegistration({ onBack, user }) {
           {step===1 && <Step1 form={form} set={set}/>}
           {step===2 && <Step2 form={form} set={set}/>}
           {step===3 && <Step3 form={form} set={set}/>}
-          {step===4 && <Step4 form={form} submitting={submitting} onSubmit={handleSubmit}/>}
-          {step===5 && (
-            <Step5
+          {step===4 && <Step4 form={form} set={set}/>}
+          {step===5 && <Step5 form={form} submitting={submitting} onSubmit={handleSubmit}/>}
+          {step===6 && (
+            <Step6
               form={form} set={set}
               churchId={churchId}
               bankSaving={bankSaving}
@@ -469,9 +504,9 @@ export default function ChurchRegistration({ onBack, user }) {
             />
           )}
         </div>
-        {/* Navigation buttons — hidden on step 4 (has its own submit button)
-            and step 5 (has its own save/skip buttons) */}
-        {!submitted && step < 4 && (
+        {/* Navigation buttons — hidden on step 5 (has its own submit button)
+            and step 6 (has its own save/skip buttons) */}
+        {!submitted && step < 5 && (
           <div style={{ display:"grid",gridTemplateColumns:step>1?"1fr 1fr":"1fr",gap:12 }}>
             {step>1 && (
               <button onClick={prevStep} style={{ padding:"14px 0",borderRadius:14,border:"1px solid rgba(255,255,255,0.1)",background:"rgba(255,255,255,0.03)",color:"rgba(255,255,255,0.5)",fontWeight:700,cursor:"pointer",fontSize:15,fontFamily:"Georgia, serif" }}>
@@ -483,8 +518,8 @@ export default function ChurchRegistration({ onBack, user }) {
             </button>
           </div>
         )}
-        {/* On step 4, show Previous button only */}
-        {!submitted && step === 4 && (
+        {/* On step 5 (Review), show Previous button only */}
+        {!submitted && step === 5 && (
           <div style={{ display:"grid",gridTemplateColumns:"1fr",gap:12,marginTop:0 }}>
             <button onClick={prevStep} style={{ padding:"14px 0",borderRadius:14,border:"1px solid rgba(255,255,255,0.1)",background:"rgba(255,255,255,0.03)",color:"rgba(255,255,255,0.5)",fontWeight:700,cursor:"pointer",fontSize:15,fontFamily:"Georgia, serif" }}>
               Previous
