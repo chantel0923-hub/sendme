@@ -33,17 +33,22 @@ export default function EmergencyRequests({ onBack, user }) {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading]   = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm]         = useState({ title:"", description:"", country:"", region:"", urgency:"urgent", goal:"" });
+  const [form, setForm]         = useState({ title:"", description:"", country:"", region:"", urgency:"urgent", goal:"", church_id:"" });
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted]   = useState(false);
+  const [churches, setChurches]     = useState([]);
 
   useEffect(() => {
     const load = async () => {
       setLoading(true);
       try {
-        const { data } = await supabase.from("emergency_requests").select("*").order("created_at",{ascending:false});
-        if (data && data.length > 0) setRequests(data);
+        const [{ data: erData }, { data: chData }] = await Promise.all([
+          supabase.from("emergency_requests").select("*").order("created_at",{ascending:false}),
+          supabase.from("churches").select("id, name, city, country").eq("verified", true).order("name"),
+        ]);
+        if (erData && erData.length > 0) setRequests(erData);
         else setRequests(DEMO_EMERGENCIES);
+        if (chData) setChurches(chData);
       } catch { setRequests(DEMO_EMERGENCIES); }
       setLoading(false);
     };
@@ -56,6 +61,7 @@ export default function EmergencyRequests({ onBack, user }) {
     try {
       await supabase.from("emergency_requests").insert({
         ...form, goal:Number(form.goal)||1000, raised:0,
+        church_id: form.church_id || null,
         submittedBy: user?.email || "Anonymous",
         created_at: new Date().toISOString(),
       });
@@ -106,6 +112,14 @@ export default function EmergencyRequests({ onBack, user }) {
                   <input placeholder="Country *" value={form.country} onChange={e=>setForm(f=>({...f,country:e.target.value}))} style={inp}/>
                   <input placeholder="Funding needed ($)" type="number" value={form.goal} onChange={e=>setForm(f=>({...f,goal:e.target.value}))} style={inp}/>
                 </div>
+                {churches.length > 0 && (
+                  <select value={form.church_id} onChange={e=>setForm(f=>({...f,church_id:e.target.value}))} style={{...inp,color:form.church_id?"#eef1ff":"rgba(255,255,255,0.35)"}}>
+                    <option value="" style={{background:"#0c1628"}}>Link a verified church (for payout routing)</option>
+                    {churches.map(c => (
+                      <option key={c.id} value={c.id} style={{background:"#0c1628"}}>{c.name} — {c.city}, {c.country}</option>
+                    ))}
+                  </select>
+                )}
                 <select value={form.urgency} onChange={e=>setForm(f=>({...f,urgency:e.target.value}))} style={{...inp,color:"#eef1ff"}}>
                   <option value="critical" style={{background:"#0c1628"}}>Critical — life/safety at risk</option>
                   <option value="urgent"   style={{background:"#0c1628"}}>Urgent — needed within days</option>

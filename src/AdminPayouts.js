@@ -17,6 +17,8 @@ export default function AdminPayouts({ onBack }) {
   const [approvedProofs, setApprovedProofs] = useState([]);  // ← NEW: pastor-approved proofs
   const [loading, setLoading]             = useState(true);
   const [filter, setFilter]               = useState("approved"); // ← default to approved queue
+  const [emergencies, setEmergencies]       = useState([]);
+  const [markingEmPaid, setMarkingEmPaid]   = useState(null);
   const [markingPaid, setMarkingPaid]     = useState(null);
   const [error, setError]                 = useState("");
 
@@ -62,6 +64,14 @@ export default function AdminPayouts({ onBack }) {
     } catch (e) {
       setError("Could not load payout data: " + (e.message || ""));
     }
+    // Load emergencies separately
+    try {
+      const { data: emData } = await supabase
+        .from("emergency_requests")
+        .select("*, churches(name, city, country)")
+        .order("created_at", { ascending: false });
+      if (emData) setEmergencies(emData);
+    } catch (e) { console.log("Emergency fetch error:", e); }
     setLoading(false);
   };
 
@@ -177,6 +187,18 @@ export default function AdminPayouts({ onBack }) {
     }
   });
 
+  const markEmPaid = async (em) => {
+    setMarkingEmPaid(em.id);
+    const newStatus = em.paid ? "unpaid" : "paid";
+    const { error } = await supabase
+      .from("emergency_requests")
+      .update({ paid: newStatus === "paid", paid_at: newStatus === "paid" ? new Date().toISOString() : null })
+      .eq("id", em.id);
+    if (!error) setEmergencies(prev => prev.map(e => e.id === em.id ? { ...e, paid: newStatus === "paid" } : e));
+    else console.log("markEmPaid error:", error);
+    setMarkingEmPaid(null);
+  };
+
   // Filter tabs
   const filteredRows = filter === "approved"
     ? approvedRows
@@ -282,15 +304,16 @@ export default function AdminPayouts({ onBack }) {
         <div style={{ display:"flex", gap:8, marginBottom:18, flexWrap:"wrap" }}>
           {[
             ["approved", `✅ Pastor Approved${approvedUnpaid > 0 ? ` (${approvedUnpaid})` : ""}`],
+            ["emergency", `🚨 Emergency${emergencies.filter(e=>!e.paid).length > 0 ? ` (${emergencies.filter(e=>!e.paid).length})` : ""}`],
             ["due",      "Payments Due"],
             ["paid",     "Paid"],
             ["all",      "All (legacy)"],
           ].map(([key,lbl]) => (
             <button key={key} onClick={()=>setFilter(key)}
               style={{ padding:"8px 18px", borderRadius:999,
-                border:`1px solid ${filter===key?(key==="approved"?"#3ecf8e":"#e8b34b"):"rgba(255,255,255,0.1)"}`,
-                background:filter===key?(key==="approved"?"rgba(62,207,142,0.15)":"rgba(232,179,75,0.15)"):"rgba(255,255,255,0.03)",
-                color:filter===key?(key==="approved"?"#3ecf8e":"#e8b34b"):"rgba(255,255,255,0.5)",
+                border:`1px solid ${filter===key?(key==="approved"?"#3ecf8e":key==="emergency"?"#e85b5b":"#e8b34b"):"rgba(255,255,255,0.1)"}`,
+                background:filter===key?(key==="approved"?"rgba(62,207,142,0.15)":key==="emergency"?"rgba(232,91,91,0.15)":"rgba(232,179,75,0.15)"):"rgba(255,255,255,0.03)",
+                color:filter===key?(key==="approved"?"#3ecf8e":key==="emergency"?"#e85b5b":"#e8b34b"):"rgba(255,255,255,0.5)",
                 cursor:"pointer", fontSize:13, fontWeight:600, fontFamily:"Georgia, serif" }}>
               {lbl}
             </button>
@@ -421,8 +444,55 @@ export default function AdminPayouts({ onBack }) {
           )
         )}
 
+        {/* ── EMERGENCY PAYOUTS ── */}
+        {filter === "emergency" && (
+          emergencies.length === 0 ? (
+            <div style={{ textAlign:"center", padding:"40px 0", color:"rgba(255,255,255,0.3)", fontSize:14 }}>No emergency requests found.</div>
+          ) : (
+            <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+              {emergencies.map((em, i) => {
+                const isPaid   = !!em.paid;
+                const isActing = markingEmPaid === em.id;
+                const urgColor = em.urgency === "critical" ? "#e85b5b" : em.urgency === "urgent" ? "#f5a44a" : "#e8b34b";
+                return (
+                  <div key={em.id||i} style={{ background:"#0c1628", borderRadius:14, border:`1px solid ${isPaid?"rgba(62,207,142,0.2)":"rgba(232,91,91,0.25)"}`, padding:"16px 18px" }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:12, flexWrap:"wrap", marginBottom:10 }}>
+                      <div style={{ flex:1 }}>
+                        <div style={{ fontSize:14, fontWeight:700, color:"#eef1ff", marginBottom:4 }}>{em.title}</div>
+                        <div style={{ fontSize:12, color:"rgba(255,255,255,0.4)", marginBottom:2 }}>📍 {em.country} · {em.urgency?.toUpperCase()}</div>
+                        {em.churches && (
+                          <div style={{ fontSize:12, color:"rgba(255,255,255,0.45)", marginBottom:2 }}>⛪ {em.churches.name} — {em.churches.city}, {em.churches.country}</div>
+                        )}
+                        {!em.churches && (
+                          <div style={{ fontSize:12, color:"#e8b34b" }}>⚠ No church linked — add church_id before paying out.</div>
+                        )}
+                        <div style={{ fontSize:12, color:"rgba(255,255,255,0.35)" }}>Submitted by: {em.submittedBy}</div>
+                      </div>
+                      <div style={{ textAlign:"right", flexShrink:0 }}>
+                        <div style={{ fontSize:18, fontWeight:700, color:urgColor }}>${fmt(em.raised||0)}</div>
+                        <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)" }}>of ${fmt(em.goal||0)} goal</div>
+                        {isPaid && <div style={{ fontSize:11, color:"#3ecf8e", marginTop:4 }}>✓ Paid out</div>}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => markEmPaid(em)}
+                      disabled={isActing}
+                      style={{ width:"100%", padding:"11px 0", borderRadius:12, border:"none", fontWeight:700, cursor:isActing?"default":"pointer", fontSize:13, fontFamily:"Georgia, serif", opacity:isActing?0.6:1,
+                        background: isPaid ? "rgba(62,207,142,0.1)" : "linear-gradient(135deg,#e85b5b,#c44040)",
+                        color: isPaid ? "#3ecf8e" : "#fff",
+                        border: isPaid ? "1px solid rgba(62,207,142,0.3)" : "none",
+                      }}>
+                      {isActing ? "Updating..." : isPaid ? "✓ Mark as Unpaid" : "💸 Mark as Paid Out"}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )
+        )}
+
         {/* ── LEGACY ROWS (due / paid / all) ── */}
-        {filter !== "approved" && (
+        {filter !== "approved" && filter !== "emergency" && (
           loading ? (
             <div style={{ textAlign:"center", padding:"40px 0", color:"rgba(255,255,255,0.3)" }}>Loading payout data...</div>
           ) : filteredRows.length === 0 ? (
