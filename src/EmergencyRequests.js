@@ -37,6 +37,10 @@ export default function EmergencyRequests({ onBack, user }) {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted]   = useState(false);
   const [churches, setChurches]     = useState([]);
+  const [responding, setResponding] = useState(null);   // emergency being responded to
+  const [response, setResponse]     = useState({ name:"", email:"", phone:"", amount:"", note:"" });
+  const [respDone, setRespDone]     = useState(false);
+  const [respSaving, setRespSaving] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -70,7 +74,92 @@ export default function EmergencyRequests({ onBack, user }) {
     setSubmitting(false);
   };
 
+  const handleRespond = async () => {
+    if (!response.name || !response.email) return;
+    setRespSaving(true);
+    try {
+      await supabase.from("emergency_responses").insert({
+        emergency_id: responding.id,
+        name:         response.name,
+        email:        response.email,
+        phone:        response.phone,
+        amount:       Number(response.amount) || 0,
+        note:         response.note,
+        created_at:   new Date().toISOString(),
+      });
+      // Notify admin
+      try {
+        await supabase.functions.invoke("send-notification", {
+          body: {
+            to:      "sendmemissionfund@gmail.com",
+            subject: `Emergency Response — ${responding.title}`,
+            message: `${response.name} (${response.email}${response.phone?" · "+response.phone:""}) has responded to the emergency: "${responding.title}".
+
+Amount offered: ${response.amount?"$"+response.amount:"not specified"}
+
+Note: ${response.note||"none"}`,
+          }
+        });
+      } catch(e) { console.log("notify error:", e); }
+      setRespDone(true);
+    } catch(e) {
+      console.log("respond error:", e);
+      setRespDone(true);
+    }
+    setRespSaving(false);
+  };
+
   const inp = { width:"100%", padding:"12px 14px", borderRadius:10, boxSizing:"border-box", background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", color:"#eef1ff", fontSize:14, fontFamily:"Georgia, serif", outline:"none", marginBottom:12 };
+
+  // ── Respond view ──────────────────────────────────────────────────
+  if (responding) {
+    const u = URGENCY[responding.urgency] || URGENCY.urgent;
+    return (
+      <div style={{ minHeight:"100vh", background:"#060c18", color:"#eef1ff", fontFamily:"Georgia, serif" }}>
+        <div style={{ background:"#09111f", borderBottom:"1px solid rgba(255,255,255,0.07)", padding:"16px 24px", display:"flex", alignItems:"center", gap:14, position:"sticky", top:0, zIndex:100 }}>
+          <button onClick={()=>{setResponding(null);setRespDone(false);setResponse({name:"",email:"",phone:"",amount:"",note:""});}}
+            style={{ background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:10, padding:"8px 16px", color:"rgba(255,255,255,0.6)", cursor:"pointer", fontSize:14, fontFamily:"Georgia, serif" }}>Back</button>
+          <div style={{ fontSize:18, fontWeight:700 }}>Respond to Emergency</div>
+        </div>
+        <div style={{ maxWidth:600, margin:"0 auto", padding:"28px 20px 60px" }}>
+          {respDone ? (
+            <div style={{ textAlign:"center", padding:"40px 0" }}>
+              <div style={{ fontSize:48, marginBottom:16 }}>🙏</div>
+              <div style={{ fontSize:22, fontWeight:700, color:"#eef1ff", marginBottom:10 }}>Response Submitted!</div>
+              <div style={{ fontSize:14, color:"rgba(255,255,255,0.5)", lineHeight:1.8, marginBottom:20 }}>
+                Thank you, <strong style={{color:"#e8b34b"}}>{response.name}</strong>. Admin and the submitter have been notified. Someone will contact you directly to coordinate.
+              </div>
+              <div style={{ background:"rgba(232,179,75,0.08)", borderRadius:14, border:"1px solid rgba(232,179,75,0.2)", padding:"16px 20px" }}>
+                <div style={{ fontSize:14, color:"#e8b34b", fontStyle:"italic" }}>"Here am I Lord, send me." — Isaiah 6:8</div>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div style={{ background:`${u.color}12`, borderRadius:14, border:`1px solid ${u.color}33`, padding:18, marginBottom:24 }}>
+                <div style={{ fontSize:11, color:u.color, letterSpacing:2, textTransform:"uppercase", marginBottom:6 }}>{u.label}</div>
+                <div style={{ fontSize:16, fontWeight:700, color:"#eef1ff", marginBottom:4 }}>{responding.title}</div>
+                <div style={{ fontSize:13, color:"rgba(255,255,255,0.45)" }}>📍 {responding.country} · ${fmt(responding.goal||0)} needed</div>
+              </div>
+              <div style={{ fontSize:15, fontWeight:700, color:"#eef1ff", marginBottom:14 }}>Your Details</div>
+              <input placeholder="Your name *" value={response.name} onChange={e=>setResponse(r=>({...r,name:e.target.value}))} style={inp}/>
+              <input placeholder="Your email * (we'll contact you here)" type="email" value={response.email} onChange={e=>setResponse(r=>({...r,email:e.target.value}))} style={inp}/>
+              <input placeholder="Your phone (optional)" type="tel" value={response.phone} onChange={e=>setResponse(r=>({...r,phone:e.target.value}))} style={inp}/>
+              <input placeholder="Amount you can contribute ($) — optional" type="number" value={response.amount} onChange={e=>setResponse(r=>({...r,amount:e.target.value}))} style={inp}/>
+              <textarea placeholder="Any message or additional details..." value={response.note} onChange={e=>setResponse(r=>({...r,note:e.target.value}))} style={{...inp,resize:"vertical",minHeight:80}}/>
+              <button onClick={handleRespond} disabled={respSaving||!response.name||!response.email}
+                style={{ width:"100%", padding:"14px 0", borderRadius:14, border:"none",
+                  background:response.name&&response.email?`linear-gradient(135deg,${u.color},${u.color}cc)`:"rgba(255,255,255,0.06)",
+                  color:response.name&&response.email?"#fff":"rgba(255,255,255,0.25)",
+                  fontWeight:700, cursor:response.name&&response.email?"pointer":"default",
+                  fontSize:15, fontFamily:"Georgia, serif" }}>
+                {respSaving ? "Submitting..." : "💝 Submit Response"}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ minHeight:"100vh", background:"#060c18", color:"#eef1ff", fontFamily:"Georgia, serif" }}>
@@ -159,7 +248,7 @@ export default function EmergencyRequests({ onBack, user }) {
                     <span style={{ fontSize:13, color:u.color, fontWeight:700 }}>${fmt(r.raised||0)} raised</span>
                     <span style={{ fontSize:12, color:"rgba(255,255,255,0.3)" }}>${fmt((r.goal||1000)-(r.raised||0))} still needed</span>
                   </div>
-                  <button style={{ width:"100%", padding:"12px 0", borderRadius:12, border:"none", background:`linear-gradient(135deg,${u.color},${u.color}cc)`, color:"#fff", fontWeight:700, cursor:"pointer", fontSize:14, fontFamily:"Georgia, serif" }}>
+                  <button onClick={()=>{setResponding(r);setRespDone(false);setResponse({name:"",email:"",phone:"",amount:"",note:""});}} style={{ width:"100%", padding:"12px 0", borderRadius:12, border:"none", background:`linear-gradient(135deg,${u.color},${u.color}cc)`, color:"#fff", fontWeight:700, cursor:"pointer", fontSize:14, fontFamily:"Georgia, serif" }}>
                     💝 Respond to This Emergency
                   </button>
                 </div>

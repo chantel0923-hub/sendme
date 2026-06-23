@@ -522,7 +522,7 @@ const MissionDetail = ({ mission: m, onBack, onDonate, onLedger }) => {
       `Goal: $${fmt(m.goal)} - ${funded}% funded\n\n` +
       `"${short}"\n\n` +
       `Help us reach unreached souls - SendMe Global Mission Fund\n` +
-      `https://sendme.org`
+      `https://sendme-nine.vercel.app`
     );
     window.open(`https://wa.me/?text=${text}`, "_blank");
   };
