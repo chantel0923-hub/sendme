@@ -176,9 +176,10 @@ const BudgetBreakdown = ({ budget=[], goal, color }) => {
 const UpdatesFeed = ({ missionId, missionColor, missionName }) => {
   const [updates, setUpdates]   = useState([]);
   const [loading, setLoading]   = useState(true);
-  const [newText, setNewText]   = useState("");
-  const [postType, setPostType] = useState("update");
-  const [posting, setPosting]   = useState(false);
+  const [newText, setNewText]     = useState("");
+  const [newMedia, setNewMedia]   = useState("");
+  const [postType, setPostType]   = useState("update");
+  const [posting, setPosting]     = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -198,12 +199,12 @@ const UpdatesFeed = ({ missionId, missionColor, missionName }) => {
   const postUpdate = async () => {
     if (!newText.trim()) return;
     setPosting(true);
-    const update = { mission_id:missionId, author:missionName, text:newText.trim(), type:postType, created_at:new Date().toISOString() };
+    const update = { mission_id:missionId, author:missionName, text:newText.trim(), type:postType, media_url:newMedia.trim()||null, created_at:new Date().toISOString() };
     try {
       await supabase.from("mission_updates").insert(update);
       setUpdates(u => [update, ...u]);
     } catch { setUpdates(u => [update,...u]); }
-    setNewText(""); setPosting(false);
+    setNewText(""); setNewMedia(""); setPosting(false);
   };
 
   const timeAgo = (dateStr) => {
@@ -231,6 +232,9 @@ const UpdatesFeed = ({ missionId, missionColor, missionName }) => {
         <textarea value={newText} onChange={e=>setNewText(e.target.value)}
           placeholder={postType==="prayer"?"Share a prayer request for this mission...":"Share a field update from the mission..."}
           style={{ width:"100%",padding:"10px 14px",borderRadius:10,background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.1)",color:"#eef1ff",fontSize:14,fontFamily:"Georgia,serif",outline:"none",resize:"vertical",minHeight:70,boxSizing:"border-box",marginBottom:10 }}/>
+        <input value={newMedia} onChange={e=>setNewMedia(e.target.value)}
+          placeholder="📷 Photo/video URL (optional — YouTube, Google Drive, Dropbox...)"
+          style={{ width:"100%",padding:"9px 14px",borderRadius:10,background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.1)",color:"#eef1ff",fontSize:13,fontFamily:"Georgia,serif",outline:"none",boxSizing:"border-box",marginBottom:10 }}/>
         <button onClick={postUpdate} disabled={posting||!newText.trim()}
           style={{ padding:"9px 20px",borderRadius:10,border:"none",background:newText.trim()?`linear-gradient(135deg,${missionColor},${missionColor}cc)`:"rgba(255,255,255,0.06)",color:newText.trim()?"#000":"rgba(255,255,255,0.25)",fontWeight:700,cursor:newText.trim()?"pointer":"default",fontSize:13,fontFamily:"Georgia,serif" }}>
           {posting?"Posting...":"Post Update"}
@@ -254,7 +258,20 @@ const UpdatesFeed = ({ missionId, missionColor, missionName }) => {
                 </div>
                 <span style={{ fontSize:11,color:"rgba(255,255,255,0.3)" }}>{timeAgo(u.created_at)}</span>
               </div>
-              <p style={{ fontSize:14,color:"rgba(255,255,255,0.7)",lineHeight:1.7,margin:0 }}>{u.text}</p>
+              <p style={{ fontSize:14,color:"rgba(255,255,255,0.7)",lineHeight:1.7,margin:0,marginBottom:u.media_url?8:0 }}>{u.text}</p>
+              {u.media_url && (
+                u.media_url.includes("youtube.com") || u.media_url.includes("youtu.be") ? (
+                  <a href={u.media_url} target="_blank" rel="noreferrer"
+                    style={{ display:"inline-flex",alignItems:"center",gap:6,fontSize:12,color:"#e85b5b",textDecoration:"none",background:"rgba(232,91,91,0.08)",border:"1px solid rgba(232,91,91,0.2)",borderRadius:8,padding:"5px 12px",marginTop:4 }}>
+                    ▶ Watch on YouTube
+                  </a>
+                ) : (
+                  <a href={u.media_url} target="_blank" rel="noreferrer"
+                    style={{ display:"inline-flex",alignItems:"center",gap:6,fontSize:12,color:"#e8b34b",textDecoration:"none",background:"rgba(232,179,75,0.08)",border:"1px solid rgba(232,179,75,0.2)",borderRadius:8,padding:"5px 12px",marginTop:4 }}>
+                    📷 View Photo / Media
+                  </a>
+                )
+              )}
             </div>
           ))}
         </div>
