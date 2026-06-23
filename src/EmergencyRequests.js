@@ -33,7 +33,7 @@ export default function EmergencyRequests({ onBack, user }) {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading]   = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm]         = useState({ title:"", description:"", country:"", region:"", urgency:"urgent", goal:"", church_id:"" });
+  const [form, setForm]         = useState({ title:"", description:"", country:"", region:"", urgency:"urgent", goal:"", church_id:"", contact_email:"", contact_phone:"" });
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted]   = useState(false);
   const [churches, setChurches]     = useState([]);
@@ -66,6 +66,8 @@ export default function EmergencyRequests({ onBack, user }) {
       await supabase.from("emergency_requests").insert({
         ...form, goal:Number(form.goal)||1000, raised:0,
         church_id: form.church_id || null,
+        contact_email: form.contact_email,
+        contact_phone: form.contact_phone,
         submittedBy: user?.email || "Anonymous",
         created_at: new Date().toISOString(),
       });
@@ -209,6 +211,10 @@ Note: ${response.note||"none"}`,
                     ))}
                   </select>
                 )}
+                <div style={{ height:1, background:"rgba(255,255,255,0.07)", margin:"4px 0 12px" }}/>
+                <div style={{ fontSize:12, color:"rgba(255,255,255,0.4)", letterSpacing:1, textTransform:"uppercase", marginBottom:8 }}>Your Contact Details (so donors can reach you)</div>
+                <input placeholder="Contact email * (responses sent here + to admin)" type="email" value={form.contact_email} onChange={e=>setForm(f=>({...f,contact_email:e.target.value}))} style={inp}/>
+                <input placeholder="Contact phone (optional)" type="tel" value={form.contact_phone} onChange={e=>setForm(f=>({...f,contact_phone:e.target.value}))} style={inp}/>
                 <select value={form.urgency} onChange={e=>setForm(f=>({...f,urgency:e.target.value}))} style={{...inp,color:"#eef1ff"}}>
                   <option value="critical" style={{background:"#0c1628"}}>Critical — life/safety at risk</option>
                   <option value="urgent"   style={{background:"#0c1628"}}>Urgent — needed within days</option>
@@ -240,7 +246,8 @@ Note: ${response.note||"none"}`,
                       </div>
                       <div style={{ fontSize:16, fontWeight:700, color:"#eef1ff", marginBottom:8 }}>{r.title}</div>
                       <div style={{ fontSize:13, color:"rgba(255,255,255,0.55)", lineHeight:1.7, marginBottom:12 }}>{r.description}</div>
-                      <div style={{ fontSize:12, color:"rgba(255,255,255,0.35)" }}>Submitted by: {r.submittedBy}</div>
+                      <div style={{ fontSize:12, color:"rgba(255,255,255,0.35)", marginBottom:r.contact_email?4:0 }}>Submitted by: {r.submittedBy}</div>
+                      {r.contact_email && <div style={{ fontSize:12, color:"rgba(232,179,75,0.7)" }}>✉ {r.contact_email}{r.contact_phone?" · "+r.contact_phone:""}</div>}
                     </div>
                   </div>
                   <Bar raised={r.raised||0} goal={r.goal||1000} color={u.color}/>

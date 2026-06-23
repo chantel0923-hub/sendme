@@ -508,9 +508,27 @@ const PayfastResultScreen = ({ status, amount, onContinue }) => (
 );
 
 const MissionDetail = ({ mission: m, onBack, onDonate, onLedger }) => {
-  const [proofTab,setProofTab] = useState("photos");
-  const proofPhotos = ["Sunday service gathering","Food parcel distribution","Community prayer meeting","New believers baptism"];
-  const proofVideos = ["Weekly ministry highlights","Testimony from community elder"];
+  const [proofTab,setProofTab]     = useState("photos");
+  const [proofItems,setProofItems] = useState([]);
+  const [proofLoaded,setProofLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!m?.id || proofLoaded) return;
+    const loadProofs = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("milestone_proofs")
+          .select("description, media_url, status, milestone_number")
+          .eq("mission_id", m.id)
+          .eq("status", "approved")
+          .order("milestone_number", { ascending: true });
+        if (error) { console.log("proofItems fetch error:", error); return; }
+        setProofItems(data || []);
+      } catch(e) { console.log("proofItems exception:", e); }
+      setProofLoaded(true);
+    };
+    loadProofs();
+  }, [m?.id]);
   const shareWhatsApp = () => {
     const name    = m.protected ? "a faithful missionary" : m.name;
     const country = m.country || m.region;
@@ -585,11 +603,24 @@ const MissionDetail = ({ mission: m, onBack, onDonate, onLedger }) => {
             </div>
           </div>
           <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
-            {(proofTab==="photos"?proofPhotos:proofVideos).map((item,i)=>(
+            {proofItems.length === 0 && (
+              <div style={{ fontSize:13,color:"rgba(255,255,255,0.3)",padding:"12px 0",textAlign:"center" }}>
+                No verified milestone proofs yet.
+              </div>
+            )}
+            {proofItems.map((item,i)=>(
               <div key={i} style={{ padding:"12px 16px",borderRadius:12,background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.06)",display:"flex",alignItems:"center",gap:10 }}>
                 <div style={{ width:8,height:8,borderRadius:999,background:m.color,boxShadow:`0 0 6px ${m.color}`,flexShrink:0 }}/>
-                <span style={{ fontSize:13,color:"rgba(255,255,255,0.6)",flex:1 }}>{item}</span>
-                <span style={{ fontSize:11,padding:"2px 8px",borderRadius:6,background:"rgba(62,207,142,0.1)",color:"#3ecf8e",border:"1px solid rgba(62,207,142,0.2)" }}>Verified</span>
+                <div style={{ flex:1 }}>
+                  <span style={{ fontSize:13,color:"rgba(255,255,255,0.6)" }}>{item.description}</span>
+                  {item.media_url && (
+                    <a href={item.media_url} target="_blank" rel="noreferrer"
+                      style={{ display:"block",fontSize:11,color:"#e8b34b",marginTop:3,textDecoration:"none" }}>
+                      📷 View proof →
+                    </a>
+                  )}
+                </div>
+                <span style={{ fontSize:11,padding:"2px 8px",borderRadius:6,background:"rgba(62,207,142,0.1)",color:"#3ecf8e",border:"1px solid rgba(62,207,142,0.2)",flexShrink:0 }}>Verified</span>
               </div>
             ))}
           </div>
@@ -1278,7 +1309,7 @@ const MissionVisionSplash = ({ onDone }) => (
         {/* Pillars */}
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:4 }}>
           {[
-            ["✝", "Message-Believing", "Built for the end-time Bride"],
+            [null, "Message-Believing", "Built for the end-time Bride"],
             ["🌍", "Global Reach",      "Active missions across every continent"],
             ["🔒", "Full Escrow",       "Funds held until milestones are met"],
             ["⛪", "Church-Anchored",   "Every missionary endorsed by a local church"],
@@ -1287,7 +1318,18 @@ const MissionVisionSplash = ({ onDone }) => (
               background:"rgba(255,255,255,0.03)", borderRadius:12,
               border:"1px solid rgba(255,255,255,0.06)", padding:"14px 12px",
             }}>
-              <div style={{ fontSize:20, marginBottom:6 }}>{icon}</div>
+              <div style={{ fontSize:20, marginBottom:6 }}>
+                {icon ? icon : (
+                  <svg width="20" height="26" viewBox="0 0 20 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="8" y="0" width="4" height="26" rx="2" fill="url(#pg)"/>
+                    <rect x="0" y="7" width="20" height="4" rx="2" fill="url(#pg)"/>
+                    <defs><linearGradient id="pg" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#f9d97a"/>
+                      <stop offset="100%" stopColor="#c8942b"/>
+                    </linearGradient></defs>
+                  </svg>
+                )}
+              </div>
               <div style={{ fontSize:13, fontWeight:700, color:"#eef1ff", marginBottom:4 }}>{title}</div>
               <div style={{ fontSize:11, color:"rgba(255,255,255,0.4)", lineHeight:1.6 }}>{desc}</div>
             </div>
