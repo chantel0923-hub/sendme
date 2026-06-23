@@ -409,7 +409,7 @@ export default function ChurchesTab({ onBack }) {
                         {[
                           ["✝ Pastor",  c.pastor_name],
                           ["📧 Email",  c.pastor_email || c.email],
-                          ["📞 Phone",  c.pastor_phone || c.phone],
+                          ["📞 Phone",  c.show_phone_public ? (c.pastor_phone || c.phone) : null],
                           ["🌐 Website",c.website],
                           ["📍 Address",c.address],
                           ["👥 Size",   c.size ? c.size + " members" : null],
