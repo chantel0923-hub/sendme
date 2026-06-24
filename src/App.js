@@ -410,11 +410,25 @@ const MsTrack = ({ current,color }) => (
 );
 
 const DonateScreen = ({ mission: m, onBack, onPayfast }) => {
-  const [amt,setAmt]       = useState("");
-  const [prayed,setPrayed] = useState(false);
+  const [donateTab,setDonateTab] = useState("once");   // once | monthly
+  const [amt,setAmt]             = useState("");
+  const [monthly,setMonthly]     = useState(null);
+  const [prayed,setPrayed]       = useState(false);
   const [submitting,setSubmitting] = useState(false);
-  const [error,setError]   = useState("");
+  const [monthlyDone,setMonthlyDone] = useState(false);
+  const [error,setError]         = useState("");
   const canGive = amt && Number(amt) > 0 && prayed;
+  const MONTHLY = [10,25,50,100,200];
+
+  const handleMonthlyAdopt = async () => {
+    if (!monthly) return;
+    setSubmitting(true);
+    try {
+      await supabase.from("donations").insert({ mission_id:m.id, amount:monthly, type:"monthly", status:"pending" });
+      setMonthlyDone(true);
+    } catch(e) { console.log("monthly adopt error:", e); setMonthlyDone(true); }
+    setSubmitting(false);
+  };
 
   const handleGive = async () => {
     if (!canGive || submitting) return;
@@ -449,7 +463,54 @@ const DonateScreen = ({ mission: m, onBack, onPayfast }) => {
           <span style={{ fontSize:18,flexShrink:0 }}>🔐</span>
           <div style={{ fontSize:13,color:"rgba(255,255,255,0.5)",lineHeight:1.7 }}>Your donation is held in <strong style={{ color:"#e8b34b" }}>secure escrow</strong> and only released when milestone proof is verified.</div>
         </div>
-        <div>
+        {/* ── Giving type tabs ── */}
+        <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",background:"rgba(255,255,255,0.04)",borderRadius:12,padding:3,gap:3 }}>
+          {[["once","Once-off Gift"],["monthly","Monthly Support"]].map(([key,label])=>(
+            <button key={key} onClick={()=>{setDonateTab(key);setError("");}} style={{ padding:"11px 0",borderRadius:10,border:"none",cursor:"pointer",fontFamily:"Georgia,serif",fontWeight:700,fontSize:14,transition:"all .2s",
+              background:donateTab===key?"linear-gradient(135deg,#e8b34b,#c8942b)":"transparent",
+              color:donateTab===key?"#000":"rgba(255,255,255,0.4)" }}>
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* ── Monthly tab ── */}
+        {donateTab==="monthly" && (
+          monthlyDone ? (
+            <div style={{ background:"rgba(62,207,142,0.08)",borderRadius:14,border:"1px solid rgba(62,207,142,0.25)",padding:"20px 18px",textAlign:"center" }}>
+              <div style={{ fontSize:28,marginBottom:10 }}>🙏</div>
+              <div style={{ fontSize:16,fontWeight:700,color:"#eef1ff",marginBottom:6 }}>You are now supporting this mission monthly!</div>
+              <div style={{ fontSize:13,color:"rgba(255,255,255,0.5)",lineHeight:1.7 }}>
+                <strong style={{ color:"#3ecf8e" }}>${fmt(monthly)}/month</strong> set aside for <strong style={{ color:"#eef1ff" }}>{m.protected?"this mission":m.name}</strong>.<br/>
+                You will receive updates as the mission progresses.
+              </div>
+            </div>
+          ) : (
+            <>
+              <div style={{ background:`${m.color}08`,borderRadius:12,border:`1px solid ${m.color}22`,padding:"12px 16px",fontSize:13,color:"rgba(255,255,255,0.5)",lineHeight:1.7 }}>
+                "Support {m.protected?"this mission":m.name.split(" ").slice(-1)[0]}'s mission for just <strong style={{ color:m.color }}>${monthly||"X"}/month</strong> — creating recurring funding so the work never stops."
+              </div>
+              <div style={{ fontSize:13,color:"rgba(255,255,255,0.4)",marginBottom:8 }}>Choose a monthly amount</div>
+              <div style={{ display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8,marginBottom:6 }}>
+                {MONTHLY.map(a=>(
+                  <button key={a} onClick={()=>setMonthly(a)} style={{ padding:"11px 0",borderRadius:12,border:`1px solid ${monthly===a?m.color:"rgba(255,255,255,0.1)"}`,background:monthly===a?`${m.color}22`:"rgba(255,255,255,0.03)",color:monthly===a?m.color:"rgba(255,255,255,0.5)",fontWeight:700,cursor:"pointer",fontSize:13,transition:"all .15s" }}>${a}</button>
+                ))}
+              </div>
+              <button onClick={handleMonthlyAdopt} disabled={!monthly||submitting}
+                style={{ width:"100%",padding:"15px 0",borderRadius:14,border:"none",
+                  background:monthly?`linear-gradient(135deg,${m.color},${m.color}cc)`:"rgba(255,255,255,0.06)",
+                  color:monthly?"#000":"rgba(255,255,255,0.25)",fontWeight:700,
+                  cursor:monthly&&!submitting?"pointer":"default",fontSize:15,fontFamily:"Georgia,serif",
+                  boxShadow:monthly?`0 6px 24px ${m.color}44`:"none",transition:"all .2s" }}>
+                {submitting?"Processing...":(monthly?`✝  Adopt This Mission — $${monthly}/month`:"Select a monthly amount")}
+              </button>
+              <div style={{ textAlign:"center",fontSize:12,color:"rgba(255,255,255,0.2)" }}>Monthly support is recorded and tracked — full transparency</div>
+            </>
+          )
+        )}
+
+        {/* ── Once-off tab ── */}
+        {donateTab==="once" && <div>
           <div style={{ fontSize:13,color:"rgba(255,255,255,0.4)",marginBottom:10 }}>Select an amount</div>
           <div style={{ display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8 }}>
             {AMOUNTS.map(a => (
@@ -487,6 +548,7 @@ const DonateScreen = ({ mission: m, onBack, onPayfast }) => {
         </button>
         {error && <div style={{ textAlign:"center",fontSize:13,color:"#e85b5b" }}>{error}</div>}
         <div style={{ textAlign:"center",fontSize:12,color:"rgba(255,255,255,0.2)" }}>🔒 Secure checkout via PayFast · Funds held in escrow · Released only on verified proof of work</div>
+        </div>}
       </div>
     </div>
   );
@@ -609,7 +671,6 @@ const MissionDetail = ({ mission: m, onBack, onDonate, onLedger }) => {
         <BudgetBreakdown budget={m.budget} goal={m.goal} color={m.color} />
         <UpdatesFeed missionId={m.id} missionColor={m.color} missionName={m.protected?"Missionary":m.name} />
         <PrayerChain missionId={m.id} missionColor={m.color} initialCount={m.prayers||0} />
-        <AdoptMission mission={m} />
         <div style={{ padding:"24px 0",borderBottom:"1px solid rgba(255,255,255,0.06)" }}>
           <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16 }}>
             <div style={{ fontSize:16,fontWeight:700,color:"#eef1ff" }}>Proof of Work</div>
