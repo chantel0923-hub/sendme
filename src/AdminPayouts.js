@@ -228,6 +228,70 @@ export default function AdminPayouts({ onBack }) {
     return `${Math.floor(diff/86400)}d ago`;
   };
 
+  const generateCSV = () => {
+    let rows = [];
+    const dateStr = new Date().toISOString().slice(0,10);
+
+    if (filter === "emergency") {
+      rows.push(["Date","Title","Country","Urgency","Church","Goal","Raised","Status","Contact Email","Contact Phone"]);
+      emergencies.forEach(em => {
+        rows.push([
+          em.created_at ? new Date(em.created_at).toLocaleDateString("en-GB") : "",
+          em.title || "",
+          em.country || "",
+          em.urgency || "",
+          em.churches ? `${em.churches.name} — ${em.churches.city}` : "",
+          em.goal || 0,
+          em.raised || 0,
+          em.paid ? "Paid" : "Unpaid",
+          em.contact_email || "",
+          em.contact_phone || "",
+        ]);
+      });
+    } else {
+      const sourceRows = filter === "approved"
+        ? approvedRows
+        : filter === "due"   ? legacyRows.filter(r => !r.isPaid)
+        : filter === "paid"  ? legacyRows.filter(r =>  r.isPaid)
+        : legacyRows;
+
+      rows.push(["Date Approved","Mission Title","Church","Country","Milestone","Amount (USD)","Status","Paid At","Recipient","Bank","Account No","Branch Code","SWIFT","Banking Source"]);
+      sourceRows.forEach(r => {
+        rows.push([
+          r.reviewedAt ? new Date(r.reviewedAt).toLocaleDateString("en-GB") : "",
+          r.missionTitle || "",
+          r.churchName || "",
+          r.country || "",
+          `Milestone ${r.milestoneNum}`,
+          r.amount || 0,
+          r.isPaid ? "Paid" : "Due",
+          r.paidAt ? new Date(r.paidAt).toLocaleDateString("en-GB") : "",
+          r.details?.recipient_name || "",
+          r.details?.bank_name || "",
+          r.details?.account_number || "",
+          r.details?.branch_code || "",
+          r.details?.swift_code || "",
+          r.bankingSource || "",
+        ]);
+      });
+    }
+
+    const csvContent = rows.map(row =>
+      row.map(cell => {
+        const str = String(cell ?? "").replace(/"/g, '""');
+        return str.includes(",") || str.includes('"') || str.includes("\n") ? `"${str}"` : str;
+      }).join(",")
+    ).join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href     = url;
+    a.download = `sendme-payouts-${filter}-${dateStr}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div style={{ minHeight:"100vh", background:"#060c18", color:"#eef1ff", fontFamily:"Georgia, serif" }}>
       <div style={{ background:"#09111f", borderBottom:"1px solid rgba(255,255,255,0.07)", padding:"16px 24px", display:"flex", alignItems:"center", gap:14, position:"sticky", top:0, zIndex:100 }}>
@@ -241,6 +305,7 @@ export default function AdminPayouts({ onBack }) {
             {approvedUnpaid} ready to pay
           </div>
         )}
+        <button onClick={generateCSV} style={{ background:"rgba(232,179,75,0.1)", border:"1px solid rgba(232,179,75,0.3)", borderRadius:10, padding:"8px 14px", color:"#e8b34b", cursor:"pointer", fontSize:12, fontFamily:"Georgia, serif", fontWeight:600 }}>⬇ Download Report</button>
         <button onClick={load} style={{ background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:10, padding:"8px 14px", color:"rgba(255,255,255,0.5)", cursor:"pointer", fontSize:12, fontFamily:"Georgia, serif" }}>↻ Refresh</button>
       </div>
 
