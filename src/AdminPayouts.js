@@ -5,7 +5,13 @@ import { sendNotification } from "./notifications";
 
 const fmt = (n) => String(Math.round(n || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 
-export const ADMIN_EMAIL = "sendmemissionfund@gmail.com";
+export const ADMIN_EMAIL = "sendmemissionfund@gmail.com"; // kept for legacy checks
+export const isAdminEmail = (email) => {
+  // Primary check: hardcoded founder email always has access
+  if (email === "sendmemissionfund@gmail.com") return true;
+  // Secondary check: is_admin flag in profiles table (checked via checkIsAdmin helper)
+  return false;
+};
 
 const MILESTONE_LABELS = ["Milestone 1", "Milestone 2", "Milestone 3"];
 

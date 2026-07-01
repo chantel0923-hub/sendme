@@ -1451,8 +1451,10 @@ export default function App() {
   const loadRole = async (u) => {
     if (!u) { setUserRole(null); return; }
     try {
-      const { data } = await supabase.from("profiles").select("role").eq("id", u.id).single();
+      const { data } = await supabase.from("profiles").select("role, is_admin").eq("id", u.id).single();
       setUserRole(data?.role || u.user_metadata?.role || null);
+      // Attach is_admin flag directly to user object so isAdminUser check works
+      if (data?.is_admin) u.isAdmin = true;
     } catch {
       setUserRole(u.user_metadata?.role || null);
     }
@@ -1489,7 +1491,7 @@ export default function App() {
 
   const signOut       = async()=>{await supabase.auth.signOut();setUser(null);setUserRole(null);setGuest(false);setScreen("home");};
   const isPastor      = userRole === "pastor";
-  const isAdminUser   = user?.email === ADMIN_EMAIL;
+  const isAdminUser   = user?.email === ADMIN_EMAIL || user?.isAdmin === true;
   const openMission   = (m)  =>{setSelectedMission(m);setScreen("detail");};
   const openDonate    = ()   =>{setScreen("donate");};
   const handlePayfastDonate = (amt) => startPayfastDonation({ mission: selectedMission, amount: amt, user });
@@ -1502,7 +1504,7 @@ export default function App() {
   if(screen==="donor-browse")    return <DonorBrowse onBack={()=>setScreen("home")} onMission={openMission} user={user}/>;
   if(screen==="faq")              return <FAQScreen onBack={()=>setScreen("home")}/>;
   if(screen==="payout")           return <PayoutSetup onBack={()=>setScreen("home")}/>;
-  if(screen==="admin-payouts")    return user?.email===ADMIN_EMAIL ? <AdminPayouts onBack={()=>setScreen("home")}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
+  if(screen==="admin-payouts")    return isAdminUser ? <AdminPayouts onBack={()=>setScreen("home")}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
   if(screen==="pray")             return <PrayerWall missions={DEMO_MISSIONS} onBack={()=>setScreen("home")}/>;
   if(screen==="churches")         return <ChurchesTab onBack={()=>setScreen("home")}/>;
   if(screen==="apply")            return <MissionaryApplication onBack={()=>setScreen("home")} user={user}/>;
@@ -1539,7 +1541,7 @@ export default function App() {
       onMilestoneProof={()=>setScreen("milestone-proof")}
       onPastorReview={()=>setScreen("pastor-review")}
       onMissionaryDashboard={()=>setScreen("missionary-dashboard")}
-      isAdmin={user?.email===ADMIN_EMAIL}
+      isAdmin={isAdminUser}
       isPastor={isPastor||isAdminUser}
       guest={guest}
       onSignIn={()=>setGuest(false)}
