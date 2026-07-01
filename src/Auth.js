@@ -2,14 +2,17 @@ import { useState } from "react";
 import { supabase } from "./supabase";
 
 export default function Auth({ onLogin, onGuest }) {
-  const [mode, setMode]         = useState("login");
-  const [role, setRole]         = useState("");
-  const [name, setName]         = useState("");
-  const [email, setEmail]       = useState("");
-  const [password, setPassword] = useState("");
-  const [loading, setLoading]   = useState(false);
-  const [error, setError]       = useState("");
-  const [success, setSuccess]   = useState("");
+  const [mode, setMode]             = useState("login");
+  const [role, setRole]             = useState("");
+  const [name, setName]             = useState("");
+  const [email, setEmail]           = useState("");
+  const [password, setPassword]     = useState("");
+  const [loading, setLoading]       = useState(false);
+  const [error, setError]           = useState("");
+  const [success, setSuccess]       = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [forgotMode, setForgotMode] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
 
   const handleLogin = async () => {
     if (!email || !password) { setError("Please enter your email and password."); return; }
@@ -38,6 +41,17 @@ export default function Auth({ onLogin, onGuest }) {
     setSuccess("Account created! Please check your email to verify your account.");
   };
 
+  const handleForgotPassword = async () => {
+    if (!resetEmail) { setError("Please enter your email address."); return; }
+    setLoading(true); setError("");
+    const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
+      redirectTo: "https://sendme-nine.vercel.app",
+    });
+    setLoading(false);
+    if (error) { setError(error.message); return; }
+    setSuccess("Password reset email sent! Check your inbox.");
+  };
+
   const inp = {
     width: "100%", padding: "13px 16px", borderRadius: 12,
     background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)",
@@ -45,6 +59,74 @@ export default function Auth({ onLogin, onGuest }) {
     marginBottom: 12, boxSizing: "border-box",
   };
 
+  // ── Forgot Password screen ──────────────────────────────────────────────
+  if (forgotMode) return (
+    <div style={{
+      minHeight: "100vh", background: "#060c18",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      padding: 20, fontFamily: "Georgia, serif",
+    }}>
+      <div style={{ width: "100%", maxWidth: 420 }}>
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 20 }}>
+          <div style={{
+            width: 110, height: 110, borderRadius: "50%",
+            border: "3px solid #e8b34b",
+            boxShadow: "0 0 0 6px rgba(232,179,75,0.12), 0 0 40px rgba(232,179,75,0.25)",
+            overflow: "hidden", flexShrink: 0,
+          }}>
+            <img src={process.env.PUBLIC_URL + "/Jesus.png"} alt="Jesus Christ"
+              style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center top" }} />
+          </div>
+        </div>
+        <div style={{ textAlign: "center", marginBottom: 28 }}>
+          <div style={{ fontSize: 36, fontWeight: 800, color: "#fff", lineHeight: 1.1 }}>
+            Send<span style={{ color: "#e8b34b" }}>Me</span>
+          </div>
+          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", letterSpacing: 4, marginTop: 6 }}>GLOBAL MISSION FUND</div>
+        </div>
+        <div style={{ background: "#0c1628", borderRadius: 20, border: "1px solid rgba(255,255,255,0.08)", padding: "32px 28px" }}>
+          <div style={{ fontSize: 18, fontWeight: 700, color: "#eef1ff", marginBottom: 8 }}>Reset Password</div>
+          <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", marginBottom: 20, lineHeight: 1.6 }}>
+            Enter your email address and we'll send you a link to reset your password.
+          </div>
+          {error && (
+            <div style={{ background: "rgba(240,82,82,0.1)", border: "1px solid rgba(240,82,82,0.3)", borderRadius: 10, padding: "10px 14px", marginBottom: 16, fontSize: 13, color: "#f05252" }}>
+              ⚠ {error}
+            </div>
+          )}
+          {success && (
+            <div style={{ background: "rgba(62,207,142,0.1)", border: "1px solid rgba(62,207,142,0.3)", borderRadius: 10, padding: "10px 14px", marginBottom: 16, fontSize: 13, color: "#3ecf8e" }}>
+              ✓ {success}
+            </div>
+          )}
+          <input
+            type="email" value={resetEmail} onChange={e => setResetEmail(e.target.value)}
+            placeholder="Your email address" style={inp}
+            onKeyDown={e => e.key === "Enter" && handleForgotPassword()}
+          />
+          <button onClick={handleForgotPassword} disabled={loading} style={{
+            width: "100%", padding: "14px 0", borderRadius: 12, border: "none",
+            background: "linear-gradient(135deg,#e8b34b,#c8942b)",
+            color: "#000", fontWeight: 700, cursor: loading ? "default" : "pointer",
+            fontSize: 15, fontFamily: "Georgia, serif", opacity: loading ? 0.7 : 1,
+            boxShadow: "0 6px 24px rgba(232,179,75,0.44)", marginBottom: 14,
+          }}>
+            {loading ? "Sending..." : "✉  Send Reset Link"}
+          </button>
+          <button onClick={() => { setForgotMode(false); setError(""); setSuccess(""); resetEmail && setResetEmail(""); }} style={{
+            width: "100%", padding: "12px 0", borderRadius: 12,
+            border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.03)",
+            color: "rgba(255,255,255,0.5)", fontWeight: 600, cursor: "pointer",
+            fontSize: 14, fontFamily: "Georgia, serif",
+          }}>
+            ← Back to Sign In
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  // ── Main Auth screen ────────────────────────────────────────────────────
   return (
     <div style={{
       minHeight: "100vh", background: "#060c18",
@@ -169,24 +251,59 @@ export default function Auth({ onLogin, onGuest }) {
                 style={{ ...inp, color: role ? "#eef1ff" : "rgba(255,255,255,0.35)" }}
               >
                 <option value="" style={{ background: "#0c1628", color: "#eef1ff" }}>I am a...</option>
-                <option value="donor"        style={{ background: "#0c1628", color: "#eef1ff" }}>Donor / Supporter</option>
-                <option value="missionary"   style={{ background: "#0c1628", color: "#eef1ff" }}>Missionary</option>
-                <option value="pastor"        style={{ background: "#0c1628", color: "#eef1ff" }}>Pastor (Senior Leader)</option>
-                <option value="minister"      style={{ background: "#0c1628", color: "#eef1ff" }}>Minister / Evangelist</option>
+                <option value="donor"      style={{ background: "#0c1628", color: "#eef1ff" }}>Donor / Supporter</option>
+                <option value="missionary" style={{ background: "#0c1628", color: "#eef1ff" }}>Missionary</option>
+                <option value="pastor"     style={{ background: "#0c1628", color: "#eef1ff" }}>Pastor (Senior Leader)</option>
+                <option value="minister"   style={{ background: "#0c1628", color: "#eef1ff" }}>Minister / Evangelist</option>
               </select>
             </>
           )}
 
-          {/* ── Email & Password ── */}
+          {/* ── Email ── */}
           <input
             type="email" value={email} onChange={e => setEmail(e.target.value)}
             placeholder="Email address" style={inp}
           />
-          <input
-            type="password" value={password} onChange={e => setPassword(e.target.value)}
-            placeholder="Password" style={inp}
-            onKeyDown={e => e.key === "Enter" && (mode === "login" ? handleLogin() : handleRegister())}
-          />
+
+          {/* ── Password with eye toggle ── */}
+          <div style={{ position: "relative", marginBottom: 4 }}>
+            <input
+              type={showPassword ? "text" : "password"}
+              value={password} onChange={e => setPassword(e.target.value)}
+              placeholder="Password"
+              style={{ ...inp, marginBottom: 0, paddingRight: 48 }}
+              onKeyDown={e => e.key === "Enter" && (mode === "login" ? handleLogin() : handleRegister())}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(v => !v)}
+              style={{
+                position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)",
+                background: "none", border: "none", cursor: "pointer",
+                color: "rgba(255,255,255,0.35)", fontSize: 18, padding: 0, lineHeight: 1,
+              }}
+              title={showPassword ? "Hide password" : "Show password"}
+            >
+              {showPassword ? "🙈" : "👁"}
+            </button>
+          </div>
+
+          {/* ── Forgot password link (login mode only) ── */}
+          {mode === "login" && (
+            <div style={{ textAlign: "right", marginBottom: 16, marginTop: 6 }}>
+              <button
+                onClick={() => { setForgotMode(true); setError(""); setSuccess(""); setResetEmail(email); }}
+                style={{
+                  background: "none", border: "none", cursor: "pointer",
+                  color: "#e8b34b", fontSize: 12, fontFamily: "Georgia, serif",
+                  textDecoration: "underline", padding: 0,
+                }}
+              >
+                Forgot password?
+              </button>
+            </div>
+          )}
+          {mode === "register" && <div style={{ marginBottom: 4 }} />}
 
           {/* ── Submit button ── */}
           <button
