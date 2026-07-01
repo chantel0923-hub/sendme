@@ -517,15 +517,14 @@ const DonateScreen = ({ mission: m, onBack, onPayfast }) => {
               <button key={a} onClick={()=>setAmt(String(a))} style={{ padding:"11px 0",borderRadius:12,border:`1px solid ${amt===String(a)?m.color:"rgba(255,255,255,0.1)"}`,background:amt===String(a)?`${m.color}22`:"rgba(255,255,255,0.03)",color:amt===String(a)?m.color:"rgba(255,255,255,0.5)",fontWeight:700,cursor:"pointer",fontSize:14,transition:"all .15s" }}>${a}</button>
             ))}
           </div>
-        </div>
-        <div>
+          <div style={{ marginTop:12 }}>
           <div style={{ fontSize:13,color:"rgba(255,255,255,0.4)",marginBottom:8 }}>Or enter a custom amount</div>
           <div style={{ display:"flex",borderRadius:13,overflow:"hidden",border:`1px solid ${amt&&!AMOUNTS.includes(Number(amt))?m.color:"rgba(255,255,255,0.1)"}` }}>
             <div style={{ padding:"13px 15px",background:"rgba(255,255,255,0.04)",color:"rgba(255,255,255,0.4)",fontSize:18 }}>$</div>
             <input type="number" value={AMOUNTS.includes(Number(amt))?"":amt} onChange={e=>setAmt(e.target.value)} placeholder="Enter amount" style={{ flex:1,padding:"13px 15px",background:"rgba(255,255,255,0.03)",border:"none",color:"#eef1ff",fontSize:18,fontFamily:"Georgia, serif",outline:"none" }}/>
           </div>
-        </div>
-        <div onClick={()=>setPrayed(p=>!p)}
+          </div>
+          <div onClick={()=>setPrayed(p=>!p)}
           style={{ background:prayed?"rgba(232,179,75,0.1)":"rgba(255,255,255,0.02)",borderRadius:14,border:`1px solid ${prayed?"rgba(232,179,75,0.4)":"rgba(255,255,255,0.08)"}`,padding:"16px 18px",display:"flex",gap:14,alignItems:"flex-start",cursor:"pointer",transition:"all .2s" }}>
           <div style={{ width:24,height:24,borderRadius:7,flexShrink:0,marginTop:1,
             background:prayed?"linear-gradient(135deg,#e8b34b,#c8942b)":"rgba(255,255,255,0.05)",
@@ -538,16 +537,16 @@ const DonateScreen = ({ mission: m, onBack, onPayfast }) => {
             <div style={{ fontSize:12,color:"rgba(255,255,255,0.4)",lineHeight:1.7,fontStyle:"italic" }}>"The effective, fervent prayer of a righteous man avails much." — James 5:16</div>
           </div>
         </div>
-        <button onClick={handleGive} disabled={!canGive||submitting}
+          <button onClick={handleGive} disabled={!canGive||submitting}
           style={{ padding:"16px 0",borderRadius:14,border:"none",
             background:canGive?`linear-gradient(135deg,${m.color},${m.color}cc)`:"rgba(255,255,255,0.06)",
             color:canGive?"#000":"rgba(255,255,255,0.25)",fontWeight:700,cursor:canGive&&!submitting?"pointer":"default",
             fontSize:16,fontFamily:"Georgia, serif",opacity:submitting?0.7:1,
             boxShadow:canGive?`0 6px 28px ${m.color}44`:"none",transition:"all .2s" }}>
           {!amt||Number(amt)===0?"Enter an amount to continue":!prayed?"✝  Tick the prayer commitment to give":submitting?"Redirecting to PayFast…":`💝  Give $${amt} via PayFast`}
-        </button>
-        {error && <div style={{ textAlign:"center",fontSize:13,color:"#e85b5b" }}>{error}</div>}
-        <div style={{ textAlign:"center",fontSize:12,color:"rgba(255,255,255,0.2)" }}>🔒 Secure checkout via PayFast · Funds held in escrow · Released only on verified proof of work</div>
+          </button>
+          {error && <div style={{ textAlign:"center",fontSize:13,color:"#e85b5b" }}>{error}</div>}
+          <div style={{ textAlign:"center",fontSize:12,color:"rgba(255,255,255,0.2)" }}>🔒 Secure checkout via PayFast · Funds held in escrow · Released only on verified proof of work</div>
         </div>}
       </div>
     </div>
