@@ -31,11 +31,12 @@ const SIZES     = ["Under 50","50 – 100","100 – 300","300 – 500","500 – 
 const MAPBOX_TOKEN = process.env.REACT_APP_MAPBOX_TOKEN ||
   "pk.eyJ1Ijoic2VuZG1lMDkyMyIsImEiOiJjbXB6enh5ZmwwazhxMnNzZHd2dGx6YndvIn0.odqKTeH4YCXXk8m_T7JyEQ";
 
-const geocodeLocation = async (city, country) => {
+const geocodeLocation = async (city, country, street) => {
   try {
     const token = MAPBOX_TOKEN;
     if (!token) return { lat: null, lng: null };
-    const query = encodeURIComponent(`${city}, ${country}`.trim());
+    const parts = [street, city, country].filter(Boolean).join(", ");
+    const query = encodeURIComponent(parts.trim());
     const res = await fetch(
       `https://api.mapbox.com/geocoding/v5/mapbox.places/${query}.json?access_token=${token}&limit=1`
     );
@@ -118,6 +119,7 @@ const Step1 = ({ form, set }) => (
   <div>
     <div style={sectionTitle}>Church Information</div>
     <FInput label="Church Name *" placeholder="e.g. Eagle Ministry Tabernacle" value={form.churchName} onChange={e=>set("churchName",e.target.value)}/>
+    <FInput label="Street Address" placeholder="e.g. 12 Main Street, Northmead" value={form.street} onChange={e=>set("street",e.target.value)}/>
     <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
       <FInput label="City *" placeholder="e.g. Benoni" value={form.city} onChange={e=>set("city",e.target.value)}/>
       <FInput label="Province / State" placeholder="e.g. Gauteng" value={form.province} onChange={e=>set("province",e.target.value)}/>
@@ -212,6 +214,7 @@ const Step5 = ({ form, submitting, onSubmit }) => {
   const allChecked = ["believesMessage","believesTrinity","believesBible","believesMission","agreesEscrow","agreesAccountability"].every(k=>form[k]);
   const summary = [
     ["Church Name", form.churchName],
+    ["Street",      form.street],
     ["City",        form.city],
     ["Country",     form.country],
     ["Email",       form.email],
@@ -367,7 +370,7 @@ export default function ChurchRegistration({ onBack, user }) {
 
   const [form, setForm] = useState({
     // Church fields
-    churchName:"", city:"", province:"", country:"", phone:"", email:"", website:"", size:"",
+    churchName:"", street:"", city:"", province:"", country:"", phone:"", email:"", website:"", size:"",
     pastorName:"", pastorEmail:"", pastorPhone:"", canEndorse:true, showPhonePublic:false,
     reference1Name:"", reference1Contact:"", reference2Name:"", reference2Contact:"",
     believesMessage:false, believesTrinity:false, believesBible:false,
@@ -395,10 +398,11 @@ export default function ChurchRegistration({ onBack, user }) {
   const handleSubmit = async () => {
     setSubmitting(true); setError("");
     try {
-      const { lat, lng } = await geocodeLocation(form.city, form.country);
+      const { lat, lng } = await geocodeLocation(form.city, form.country, form.street);
 
       const { data, error: dbError } = await supabase.from("churches").insert({
         name:         form.churchName,
+        street:       form.street || null,
         city:         form.city,
         country:      form.country,
         phone:        form.phone,
