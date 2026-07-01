@@ -99,14 +99,14 @@ export default function MapboxMap({ missions, churches = [], onMissionClick }) {
         source: "unreached",
         layout: {
           "text-field": ["get", "name"],
-          "text-size": 10,
+          "text-size": 12,
           "text-anchor": "center",
         },
         paint: {
-          "text-color": "#e85b5b",
-          "text-opacity": 0.55,
-          "text-halo-color": "#060c18",
-          "text-halo-width": 1.5,
+          "text-color": "#ffffff",
+          "text-opacity": 0.9,
+          "text-halo-color": "#000000",
+          "text-halo-width": 2.5,
         },
       });
 
