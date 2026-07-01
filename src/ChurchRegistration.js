@@ -439,8 +439,16 @@ export default function ChurchRegistration({ onBack, user }) {
   // Step 5 — save banking details keyed to church_id
   const handleSaveBank = async () => {
     setBankError("");
-    if (!form.bankAccountHolder.trim() || !form.bankName.trim() || !form.bankAccountNumber.trim()) {
-      setBankError("Please fill in Account Holder, Bank Name, and Account Number.");
+    if (!form.bankAccountHolder.trim()) {
+      setBankError("Please enter the full name of the account holder.");
+      return;
+    }
+    if (!form.bankName.trim()) {
+      setBankError("Please enter the bank name.");
+      return;
+    }
+    if (!form.bankAccountNumber.trim()) {
+      setBankError("Please enter the account number.");
       return;
     }
     setBankSaving(true);
@@ -463,7 +471,9 @@ export default function ChurchRegistration({ onBack, user }) {
       if (dbError) throw dbError;
       setBankDone(true);
     } catch (e) {
-      setBankError("Could not save banking details: " + (e.message || "Please try again."));
+      const msg = e?.message || e?.details || e?.hint || "Unknown error — please try again.";
+      setBankError("Could not save banking details: " + msg);
+      console.error("payout_details upsert error:", e);
     }
     setBankSaving(false);
   };
