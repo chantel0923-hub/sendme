@@ -947,7 +947,7 @@ const NavDropdown = ({ user, userRole, onProfile, onEmergency, onTestimonies, on
     { label:"Find Mission",              color:"#5b9cf6",                            onClick:onMatching },
     { label:"QR Share",                  color:"rgba(255,255,255,0.65)",             onClick:onQR },
     { label:"FAQ",                       color:"#e8b34b",                            onClick:onFaq },
-    user && { label:"Payout Details",    color:"rgba(255,255,255,0.65)",             onClick:onPayout },
+    (isMissionary||isPastor) && user && { label:"💳 Payout Details", color:"rgba(255,255,255,0.65)", onClick:onPayout },
     (isMissionary||isPastor) && user && { label:"📋 Submit Proof",  color:"#5b9cf6", onClick:onMilestoneProof },
     isPastor && user &&                  { label:"⛪ Review Proofs", color:"#3ecf8e", onClick:onPastorReview },
   ].filter(Boolean);

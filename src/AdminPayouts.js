@@ -439,7 +439,7 @@ export default function AdminPayouts({ onBack }) {
                         <div style={{ fontSize:26, fontWeight:700, color: r.isPaid ? "#3ecf8e" : "#e8b34b" }}>${fmt(r.amount)}</div>
                         {r.bankingSource && (
                           <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", marginTop:4 }}>
-                            {r.bankingSource === "church" ? "🏦 to church" : "👤 to missionary"}
+                            {r.bankingSource === "church" ? "🏦 to church" : "🏦 to pastor/church"}
                           </div>
                         )}
                       </div>
@@ -448,7 +448,7 @@ export default function AdminPayouts({ onBack }) {
                     {/* Proof summary */}
                     {r.description && (
                       <div style={{ background:"rgba(255,255,255,0.03)", borderRadius:10, border:"1px solid rgba(255,255,255,0.06)", padding:"10px 14px", marginBottom:12 }}>
-                        <div style={{ fontSize:11, color:"rgba(255,255,255,0.25)", marginBottom:4 }}>Missionary's field report</div>
+                        <div style={{ fontSize:11, color:"rgba(255,255,255,0.25)", marginBottom:4 }}>Missionary's field report (payout goes to pastor)</div>
                         <div style={{ fontSize:13, color:"rgba(255,255,255,0.6)", lineHeight:1.7 }}>{r.description}</div>
                         {r.mediaUrl && (
                           <a href={r.mediaUrl} target="_blank" rel="noopener noreferrer"
@@ -471,7 +471,7 @@ export default function AdminPayouts({ onBack }) {
                       {r.details ? (
                         <>
                           <div style={{ fontSize:11, color:"rgba(255,255,255,0.25)", letterSpacing:1, textTransform:"uppercase", marginBottom:8 }}>
-                            {r.bankingSource === "church" ? "Church Banking Details" : "Missionary Banking Details"}
+                            {r.bankingSource === "church" ? "Church Banking Details" : "Pastor Banking Details"}
                           </div>
                           <div style={{ fontSize:12, color:"rgba(255,255,255,0.5)", lineHeight:1.8,
                             display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:"4px 16px" }}>
@@ -609,7 +609,7 @@ export default function AdminPayouts({ onBack }) {
                             <span style={{ fontSize:11, padding:"2px 10px", borderRadius:999,
                               background:"rgba(232,179,75,0.12)", color:"#e8b34b",
                               border:"1px solid rgba(232,179,75,0.25)" }}>
-                              👤 Pay to missionary
+                              🏦 Pay to pastor/church
                             </span>
                           )}
                           {r.isPaid && (
@@ -630,7 +630,7 @@ export default function AdminPayouts({ onBack }) {
                       {r.details ? (
                         <>
                           <div style={{ fontSize:11, color:"rgba(255,255,255,0.25)", letterSpacing:1, textTransform:"uppercase", marginBottom:8 }}>
-                            {r.bankingSource === "church" ? "Church Banking Details" : "Missionary Banking Details"}
+                            {r.bankingSource === "church" ? "Church Banking Details" : "Pastor Banking Details"}
                           </div>
                           <div style={{ fontSize:12, color:"rgba(255,255,255,0.5)", lineHeight:1.8,
                             display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:"4px 16px" }}>
@@ -675,7 +675,7 @@ export default function AdminPayouts({ onBack }) {
           <div style={{ fontSize:12, color:"rgba(255,255,255,0.3)", lineHeight:1.7 }}>
             Each mission's goal is split into 3 milestone payments. Pastor-approved proofs appear in the
             "Pastor Approved" tab. Banking details are pulled from the church account first, falling back
-            to the missionary's own details. Click "Mark as Paid" once the EFT is complete.
+            to the pastor's church account. Funds flow: SendMe → Church → Missionary. Click "Mark as Paid" once the EFT is complete.
           </div>
         </div>
       </div>
