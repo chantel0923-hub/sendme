@@ -192,6 +192,8 @@ export default function AdminPayouts({ onBack }) {
         paidAt:       record?.paid_at,
         details,
         bankingSource: source,
+        pastorEmail:  m.pastor_email || null,
+        pastorName:   m.pastor_name || null,
       });
     }
   });
@@ -717,6 +719,17 @@ export default function AdminPayouts({ onBack }) {
                         <div style={{ fontSize:12, color:"#e85b5b" }}>
                           ⚠️ No banking details found.
                           {r.churchId ? " Church not set up banking yet." : " No banking details submitted."}
+                          {r.pastorEmail && (
+                            <div>
+                              <button onClick={() => requestBanking(r)}
+                                style={{ marginTop:8, padding:"8px 14px", borderRadius:10, border:"1px solid rgba(232,179,75,0.4)", background:"rgba(232,179,75,0.08)", color:"#e8b34b", cursor:"pointer", fontSize:12, fontFamily:"Georgia, serif", fontWeight:600 }}>
+                                📧 Request Banking Details from Pastor
+                              </button>
+                            </div>
+                          )}
+                          {!r.pastorEmail && (
+                            <div style={{ fontSize:11, color:"rgba(255,255,255,0.25)", marginTop:4 }}>No pastor email on record — contact manually.</div>
+                          )}
                         </div>
                       )}
                     </div>
