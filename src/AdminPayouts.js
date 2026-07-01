@@ -43,7 +43,7 @@ export default function AdminPayouts({ onBack }) {
           .select(`
             id, mission_id, milestone_number, description, media_url,
             submitted_at, reviewed_at, pastor_notes, status,
-            missions ( id, title, country, city, church_id, church_name, goal, current_milestone, missionary_role, missionary_email )
+            missions ( id, title, country, city, church_id, church_name, goal, current_milestone, missionary_role, missionary_email, churches ( pastor_name, pastor_email ) )
           `)
           .eq("status", "approved")
           .order("reviewed_at", { ascending: false }),
@@ -147,6 +147,8 @@ export default function AdminPayouts({ onBack }) {
       missionId:    proof.mission_id,
       missionTitle: m.title || "Untitled Mission",
       missionaryEmail: m.missionary_email || null,
+      pastorEmail:     m.churches?.pastor_email || null,
+      pastorName:      m.churches?.pastor_name || null,
       churchName:   m.church_name || "",
       churchId:     m.church_id || null,
       country:      m.country || m.city || "",
@@ -232,6 +234,25 @@ export default function AdminPayouts({ onBack }) {
     if (diff < 3600) return `${Math.floor(diff/60)}m ago`;
     if (diff < 86400) return `${Math.floor(diff/3600)}h ago`;
     return `${Math.floor(diff/86400)}d ago`;
+  };
+
+  const requestBanking = async (r) => {
+    const toEmail = r.pastorEmail;
+    if (!toEmail) {
+      alert("No pastor email found for this church. Please contact them manually.");
+      return;
+    }
+    try {
+      await sendNotification("banking_request", toEmail, {
+        pastorName:   r.pastorName || "Pastor",
+        missionTitle: r.missionTitle,
+        churchName:   r.churchName,
+        siteUrl:      "https://sendme-nine.vercel.app",
+      });
+      alert(`Banking request email sent to ${toEmail}`);
+    } catch (e) {
+      alert("Could not send email. Please contact the pastor manually at: " + toEmail);
+    }
   };
 
   const generateCSV = () => {
@@ -488,6 +509,15 @@ export default function AdminPayouts({ onBack }) {
                       ) : (
                         <div style={{ fontSize:12, color:"#e85b5b" }}>
                           ⚠️ No banking details found. {r.churchId ? "The church has not submitted their banking details yet." : "No banking details submitted for this mission."}
+                          {r.pastorEmail && (
+                            <button onClick={() => requestBanking(r)}
+                              style={{ marginTop:8, padding:"8px 14px", borderRadius:10, border:"1px solid rgba(232,179,75,0.4)", background:"rgba(232,179,75,0.08)", color:"#e8b34b", cursor:"pointer", fontSize:12, fontFamily:"Georgia, serif", fontWeight:600 }}>
+                              📧 Request Banking Details from Pastor
+                            </button>
+                          )}
+                          {!r.pastorEmail && (
+                            <div style={{ fontSize:11, color:"rgba(255,255,255,0.25)", marginTop:4 }}>No pastor email on record — contact manually.</div>
+                          )}
                         </div>
                       )}
                     </div>
