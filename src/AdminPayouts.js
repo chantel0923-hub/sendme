@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "./supabase";
 import { sendNotification } from "./notifications";
+import XLSX from "xlsx-js-style";
 
 const fmt = (n) => String(Math.round(n || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 
@@ -255,68 +256,106 @@ export default function AdminPayouts({ onBack }) {
     }
   };
 
-  const generateCSV = () => {
-    let rows = [];
+  const generateReport = () => {
     const dateStr = new Date().toISOString().slice(0,10);
+    let headers = [];
+    let dataRows = [];
+    let sheetName = "Payouts";
+    let currencyCols = []; // 0-indexed columns to format as currency
 
     if (filter === "emergency") {
-      rows.push(["Date","Title","Country","Urgency","Church","Goal","Raised","Status","Contact Email","Contact Phone"]);
-      emergencies.forEach(em => {
-        rows.push([
-          em.created_at ? new Date(em.created_at).toLocaleDateString("en-GB") : "",
-          em.title || "",
-          em.country || "",
-          em.urgency || "",
-          em.churches ? `${em.churches.name} — ${em.churches.city}` : "",
-          em.goal || 0,
-          em.raised || 0,
-          em.paid ? "Paid" : "Unpaid",
-          em.contact_email || "",
-          em.contact_phone || "",
-        ]);
-      });
+      sheetName = "Emergency Requests";
+      headers = ["Date","Title","Country","Urgency","Church","Goal (USD)","Raised (USD)","Status","Contact Email","Contact Phone"];
+      currencyCols = [5, 6];
+      dataRows = emergencies.map(em => ([
+        em.created_at ? new Date(em.created_at).toLocaleDateString("en-GB") : "",
+        em.title || "",
+        em.country || "",
+        em.urgency || "",
+        em.churches ? `${em.churches.name} — ${em.churches.city}` : "",
+        em.goal || 0,
+        em.raised || 0,
+        em.paid ? "Paid" : "Unpaid",
+        em.contact_email || "",
+        em.contact_phone || "",
+      ]));
     } else {
+      sheetName = filter === "approved" ? "Pastor Approved"
+        : filter === "due"   ? "Payments Due"
+        : filter === "paid"  ? "Paid"
+        : "All Payouts";
+
       const sourceRows = filter === "approved"
         ? approvedRows
         : filter === "due"   ? legacyRows.filter(r => !r.isPaid)
         : filter === "paid"  ? legacyRows.filter(r =>  r.isPaid)
         : legacyRows;
 
-      rows.push(["Date Approved","Mission Title","Church","Country","Milestone","Amount (USD)","Status","Paid At","Recipient","Bank","Account No","Branch Code","SWIFT","Banking Source"]);
-      sourceRows.forEach(r => {
-        rows.push([
-          r.reviewedAt ? new Date(r.reviewedAt).toLocaleDateString("en-GB") : "",
-          r.missionTitle || "",
-          r.churchName || "",
-          r.country || "",
-          `Milestone ${r.milestoneNum}`,
-          r.amount || 0,
-          r.isPaid ? "Paid" : "Due",
-          r.paidAt ? new Date(r.paidAt).toLocaleDateString("en-GB") : "",
-          r.details?.recipient_name || "",
-          r.details?.bank_name || "",
-          r.details?.account_number || "",
-          r.details?.branch_code || "",
-          r.details?.swift_code || "",
-          r.bankingSource || "",
-        ]);
-      });
+      headers = ["Date Approved","Mission Title","Church","Country","Milestone","Amount (USD)","Status","Paid At","Recipient","Bank","Account No","Branch Code","SWIFT","Banking Source"];
+      currencyCols = [5];
+      dataRows = sourceRows.map(r => ([
+        r.reviewedAt ? new Date(r.reviewedAt).toLocaleDateString("en-GB") : "",
+        r.missionTitle || "",
+        r.churchName || "",
+        r.country || "",
+        `Milestone ${r.milestoneNum}`,
+        r.amount || 0,
+        r.isPaid ? "Paid" : "Due",
+        r.paidAt ? new Date(r.paidAt).toLocaleDateString("en-GB") : "",
+        r.details?.recipient_name || "",
+        r.details?.bank_name || "",
+        r.details?.account_number || "",
+        r.details?.branch_code || "",
+        r.details?.swift_code || "",
+        r.bankingSource || "",
+      ]));
     }
 
-    const csvContent = rows.map(row =>
-      row.map(cell => {
-        const str = String(cell ?? "").replace(/"/g, '""');
-        return str.includes(",") || str.includes('"') || str.includes("\n") ? `"${str}"` : str;
-      }).join(",")
-    ).join("\n");
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
 
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement("a");
-    a.href     = url;
-    a.download = `sendme-payouts-${filter}-${dateStr}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    // Bold gold header row with SendMe branding + thin bottom border
+    const headerStyle = {
+      font: { bold: true, sz: 12, color: { rgb: "060C18" } },
+      fill: { fgColor: { rgb: "E8B34B" } },
+      alignment: { vertical: "center", horizontal: "left", wrapText: false },
+      border: { bottom: { style: "thin", color: { rgb: "060C18" } } },
+    };
+    headers.forEach((_, colIdx) => {
+      const ref = XLSX.utils.encode_cell({ r: 0, c: colIdx });
+      if (ws[ref]) ws[ref].s = headerStyle;
+    });
+
+    // Currency formatting + right-align on amount columns; light zebra striping on data rows
+    for (let row = 1; row <= dataRows.length; row++) {
+      for (let col = 0; col < headers.length; col++) {
+        const ref = XLSX.utils.encode_cell({ r: row, c: col });
+        if (!ws[ref]) continue;
+        const isCurrency = currencyCols.includes(col);
+        ws[ref].s = {
+          font: { sz: 11, color: { rgb: "1A1A1A" } },
+          alignment: { horizontal: isCurrency ? "right" : "left" },
+          fill: row % 2 === 0 ? { fgColor: { rgb: "F7F3EA" } } : undefined,
+        };
+        if (isCurrency) ws[ref].z = '"$"#,##0';
+      }
+    }
+
+    // Sensible column widths based on header + longest content
+    ws["!cols"] = headers.map((h, i) => {
+      const longest = dataRows.reduce((max, row) => {
+        const val = row[i] == null ? "" : String(row[i]);
+        return Math.max(max, val.length);
+      }, h.length);
+      return { wch: Math.min(Math.max(longest + 2, 12), 42) };
+    });
+
+    // Freeze the header row so it stays visible while scrolling
+    ws["!freeze"] = { xSplit: 0, ySplit: 1, topLeftCell: "A2", activePane: "bottomLeft" };
+    ws["!sheetViews"] = [{ state: "frozen", ySplit: 1, topLeftCell: "A2" }];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    XLSX.writeFile(wb, `sendme-payouts-${filter}-${dateStr}.xlsx`, { bookType: "xlsx" });
   };
 
   return (
@@ -332,7 +371,7 @@ export default function AdminPayouts({ onBack }) {
             {approvedUnpaid} ready to pay
           </div>
         )}
-        <button onClick={generateCSV} style={{ background:"rgba(232,179,75,0.1)", border:"1px solid rgba(232,179,75,0.3)", borderRadius:10, padding:"8px 14px", color:"#e8b34b", cursor:"pointer", fontSize:12, fontFamily:"Georgia, serif", fontWeight:600 }}>⬇ Download Report</button>
+        <button onClick={generateReport} style={{ background:"rgba(232,179,75,0.1)", border:"1px solid rgba(232,179,75,0.3)", borderRadius:10, padding:"8px 14px", color:"#e8b34b", cursor:"pointer", fontSize:12, fontFamily:"Georgia, serif", fontWeight:600 }}>⬇ Download Report (Excel)</button>
         <button onClick={load} style={{ background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:10, padding:"8px 14px", color:"rgba(255,255,255,0.5)", cursor:"pointer", fontSize:12, fontFamily:"Georgia, serif" }}>↻ Refresh</button>
       </div>
 
