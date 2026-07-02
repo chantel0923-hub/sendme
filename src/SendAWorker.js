@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "./supabase";
+import { notifyAdmin } from "./notifications";
 
 const fmt = (n) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 
@@ -40,6 +41,12 @@ export default function SendAWorker({ onBack, user }) {
     } catch {}
     setRequests(r => [{ id:Date.now(), ...form, needs:[form.need1,form.need2,form.need3].filter(Boolean), responses:0, created_at:new Date().toISOString() }, ...r]);
     setSubmitted(true);
+    notifyAdmin("worker_request", {
+      title: form.title,
+      church: form.church,
+      country: form.country,
+      type: form.type,
+    });
   };
 
   const submitResponse = async (req) => {

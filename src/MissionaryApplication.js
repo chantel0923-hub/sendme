@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "./supabase";
+import { notifyAdmin } from "./notifications";
 
 const inp = {
   width: "100%", padding: "13px 16px", borderRadius: 12, boxSizing: "border-box",
@@ -646,6 +647,12 @@ export default function MissionaryApplication({ onBack, user }) {
       });
       if (dbError) throw dbError;
       setSubmitted(true);
+      notifyAdmin("mission_applied", {
+        missionTitle: form.title,
+        missionaryName: user?.user_metadata?.full_name || user?.email || "Unknown",
+        country: form.country,
+        churchName: form.churchName || form.churchId || "unregistered",
+      });
     } catch (e) {
       setError("Submission failed: " + (e.message || "Please try again."));
     }

@@ -1,7 +1,7 @@
 // AdminPayouts.js — Br Donald's private payout management dashboard
 import React, { useState, useEffect } from "react";
 import { supabase } from "./supabase";
-import { sendNotification } from "./notifications";
+import { sendNotification, notifyAdmin } from "./notifications";
 import XLSX from "xlsx-js-style";
 
 const fmt = (n) => String(Math.round(n || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
@@ -126,6 +126,12 @@ export default function AdminPayouts({ onBack }) {
           missionTitle,
           amount,
           recipientName,
+        });
+        notifyAdmin("payout_processed", {
+          missionTitle,
+          amount,
+          recipientName: recipientName || "pastor/church",
+          milestone: milestoneNum,
         });
       }
     } catch (e) {
