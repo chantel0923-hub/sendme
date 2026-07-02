@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "./supabase";
 import { ADMIN_EMAIL } from "./AdminPayouts";
+import { sendNotification } from "./notifications";
 
 const timeAgo = (dateStr) => {
   if (!dateStr) return "";
@@ -105,6 +106,35 @@ export default function AdminChurchVerification({ onBack, user }) {
       setError("Could not update church. (" + (e.message || "") + ")");
     }
     setActing(null);
+  };
+
+  const [refEmailSent, setRefEmailSent] = useState({});
+
+  const sendReferenceEmails = async (c) => {
+    const refs = [
+      { name: c.reference_1_name, contact: c.reference_1_contact },
+      { name: c.reference_2_name, contact: c.reference_2_contact },
+    ].filter(r => r.name && r.contact && r.contact.includes("@"));
+
+    if (refs.length === 0) {
+      alert("No valid email addresses found in the references. Please contact them manually.");
+      return;
+    }
+
+    let sent = 0;
+    for (const ref of refs) {
+      await sendNotification("reference_confirmation", ref.contact, {
+        referenceName: ref.name,
+        churchName:    c.name,
+        pastorName:    c.pastor_name,
+        city:          c.city,
+        country:       c.country,
+        adminEmail:    ADMIN_EMAIL,
+      });
+      sent++;
+    }
+    setRefEmailSent(prev => ({ ...prev, [c.id]: true }));
+    alert(`✝ Reference confirmation email${sent > 1 ? "s" : ""} sent to ${refs.map(r => r.contact).join(" and ")}`);
   };
 
   // Fixes churches that registered with missing lat/lng (e.g. the Mapbox
@@ -246,6 +276,14 @@ export default function AdminChurchVerification({ onBack, user }) {
                       {c.reference_2_name && (
                         <div><strong style={{ color: "rgba(255,255,255,0.8)" }}>Reference 2:</strong> {c.reference_2_name}{c.reference_2_contact ? ` · ${c.reference_2_contact}` : ""}</div>
                       )}
+                      <button onClick={() => sendReferenceEmails(c)}
+                        style={{ marginTop:12, padding:"9px 16px", borderRadius:10,
+                          border:"1px solid rgba(232,179,75,0.4)",
+                          background: refEmailSent[c.id] ? "rgba(62,207,142,0.1)" : "rgba(232,179,75,0.08)",
+                          color: refEmailSent[c.id] ? "#3ecf8e" : "#e8b34b",
+                          cursor:"pointer", fontSize:12, fontFamily:"Georgia, serif", fontWeight:600 }}>
+                        {refEmailSent[c.id] ? "✓ Emails Sent" : "📧 Send Reference Confirmation Emails"}
+                      </button>
                     </div>
                   )}
                   {!c.reference_1_name && !c.reference_2_name && (
