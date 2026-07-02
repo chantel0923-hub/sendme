@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { supabase } from "./supabase";
+import { notifyAdmin } from "./notifications";
 
 const inp = {
   width:"100%", padding:"13px 16px", borderRadius:12, boxSizing:"border-box",
@@ -427,6 +428,14 @@ export default function ChurchRegistration({ onBack, user }) {
       if (dbError) throw dbError;
       setChurchId(data.id);
       setSubmitted(true);
+      // Notify admin via WhatsApp — fire and forget
+      notifyAdmin("church_registered", {
+        churchName: form.churchName,
+        city:       form.city,
+        country:    form.country,
+        pastorName: form.pastorName,
+        pastorEmail: form.pastorEmail,
+      });
       // Advance to banking step
       setStep(6);
       window.scrollTo({top:0,behavior:"smooth"});
