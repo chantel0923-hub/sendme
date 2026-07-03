@@ -25,6 +25,55 @@ import { supabase } from "./supabase";
 
 const fmt = (n) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 
+// Detects the media URL type and renders it inline where possible.
+// YouTube links → embedded player. Direct image links (ends in a known
+// image extension) → inline <img>. Everything else (Google Drive/Photos
+// folder links, Dropbox folder links, etc. — can't be embedded reliably
+// without their APIs) → falls back to a clickable "view" link.
+const getYouTubeId = (url) => {
+  const m = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+  return m ? m[1] : null;
+};
+const isDirectImage = (url) => /\.(jpe?g|png|gif|webp|avif)(\?.*)?$/i.test(url);
+
+const MediaEmbed = ({ url }) => {
+  if (!url) return null;
+  const ytId = getYouTubeId(url);
+
+  if (ytId) {
+    return (
+      <div style={{ marginTop:14, borderRadius:12, overflow:"hidden", background:"#000", position:"relative", paddingTop:"56.25%" }}>
+        <iframe
+          src={`https://www.youtube.com/embed/${ytId}`}
+          title="Testimony video"
+          style={{ position:"absolute", top:0, left:0, width:"100%", height:"100%", border:"none" }}
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowFullScreen
+        />
+      </div>
+    );
+  }
+
+  if (isDirectImage(url)) {
+    return (
+      <div style={{ marginTop:14 }}>
+        <img src={url} alt="Testimony" style={{ width:"100%", borderRadius:12, display:"block" }} />
+      </div>
+    );
+  }
+
+  // Fallback — Google Drive/Photos folders, Dropbox folders, etc. can't be
+  // embedded reliably, so link out instead of showing a broken embed.
+  return (
+    <div style={{ marginTop:14 }}>
+      <a href={url} target="_blank" rel="noreferrer"
+        style={{ color:"#e8b34b", fontSize:13, textDecoration:"none", borderBottom:"1px solid rgba(232,179,75,0.3)" }}>
+        📷 View Photos / Media →
+      </a>
+    </div>
+  );
+};
+
 const COLORS = ["#e8b34b","#4caf7d","#5b9cf6","#e85b5b","#b06cf5","#f5a44a","#3ecf8e"];
 const getColor = (i) => COLORS[i % COLORS.length];
 
@@ -201,14 +250,7 @@ export default function TestimonyEngine({ onBack, onMission, user }) {
             <div style={{ background:"#0c1628", borderRadius:16, border:"1px solid rgba(255,255,255,0.08)", padding:20, marginBottom:16 }}>
               <div style={{ fontSize:14, fontWeight:700, color:"#eef1ff", marginBottom:12 }}>The Story</div>
               <div style={{ fontSize:14, color:"rgba(255,255,255,0.65)", lineHeight:1.85 }}>{t.story}</div>
-              {t.mediaUrl && (
-                <div style={{ marginTop:14 }}>
-                  <a href={t.mediaUrl} target="_blank" rel="noreferrer"
-                    style={{ color:"#e8b34b", fontSize:13, textDecoration:"none", borderBottom:"1px solid rgba(232,179,75,0.3)" }}>
-                    📷 View Photos / Media →
-                  </a>
-                </div>
-              )}
+              <MediaEmbed url={t.mediaUrl} />
             </div>
           ) : (
             <div style={{ background:"rgba(255,255,255,0.03)", borderRadius:14, border:"1px solid rgba(255,255,255,0.07)", padding:20, marginBottom:16, textAlign:"center" }}>
@@ -279,7 +321,7 @@ export default function TestimonyEngine({ onBack, onMission, user }) {
                   <textarea placeholder="Tell the full story of this mission — what God did, lives changed, challenges overcome... *" value={submitForm.story} onChange={e=>setSubmitForm(f=>({...f,story:e.target.value}))} style={{...inp,resize:"vertical",minHeight:120}}/>
                   <input placeholder="Before — what was the situation before the mission?" value={submitForm.before_text} onChange={e=>setSubmitForm(f=>({...f,before_text:e.target.value}))} style={inp}/>
                   <input placeholder="After — what changed as a result?" value={submitForm.after_text} onChange={e=>setSubmitForm(f=>({...f,after_text:e.target.value}))} style={inp}/>
-                  <input placeholder="Photo / media URL (optional — Google Drive, YouTube, etc)" value={submitForm.media_url} onChange={e=>setSubmitForm(f=>({...f,media_url:e.target.value}))} style={inp}/>
+                  <input placeholder="Photo / video URL (optional — YouTube link or direct image URL embeds inline; Google Drive/Dropbox folder links show as a click-through)" value={submitForm.media_url} onChange={e=>setSubmitForm(f=>({...f,media_url:e.target.value}))} style={inp}/>
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
                     <button onClick={()=>setShowSubmit(false)} style={{ padding:"12px 0", borderRadius:12, border:"1px solid rgba(255,255,255,0.1)", background:"transparent", color:"rgba(255,255,255,0.4)", fontWeight:700, cursor:"pointer", fontSize:14, fontFamily:"Georgia, serif" }}>Cancel</button>
                     <button onClick={handleSubmitTestimony} disabled={submitting||!submitForm.story.trim()}
