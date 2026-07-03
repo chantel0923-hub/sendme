@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "./supabase";
+import { notifyAdmin } from "./notifications";
 
 const fmt = (n) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 
@@ -72,6 +73,12 @@ export default function EmergencyRequests({ onBack, user }) {
         created_at: new Date().toISOString(),
       });
       setSubmitted(true);
+      notifyAdmin("emergency_submitted", {
+        title: form.title,
+        country: form.country,
+        urgency: form.urgency,
+        goal: form.goal || 1000,
+      });
     } catch { setSubmitted(true); }
     setSubmitting(false);
   };
