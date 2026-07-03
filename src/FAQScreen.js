@@ -4,6 +4,8 @@
 import React, { useState } from 'react';
 import { FEATURED_VIDEOS, SENDME_CHANNEL_URL } from './sendmeVideos';
 import YouTubeEmbed from './YouTubeEmbed';
+import { supabase } from './supabase';
+import { notifyAdmin } from './notifications';
 
 const faqs = [
   {
@@ -104,9 +106,43 @@ const faqs = [
 
 export default function FAQScreen({ onBack }) {
   const [openIndex, setOpenIndex] = useState(null);
+  const [showContactForm, setShowContactForm] = useState(false);
+  const [contactForm, setContactForm] = useState({ name: '', email: '', message: '' });
+  const [contactSubmitting, setContactSubmitting] = useState(false);
+  const [contactSubmitted, setContactSubmitted] = useState(false);
+  const [contactError, setContactError] = useState('');
 
   const toggle = (key) => {
     setOpenIndex(openIndex === key ? null : key);
+  };
+
+  const submitContact = async () => {
+    if (!contactForm.email.trim() || !contactForm.message.trim()) {
+      setContactError('Please fill in your email and your question before sending.');
+      return;
+    }
+    setContactSubmitting(true);
+    setContactError('');
+    try {
+      // WhatsApp ping to admin — fire-and-forget
+      notifyAdmin('support_contact', {
+        name: contactForm.name.trim() || 'Anonymous',
+        email: contactForm.email.trim(),
+        message: contactForm.message.trim(),
+      });
+      // Full message captured via email so nothing is lost
+      await supabase.functions.invoke('send-notification', {
+        body: {
+          to: 'sendmemissionfund@gmail.com',
+          subject: `SendMe FAQ Contact — ${contactForm.name.trim() || 'Anonymous'}`,
+          message: `From: ${contactForm.name.trim() || 'Anonymous'} (${contactForm.email.trim()})\n\n${contactForm.message.trim()}`,
+        },
+      });
+      setContactSubmitted(true);
+    } catch (e) {
+      setContactError('Could not send your message. Please try again, or email us directly at sendmemissionfund@gmail.com.');
+    }
+    setContactSubmitting(false);
   };
 
   return (
@@ -340,39 +376,96 @@ export default function FAQScreen({ onBack }) {
         borderRadius: '10px',
         textAlign: 'center',
       }}>
-        <p style={{
-          margin: '0 0 6px',
-          fontSize: '15px',
-          color: '#fff',
-          fontFamily: 'Georgia, serif',
-        }}>
-          Still have a question?
-        </p>
-        <p style={{
-          margin: '0 0 14px',
-          fontSize: '13px',
-          color: 'rgba(240,230,208,0.6)',
-          lineHeight: 1.5,
-        }}>
-          We're real people, brother. Reach out and we'll answer you personally.
-        </p>
-        <a
-          href="mailto:sendmemissionfund@gmail.com"
-          style={{
-            display: 'inline-block',
-            padding: '10px 24px',
-            background: '#e8b34b',
-            color: '#060c18',
-            borderRadius: '6px',
-            fontSize: '13px',
-            fontFamily: 'Georgia, serif',
-            textDecoration: 'none',
-            fontWeight: 'bold',
-            letterSpacing: '0.5px',
-          }}
-        >
-          Contact Us
-        </a>
+        {contactSubmitted ? (
+          <>
+            <div style={{ fontSize: '28px', marginBottom: '8px' }}>🙏</div>
+            <p style={{ margin: '0 0 4px', fontSize: '15px', color: '#fff', fontFamily: 'Georgia, serif' }}>
+              Message received
+            </p>
+            <p style={{ margin: 0, fontSize: '13px', color: 'rgba(240,230,208,0.6)', lineHeight: 1.5 }}>
+              We'll get back to you personally as soon as we can, brother.
+            </p>
+          </>
+        ) : showContactForm ? (
+          <div style={{ textAlign: 'left' }}>
+            <p style={{ margin: '0 0 14px', fontSize: '15px', color: '#fff', fontFamily: 'Georgia, serif', textAlign: 'center' }}>
+              Send us your question
+            </p>
+            {contactError && (
+              <div style={{ background: 'rgba(232,91,91,0.1)', border: '1px solid rgba(232,91,91,0.3)', borderRadius: 8, padding: '8px 12px', marginBottom: 10, fontSize: 12, color: '#e85b5b' }}>
+                {contactError}
+              </div>
+            )}
+            <input
+              placeholder="Your name (optional)"
+              value={contactForm.name}
+              onChange={e => setContactForm(f => ({ ...f, name: e.target.value }))}
+              style={{ width: '100%', boxSizing: 'border-box', padding: '11px 14px', borderRadius: 8, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', color: '#f0e6d0', fontSize: 13, fontFamily: 'Georgia, serif', outline: 'none', marginBottom: 10 }}
+            />
+            <input
+              placeholder="Your email *"
+              type="email"
+              value={contactForm.email}
+              onChange={e => setContactForm(f => ({ ...f, email: e.target.value }))}
+              style={{ width: '100%', boxSizing: 'border-box', padding: '11px 14px', borderRadius: 8, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', color: '#f0e6d0', fontSize: 13, fontFamily: 'Georgia, serif', outline: 'none', marginBottom: 10 }}
+            />
+            <textarea
+              placeholder="Your question *"
+              value={contactForm.message}
+              onChange={e => setContactForm(f => ({ ...f, message: e.target.value }))}
+              style={{ width: '100%', boxSizing: 'border-box', padding: '11px 14px', borderRadius: 8, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', color: '#f0e6d0', fontSize: 13, fontFamily: 'Georgia, serif', outline: 'none', resize: 'vertical', minHeight: 80, marginBottom: 12 }}
+            />
+            <button
+              onClick={submitContact}
+              disabled={contactSubmitting}
+              style={{
+                width: '100%', padding: '12px 0', borderRadius: 8, border: 'none',
+                background: contactSubmitting ? 'rgba(232,179,75,0.4)' : '#e8b34b',
+                color: '#060c18', fontSize: 13, fontFamily: 'Georgia, serif', fontWeight: 'bold',
+                letterSpacing: '0.5px', cursor: contactSubmitting ? 'default' : 'pointer',
+              }}
+            >
+              {contactSubmitting ? 'Sending...' : 'Send Message'}
+            </button>
+          </div>
+        ) : (
+          <>
+            <p style={{
+              margin: '0 0 6px',
+              fontSize: '15px',
+              color: '#fff',
+              fontFamily: 'Georgia, serif',
+            }}>
+              Still have a question?
+            </p>
+            <p style={{
+              margin: '0 0 14px',
+              fontSize: '13px',
+              color: 'rgba(240,230,208,0.6)',
+              lineHeight: 1.5,
+            }}>
+              We're real people, brother. Reach out and we'll answer you personally.
+            </p>
+            <button
+              onClick={() => setShowContactForm(true)}
+              style={{
+                display: 'inline-block',
+                padding: '10px 24px',
+                background: '#e8b34b',
+                border: 'none',
+                color: '#060c18',
+                borderRadius: '6px',
+                fontSize: '13px',
+                fontFamily: 'Georgia, serif',
+                fontWeight: 'bold',
+                letterSpacing: '0.5px',
+                cursor: 'pointer',
+              }}
+            >
+              Contact Us
+            </button>
+          </>
+        )}
       </div>
     </div>
   );
