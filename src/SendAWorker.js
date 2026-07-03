@@ -20,7 +20,7 @@ export default function SendAWorker({ onBack, user }) {
   const [loading, setLoading]       = useState(true);
   const [showForm, setShowForm]     = useState(false);
   const [responding, setResponding] = useState(null);
-  const [form, setForm]             = useState({ title:"", description:"", church:"", city:"", country:"", type:"missionary_team", need1:"", need2:"", need3:"" });
+  const [form, setForm]             = useState({ title:"", description:"", church:"", city:"", country:"", type:"missionary_team", need1:"", need2:"", need3:"", contactEmail:"", contactPhone:"" });
   const [response, setResponse]     = useState({ commitment:"", note:"" });
   const [submitMsg, setSubmitMsg]   = useState("");
   const [responded, setResponded]   = useState(false);
@@ -47,28 +47,30 @@ export default function SendAWorker({ onBack, user }) {
   };
 
   const submitRequest = async () => {
-    if (!form.title || !form.church || !form.country) return;
+    if (!form.title || !form.church || !form.country || !form.contactEmail) return;
     try {
       const { data, error } = await supabase
         .from("worker_requests")
         .insert({
-          title:       form.title,
-          description: form.description,
-          church:      form.church,
-          city:        form.city || null,
-          country:     form.country,
-          type:        form.type,
-          needs:       [form.need1, form.need2, form.need3].filter(Boolean),
-          responses:   0,
-          status:      "open",
-          user_id:     user?.id || null,
-          created_at:  new Date().toISOString(),
+          title:         form.title,
+          description:   form.description,
+          church:        form.church,
+          city:          form.city || null,
+          country:       form.country,
+          type:          form.type,
+          needs:         [form.need1, form.need2, form.need3].filter(Boolean),
+          contact_email: form.contactEmail,
+          contact_phone: form.contactPhone || null,
+          responses:     0,
+          status:        "open",
+          user_id:       user?.id || null,
+          created_at:    new Date().toISOString(),
         })
         .select()
         .single();
       if (error) throw error;
       setRequests(r => [data, ...r]);
-      setForm({ title:"", description:"", church:"", city:"", country:"", type:"missionary_team", need1:"", need2:"", need3:"" });
+      setForm({ title:"", description:"", church:"", city:"", country:"", type:"missionary_team", need1:"", need2:"", need3:"", contactEmail:"", contactPhone:"" });
       setSubmitMsg("✝ Request posted! Other churches can now see and respond to your need.");
       setShowForm(false);
       notifyAdmin("worker_request", {
@@ -197,6 +199,11 @@ export default function SendAWorker({ onBack, user }) {
               <input placeholder="City / Area *" value={form.city} onChange={e=>setForm(f=>({...f,city:e.target.value}))} style={inp}/>
               <input placeholder="Country *" value={form.country} onChange={e=>setForm(f=>({...f,country:e.target.value}))} style={inp}/>
             </div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+              <input type="email" placeholder="Church contact email *" value={form.contactEmail} onChange={e=>setForm(f=>({...f,contactEmail:e.target.value}))} style={inp}/>
+              <input placeholder="Church contact phone (optional)" value={form.contactPhone} onChange={e=>setForm(f=>({...f,contactPhone:e.target.value}))} style={inp}/>
+            </div>
+            <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", marginTop:-6, marginBottom:12 }}>Used to notify you the moment another church offers to help — please make sure it's correct.</div>
             <select value={form.type} onChange={e=>setForm(f=>({...f,type:e.target.value}))} style={{...inp,color:"#eef1ff"}}>
               {Object.entries(REQUEST_TYPES).map(([val,{label}]) => (
                 <option key={val} value={val} style={{background:"#0c1628"}}>{label}</option>
@@ -206,8 +213,8 @@ export default function SendAWorker({ onBack, user }) {
             <input placeholder="Need 1 (e.g. 2 missionaries)" value={form.need1} onChange={e=>setForm(f=>({...f,need1:e.target.value}))} style={inp}/>
             <input placeholder="Need 2 (optional)" value={form.need2} onChange={e=>setForm(f=>({...f,need2:e.target.value}))} style={inp}/>
             <input placeholder="Need 3 (optional)" value={form.need3} onChange={e=>setForm(f=>({...f,need3:e.target.value}))} style={inp}/>
-            <button onClick={submitRequest} disabled={!form.title||!form.church||!form.country}
-              style={{ width:"100%", padding:"13px 0", borderRadius:12, border:"none", background:form.title&&form.church&&form.country?"linear-gradient(135deg,#e8b34b,#c8942b)":"rgba(255,255,255,0.06)", color:form.title&&form.church&&form.country?"#000":"rgba(255,255,255,0.25)", fontWeight:700, cursor:form.title&&form.church&&form.country?"pointer":"default", fontSize:15, fontFamily:"Georgia, serif" }}>
+            <button onClick={submitRequest} disabled={!form.title||!form.church||!form.country||!form.contactEmail}
+              style={{ width:"100%", padding:"13px 0", borderRadius:12, border:"none", background:form.title&&form.church&&form.country&&form.contactEmail?"linear-gradient(135deg,#e8b34b,#c8942b)":"rgba(255,255,255,0.06)", color:form.title&&form.church&&form.country&&form.contactEmail?"#000":"rgba(255,255,255,0.25)", fontWeight:700, cursor:form.title&&form.church&&form.country&&form.contactEmail?"pointer":"default", fontSize:15, fontFamily:"Georgia, serif" }}>
               Post Request
             </button>
           </div>
