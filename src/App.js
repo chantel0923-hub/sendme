@@ -935,21 +935,14 @@ const NavDropdown = ({ user, userRole, onProfile, onEmergency, onTestimonies, on
     return ()=>document.removeEventListener("mousedown",handler);
   },[]);
 
-  const isMissionary = userRole === "missionary";
-  const isPastor     = userRole === "pastor";
-
   const items = [
     user && { label:"My Profile",        icon:"✝",  color:"#e8b34b",                onClick:onProfile },
-    isMissionary && user &&              { label:"📊 My Dashboard",  color:"#e8b34b", onClick:onMissionaryDashboard },
     { label:"🚨 Emergency",              color:"#e85b5b",                            onClick:onEmergency },
     { label:"Testimonies",               color:"#3ecf8e",                            onClick:onTestimonies },
     { label:"Send Worker",               color:"#b06cf5",                            onClick:onWorker },
     { label:"Find Mission",              color:"#5b9cf6",                            onClick:onMatching },
     { label:"QR Share",                  color:"rgba(255,255,255,0.65)",             onClick:onQR },
     { label:"FAQ",                       color:"#e8b34b",                            onClick:onFaq },
-    (isMissionary||isPastor) && user && { label:"💳 Payout Details", color:"rgba(255,255,255,0.65)", onClick:onPayout },
-    (isMissionary||isPastor) && user && { label:"📋 Submit Proof",  color:"#5b9cf6", onClick:onMilestoneProof },
-    isPastor && user &&                  { label:"⛪ Review Proofs", color:"#3ecf8e", onClick:onPastorReview },
   ].filter(Boolean);
 
   return (
@@ -985,6 +978,65 @@ const NavDropdown = ({ user, userRole, onProfile, onEmergency, onTestimonies, on
                 fontWeight:600, fontFamily:"Georgia, serif", transition:"background .12s",
               }}>
               {item.icon && <span>{item.icon}</span>}{item.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ── PASTOR "PAYOUTS" DROPDOWN ────────────────────────────────────────────────
+// Groups Payout Details + Review Proofs — pastor-only per Bug #45 (missionaries
+// no longer have Payout Details access) and Bug #50 (own top menu w/ dropdown).
+const PayoutsDropdown = ({ onPayout, onPastorReview }) => {
+  const [open,setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(()=>{
+    const handler = (e)=>{ if(ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown",handler);
+    return ()=>document.removeEventListener("mousedown",handler);
+  },[]);
+
+  const items = [
+    { label:"💳 Payout Details", color:"rgba(255,255,255,0.65)", onClick:onPayout },
+    { label:"⛪ Review Proofs",  color:"#3ecf8e",                onClick:onPastorReview },
+  ];
+
+  return (
+    <div ref={ref} style={{ position:"relative" }}>
+      <button onClick={()=>setOpen(o=>!o)} style={{
+        background:open?"rgba(232,179,75,0.12)":"rgba(255,255,255,0.05)",
+        border:`1px solid ${open?"rgba(232,179,75,0.35)":"rgba(255,255,255,0.1)"}`,
+        borderRadius:10, padding:"8px 16px",
+        color:open?"#e8b34b":"rgba(255,255,255,0.6)",
+        cursor:"pointer", fontSize:13, fontFamily:"Georgia, serif",
+        display:"flex", alignItems:"center", gap:5,
+      }}>
+        Payouts
+        <span style={{ fontSize:10, display:"inline-block", transform:open?"rotate(180deg)":"none", transition:"transform .15s" }}>▾</span>
+      </button>
+      {open && (
+        <div style={{
+          position:"absolute", top:"calc(100% + 8px)", right:0, minWidth:190,
+          background:"#0c1628", border:"1px solid rgba(232,179,75,0.2)",
+          borderRadius:14, boxShadow:"0 12px 40px rgba(0,0,0,0.6)",
+          padding:6, zIndex:200, display:"flex", flexDirection:"column", gap:2,
+        }}>
+          {items.map(item=>(
+            <button key={item.label}
+              onClick={()=>{ item.onClick && item.onClick(); setOpen(false); }}
+              onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,0.05)";}}
+              onMouseLeave={e=>{e.currentTarget.style.background="transparent";}}
+              style={{
+                display:"flex", alignItems:"center", gap:8,
+                width:"100%", textAlign:"left", padding:"10px 12px",
+                borderRadius:8, border:"none", background:"transparent",
+                color:item.color, cursor:"pointer", fontSize:13,
+                fontWeight:600, fontFamily:"Georgia, serif", transition:"background .12s",
+              }}>
+              {item.label}
             </button>
           ))}
         </div>
@@ -1029,13 +1081,14 @@ const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, o
           <button onClick={onPray} style={{ background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"8px 16px",color:"rgba(255,255,255,0.6)",cursor:"pointer",fontSize:13 }}>Pray</button>
           <button onClick={onChurches} style={{ background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"8px 16px",color:"rgba(255,255,255,0.6)",cursor:"pointer",fontSize:13 }}>Churches</button>
           <button onClick={onApply} style={{ background:"linear-gradient(135deg,#e8b34b,#c8942b)",border:"none",borderRadius:10,padding:"8px 16px",color:"#000",cursor:"pointer",fontSize:13,fontWeight:700 }}>Apply</button>
+          {(userRole==="missionary"||isPastor) && user && <button onClick={onMilestoneProof} style={{ background:"rgba(91,156,246,0.1)",border:"1px solid rgba(91,156,246,0.3)",borderRadius:10,padding:"8px 16px",color:"#5b9cf6",cursor:"pointer",fontSize:13,fontWeight:700 }}>📋 Submit Proof</button>}
+          {userRole==="missionary" && user && <button onClick={onMissionaryDashboard} style={{ background:"rgba(232,179,75,0.1)",border:"1px solid rgba(232,179,75,0.3)",borderRadius:10,padding:"8px 16px",color:"#e8b34b",cursor:"pointer",fontSize:13,fontWeight:700 }}>📊 My Dashboard</button>}
           {isPastor && <button onClick={onChurch} style={{ background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"8px 16px",color:"rgba(255,255,255,0.6)",cursor:"pointer",fontSize:13 }}>Register Church</button>}
+          {isPastor && user && <PayoutsDropdown onPayout={onPayout} onPastorReview={onPastorReview} />}
           <NavDropdown
             user={user} userRole={userRole}
             onProfile={onProfile} onEmergency={onEmergency} onTestimonies={onTestimonies}
             onWorker={onWorker} onMatching={onMatching} onQR={onQR} onFaq={onFaq}
-            onPayout={onPayout} onMilestoneProof={onMilestoneProof} onPastorReview={onPastorReview}
-            onMissionaryDashboard={onMissionaryDashboard}
           />
           {isAdmin&&<button onClick={onAdminChurchVerification} style={{ background:"rgba(91,156,246,0.1)",border:"1px solid rgba(91,156,246,0.3)",borderRadius:10,padding:"8px 14px",color:"#5b9cf6",cursor:"pointer",fontSize:12,fontWeight:700 }}>⛪ Churches</button>}
           {isAdmin&&<button onClick={onAdminWorkers} style={{ background:"rgba(91,156,246,0.1)",border:"1px solid rgba(91,156,246,0.3)",borderRadius:10,padding:"8px 14px",color:"#5b9cf6",cursor:"pointer",fontSize:12,fontWeight:700 }}>👥 Workers</button>}
