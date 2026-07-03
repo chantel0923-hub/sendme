@@ -648,10 +648,10 @@ export default function MissionaryApplication({ onBack, user }) {
       if (dbError) throw dbError;
       setSubmitted(true);
       notifyAdmin("mission_applied", {
-        missionTitle: form.title,
-        missionaryName: user?.user_metadata?.full_name || user?.email || "Unknown",
-        country: form.country,
-        churchName: form.churchName || form.churchId || "unregistered",
+        missionTitle: form.missionTitle,
+        missionaryName: form.shadowMode ? "Anonymous (shadow mode)" : (form.fullName || user?.email || "Unknown"),
+        country: form.targetCountry,
+        churchName: form.churchName || "unregistered",
       });
     } catch (e) {
       setError("Submission failed: " + (e.message || "Please try again."));
