@@ -428,14 +428,17 @@ export default function ChurchRegistration({ onBack, user }) {
       if (dbError) throw dbError;
       setChurchId(data.id);
       setSubmitted(true);
-      // Notify admin via WhatsApp — fire and forget
+
+      // Ping admin on WhatsApp — matches the "church_registered" template
+      // already defined in supabase/functions/notify-admin/index.ts
       notifyAdmin("church_registered", {
-        churchName: form.churchName,
-        city:       form.city,
-        country:    form.country,
-        pastorName: form.pastorName,
+        churchName:  form.churchName,
+        city:        form.city,
+        country:     form.country,
+        pastorName:  form.pastorName,
         pastorEmail: form.pastorEmail,
       });
+
       // Advance to banking step
       setStep(6);
       window.scrollTo({top:0,behavior:"smooth"});
