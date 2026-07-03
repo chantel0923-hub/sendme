@@ -185,16 +185,45 @@ export default function AdminWorkerRequests({ onBack }) {
                     </button>
                     {isExpanded && (
                       <div style={{ marginTop:12, display:"flex", flexDirection:"column", gap:10 }}>
-                        {reqResponses.map((rp, i) => (
-                          <div key={i} style={{ background:"rgba(62,207,142,0.05)", borderRadius:12, border:"1px solid rgba(62,207,142,0.15)", padding:"12px 14px" }}>
-                            <div style={{ fontSize:13, fontWeight:700, color:"#3ecf8e", marginBottom:4 }}>
-                              {rp.commitment?.replace(/_/g," ") || "Response"}
+                        {reqResponses.map((rp, i) => {
+                          const mailBody =
+`Dear ${req.church || "Pastor"},
+
+Great news! Someone has responded to your worker request on SendMe:
+
+"${req.title}"
+
+They shared:
+${rp.commitment ? rp.commitment.replace(/_/g," ") : "They are willing to help"}
+${rp.note ? `"${rp.note}"` : ""}
+
+You can reach them directly at: ${rp.responder_email || "contact SendMe admin for details"}${rp.responder_phone ? " / " + rp.responder_phone : ""}
+
+In His service,
+SendMe Global Mission Fund`;
+                          const mailtoHref = req.contact_email
+                            ? `mailto:${req.contact_email}?subject=${encodeURIComponent(`Someone can help with "${req.title}"`)}&body=${encodeURIComponent(mailBody)}`
+                            : null;
+
+                          return (
+                            <div key={i} style={{ background:"rgba(62,207,142,0.05)", borderRadius:12, border:"1px solid rgba(62,207,142,0.15)", padding:"12px 14px" }}>
+                              <div style={{ fontSize:13, fontWeight:700, color:"#3ecf8e", marginBottom:4 }}>
+                                {rp.commitment?.replace(/_/g," ") || "Response"}
+                              </div>
+                              {rp.responder_email && <div style={{ fontSize:12, color:"rgba(255,255,255,0.5)", marginBottom:2 }}>✉ {rp.responder_email}{rp.responder_phone ? " · " + rp.responder_phone : ""}</div>}
+                              {rp.note && <div style={{ fontSize:13, color:"rgba(255,255,255,0.55)", lineHeight:1.6, marginTop:6 }}>{rp.note}</div>}
+                              <div style={{ fontSize:11, color:"rgba(255,255,255,0.25)", marginTop:6, marginBottom:10 }}>{timeAgo(rp.created_at)}</div>
+                              {mailtoHref ? (
+                                <a href={mailtoHref}
+                                  style={{ display:"inline-block", padding:"7px 14px", borderRadius:9, border:"1px solid rgba(232,179,75,0.35)", background:"rgba(232,179,75,0.08)", color:"#e8b34b", cursor:"pointer", fontSize:12, fontFamily:"Georgia, serif", fontWeight:600, textDecoration:"none" }}>
+                                  📧 Email {req.church || "the church"} — Someone Can Help
+                                </a>
+                              ) : (
+                                <div style={{ fontSize:11, color:"rgba(255,255,255,0.25)" }}>No church email on file — contact manually.</div>
+                              )}
                             </div>
-                            {rp.responder_email && <div style={{ fontSize:12, color:"rgba(255,255,255,0.5)", marginBottom:2 }}>✉ {rp.responder_email}{rp.responder_phone ? " · " + rp.responder_phone : ""}</div>}
-                            {rp.note && <div style={{ fontSize:13, color:"rgba(255,255,255,0.55)", lineHeight:1.6, marginTop:6 }}>{rp.note}</div>}
-                            <div style={{ fontSize:11, color:"rgba(255,255,255,0.25)", marginTop:6 }}>{timeAgo(rp.created_at)}</div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </div>

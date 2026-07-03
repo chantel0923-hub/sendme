@@ -93,6 +93,13 @@ export default function SendAWorker({ onBack, user }) {
         user_id:         user?.id || null,
       });
       await supabase.from("worker_requests").update({ responses: (req.responses || 0) + 1 }).eq("id", req.id);
+      notifyAdmin("worker_response_received", {
+        requestTitle:   req.title,
+        requestChurch:  req.church,
+        commitment:     response.commitment,
+        responderEmail: user?.email || null,
+        note:           response.note,
+      });
     } catch (e) {
       console.error("submitResponse error:", e);
     }
