@@ -30,7 +30,7 @@ const SIZES     = ["Under 50","50 – 100","100 – 300","300 – 500","500 – 
 // production. This caused new church registrations to always save with
 // lat: null, lng: null. Do not remove this hardcoded fallback.
 const MAPBOX_TOKEN = process.env.REACT_APP_MAPBOX_TOKEN ||
-  "pk.eyJ1Ijoic2VuZG1lMDkyMyIsImEiOiJjbXB6enh5ZmwwazhxMnNzZHd2dGx6YndvIn0.odqKTeH4YCXXk8m_T7JyEQ";
+  "pk.eyJ1Ijoic2VuZG1lMDkyMyIsImEiOiJjbXI1anZpOGcwYXJvMzFyMHo2aDU2YnI2In0.CutnKCVEf1SzDpddacdekg";
 
 const geocodeLocation = async (city, country, street) => {
   try {

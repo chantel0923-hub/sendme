@@ -22,7 +22,7 @@ const timeAgo = (dateStr) => {
 // production. This caused ALL church geocoding (registration + admin fix)
 // to silently fail. Do not remove this hardcoded fallback.
 const MAPBOX_TOKEN = process.env.REACT_APP_MAPBOX_TOKEN ||
-  "pk.eyJ1Ijoic2VuZG1lMDkyMyIsImEiOiJjbXB6enh5ZmwwazhxMnNzZHd2dGx6YndvIn0.odqKTeH4YCXXk8m_T7JyEQ";
+  "pk.eyJ1Ijoic2VuZG1lMDkyMyIsImEiOiJjbXI1anZpOGcwYXJvMzFyMHo2aDU2YnI2In0.CutnKCVEf1SzDpddacdekg";
 
 const geocodeLocation = async (city, country) => {
   try {
