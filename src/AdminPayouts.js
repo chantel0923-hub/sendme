@@ -258,6 +258,10 @@ export default function AdminPayouts({ onBack }) {
         churchName:   r.churchName,
         siteUrl:      "https://sendme-nine.vercel.app",
       });
+      notifyAdmin("banking_missing", {
+        missionTitle: r.missionTitle,
+        pastorEmail:  toEmail,
+      });
       alert(`Banking request email sent to ${toEmail}`);
     } catch (e) {
       alert("Could not send email. Please contact the pastor manually at: " + toEmail);
