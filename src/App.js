@@ -1501,6 +1501,8 @@ export default function App() {
   const [selectedMission,setSelectedMission]   = useState(null);
   const [guest,setGuest]                       = useState(false);
   const [pfReturn,setPfReturn]                 = useState(null);
+  const [pendingMissionId,setPendingMissionId] = useState(null);
+  const [liveMissions,setLiveMissions]         = useState(DEMO_MISSIONS);
 
   const loadRole = async (u) => {
     if (!u) { setUserRole(null); return; }
@@ -1543,6 +1545,55 @@ export default function App() {
     }
   },[]);
 
+  // Bug #61 — deep-link routing so QR/shared links (e.g. /mission/:id, /emergency, /apply)
+  // open the right screen instead of always landing on Home.
+  useEffect(()=>{
+    const path = window.location.pathname.replace(/\/+$/,"") || "/";
+    const missionMatch = path.match(/^\/mission\/([^/]+)$/);
+    if(missionMatch){ setPendingMissionId(missionMatch[1]); return; }
+    const ROUTE_SCREENS = {
+      "/missions":"donor-browse",
+      "/apply":"apply",
+      "/register-church":"church",
+      "/emergency":"emergency",
+    };
+    if(ROUTE_SCREENS[path]) setScreen(ROUTE_SCREENS[path]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[]);
+
+  // Resolve a deep-linked mission id (from a QR/share URL) against Supabase directly,
+  // so it works even for missions not in the "active" list (e.g. completed missions).
+  useEffect(()=>{
+    if(!pendingMissionId) return;
+    let cancelled = false;
+    (async () => {
+      try{
+        const { data, error } = await supabase.from("missions").select("*").eq("id", pendingMissionId).single();
+        if(error || !data) throw error || new Error("Mission not found");
+        if(!cancelled){ setSelectedMission(mapRow(data, 0)); setScreen("detail"); }
+      } catch {
+        if(!cancelled) setScreen("home");
+      }
+      if(!cancelled) setPendingMissionId(null);
+    })();
+    return ()=>{ cancelled = true; };
+  },[pendingMissionId]);
+
+  // Bug #62 — one shared, live missions list for Home + all secondary screens
+  // (Mission Matching, Prayer Wall, QR Share) so they never diverge from what
+  // donors see on the home map.
+  useEffect(()=>{
+    const fetchLiveMissions = async () => {
+      try{
+        const { data, error } = await supabase.from("missions").select("*").eq("status","active").order("created_at",{ascending:false});
+        if(error) throw error;
+        if(data && data.length>0) setLiveMissions(data.map((row,i)=>mapRow(row,i)));
+        else setLiveMissions(DEMO_MISSIONS);
+      } catch { setLiveMissions(DEMO_MISSIONS); }
+    };
+    fetchLiveMissions();
+  },[]);
+
   const signOut       = async()=>{await supabase.auth.signOut();setUser(null);setUserRole(null);setGuest(false);setScreen("home");};
   const isPastor      = userRole === "pastor";
   const isAdminUser   = user?.email === ADMIN_EMAIL || user?.isAdmin === true;
@@ -1559,17 +1610,17 @@ export default function App() {
   if(screen==="faq")              return <FAQScreen onBack={()=>setScreen("home")}/>;
   if(screen==="payout")           return <PayoutSetup onBack={()=>setScreen("home")}/>;
   if(screen==="admin-payouts")    return isAdminUser ? <AdminPayouts onBack={()=>setScreen("home")}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
-  if(screen==="pray")             return <PrayerWall missions={DEMO_MISSIONS} onBack={()=>setScreen("home")}/>;
+  if(screen==="pray")             return <PrayerWall missions={liveMissions} onBack={()=>setScreen("home")}/>;
   if(screen==="churches")         return <ChurchesTab onBack={()=>setScreen("home")}/>;
   if(screen==="apply")            return <MissionaryApplication onBack={()=>setScreen("home")} user={user}/>;
   if(screen==="church")           return (isPastor||isAdminUser) ? <ChurchRegistration onBack={()=>setScreen("home")} user={user}/> : null;
   if(screen==="my-church")        return (isPastor||isAdminUser) ? <MyChurch onBack={()=>setScreen("home")} user={user}/> : null;
   if(screen==="profile")          return <DonorProfile user={user} onBack={()=>setScreen("home")}/>;
   if(screen==="emergency")        return <EmergencyRequests onBack={()=>setScreen("home")} user={user}/>;
-  if(screen==="matching")         return <MissionMatching missions={DEMO_MISSIONS} onMission={openMission} onBack={()=>setScreen("home")}/>;
+  if(screen==="matching")         return <MissionMatching missions={liveMissions} onMission={openMission} onBack={()=>setScreen("home")}/>;
   if(screen==="testimonies")      return <TestimonyEngine onBack={()=>setScreen("home")} onMission={openMission}/>;
   if(screen==="worker")           return <SendAWorker onBack={()=>setScreen("home")} user={user}/>;
-  if(screen==="qr")               return <QRShare missions={DEMO_MISSIONS} onBack={()=>setScreen("home")}/>;
+  if(screen==="qr")               return <QRShare missions={liveMissions} onBack={()=>setScreen("home")}/>;
   if(screen==="milestone-proof")  return <MilestoneProof onBack={()=>setScreen("home")} user={user}/>;
   if(screen==="pastor-review")    return (isPastor||isAdminUser) ? <PastorReview onBack={()=>setScreen("home")} user={user} isAdmin={isAdminUser}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
   if(screen==="missionary-dashboard") return <MissionaryDashboard onBack={()=>setScreen("home")} user={user} onSubmitProof={()=>setScreen("milestone-proof")}/>;

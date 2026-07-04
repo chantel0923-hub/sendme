@@ -25,6 +25,31 @@ const MISSION_TAGS = {
   7: ["refugees","mideast","bibles"],
 };
 
+// Bug #62 follow-on: MISSION_TAGS above only covers the 7 hardcoded demo
+// missions (numeric ids 1-7). Once real missions (uuid ids) come from the
+// database they'd never match anything and always score 0. This infers
+// reasonable tags from the mission's own text/region fields so matching
+// keeps working for real data without needing a schema change.
+const inferTags = (m) => {
+  const text = `${m.title||""} ${m.blurb||""} ${m.role||""} ${m.region||""} ${m.country||""}`.toLowerCase();
+  const tags = [];
+  if (/child|orphan|kids/.test(text))                          tags.push("children");
+  if (/village|rural/.test(text))                              tags.push("village");
+  if (/bible|scripture/.test(text))                            tags.push("bibles");
+  if (/church plant|planting/.test(text))                      tags.push("planting");
+  if (/youth|teen/.test(text))                                 tags.push("youth");
+  if (/medic|health|clinic|hospital/.test(text))               tags.push("medical");
+  if (/refugee|displaced|camp/.test(text))                     tags.push("refugees");
+  if (/women/.test(text))                                      tags.push("womens");
+  if (/africa/.test(text))                                     tags.push("africa");
+  if (/asia/.test(text))                                       tags.push("asia");
+  if (/middle east|lebanon|syria|m\. east/.test(text))         tags.push("mideast");
+  if (/america|brazil|amazon|s\. america/.test(text))          tags.push("americas");
+  return tags;
+};
+
+const getTags = (m) => (MISSION_TAGS[m.id] && MISSION_TAGS[m.id].length) ? MISSION_TAGS[m.id] : inferTags(m);
+
 export default function MissionMatching({ missions, onMission, onBack }) {
   const [selected, setSelected] = useState([]);
   const [matched, setMatched]   = useState(null);
@@ -37,7 +62,7 @@ export default function MissionMatching({ missions, onMission, onBack }) {
   const findMatches = () => {
     if (selected.length === 0) return;
     const scored = missions.map(m => {
-      const tags = MISSION_TAGS[m.id] || [];
+      const tags = getTags(m);
       const score = selected.filter(s => tags.includes(s)).length;
       return { ...m, score };
     }).filter(m => m.score > 0).sort((a,b) => b.score - a.score);
