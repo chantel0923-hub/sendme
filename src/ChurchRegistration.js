@@ -399,6 +399,22 @@ export default function ChurchRegistration({ onBack, user }) {
   const handleSubmit = async () => {
     setSubmitting(true); setError("");
     try {
+      // Block duplicate registration — one church per pastor account.
+      // The real enforcement is a DB-level unique index on churches.user_id
+      // (see handover SQL), this is just a friendlier error before that fires.
+      if (user?.id) {
+        const { data: existing } = await supabase
+          .from("churches")
+          .select("id")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        if (existing) {
+          setError("You've already registered a church on SendMe. Go to My Church from the home screen to view or edit it.");
+          setSubmitting(false);
+          return;
+        }
+      }
+
       const { lat, lng } = await geocodeLocation(form.city, form.country, form.street);
 
       const { data, error: dbError } = await supabase.from("churches").insert({

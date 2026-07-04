@@ -4,6 +4,7 @@ import Auth from "./Auth";
 import "./App.css";
 import MissionaryApplication from "./MissionaryApplication";
 import ChurchRegistration from "./ChurchRegistration";
+import MyChurch from "./MyChurch";
 import MapboxMap from "./MapboxMap";
 import ChurchesTab from "./ChurchesTab";
 import TransparencyLedger from "./TransparencyLedger";
@@ -1046,7 +1047,7 @@ const PayoutsDropdown = ({ onPayout, onPastorReview }) => {
 };
 
 // ── HOME SCREEN ───────────────────────────────────────────────────────────────
-const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, onChurches, onProfile, onEmergency, onMatching, onPray, onTestimonies, onWorker, onQR, onFaq, onPayout, onAdminPayouts, isAdmin, isPastor, onMilestoneProof, onPastorReview, onMissionaryDashboard, onAdminApprovals, onAdminChurchVerification, guest, onSignIn, onDonate, onAdminWorkers }) => {
+const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, onMyChurch, onChurches, onProfile, onEmergency, onMatching, onPray, onTestimonies, onWorker, onQR, onFaq, onPayout, onAdminPayouts, isAdmin, isPastor, onMilestoneProof, onPastorReview, onMissionaryDashboard, onAdminApprovals, onAdminChurchVerification, guest, onSignIn, onDonate, onAdminWorkers }) => {
   const [region,setRegion]       = useState("All");
   const [missions,setMissions]   = useState([]);
   const [loading,setLoading]     = useState(true);
@@ -1083,7 +1084,7 @@ const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, o
           <button onClick={onApply} style={{ background:"linear-gradient(135deg,#e8b34b,#c8942b)",border:"none",borderRadius:10,padding:"8px 16px",color:"#000",cursor:"pointer",fontSize:13,fontWeight:700 }}>Apply</button>
           {(userRole==="missionary"||isPastor) && user && <button onClick={onMilestoneProof} style={{ background:"rgba(91,156,246,0.1)",border:"1px solid rgba(91,156,246,0.3)",borderRadius:10,padding:"8px 16px",color:"#5b9cf6",cursor:"pointer",fontSize:13,fontWeight:700 }}>📋 Submit Proof</button>}
           {userRole==="missionary" && user && <button onClick={onMissionaryDashboard} style={{ background:"rgba(232,179,75,0.1)",border:"1px solid rgba(232,179,75,0.3)",borderRadius:10,padding:"8px 16px",color:"#e8b34b",cursor:"pointer",fontSize:13,fontWeight:700 }}>📊 My Dashboard</button>}
-          {isPastor && <button onClick={onChurch} style={{ background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"8px 16px",color:"rgba(255,255,255,0.6)",cursor:"pointer",fontSize:13 }}>Register Church</button>}
+          {isPastor && <button onClick={onMyChurch} style={{ background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"8px 16px",color:"rgba(255,255,255,0.6)",cursor:"pointer",fontSize:13 }}>My Church</button>}
           {isPastor && user && <PayoutsDropdown onPayout={onPayout} onPastorReview={onPastorReview} />}
           <NavDropdown
             user={user} userRole={userRole}
@@ -1562,6 +1563,7 @@ export default function App() {
   if(screen==="churches")         return <ChurchesTab onBack={()=>setScreen("home")}/>;
   if(screen==="apply")            return <MissionaryApplication onBack={()=>setScreen("home")} user={user}/>;
   if(screen==="church")           return (isPastor||isAdminUser) ? <ChurchRegistration onBack={()=>setScreen("home")} user={user}/> : null;
+  if(screen==="my-church")        return (isPastor||isAdminUser) ? <MyChurch onBack={()=>setScreen("home")} user={user}/> : null;
   if(screen==="profile")          return <DonorProfile user={user} onBack={()=>setScreen("home")}/>;
   if(screen==="emergency")        return <EmergencyRequests onBack={()=>setScreen("home")} user={user}/>;
   if(screen==="matching")         return <MissionMatching missions={DEMO_MISSIONS} onMission={openMission} onBack={()=>setScreen("home")}/>;
@@ -1569,7 +1571,7 @@ export default function App() {
   if(screen==="worker")           return <SendAWorker onBack={()=>setScreen("home")} user={user}/>;
   if(screen==="qr")               return <QRShare missions={DEMO_MISSIONS} onBack={()=>setScreen("home")}/>;
   if(screen==="milestone-proof")  return <MilestoneProof onBack={()=>setScreen("home")} user={user}/>;
-  if(screen==="pastor-review")    return (isPastor||isAdminUser) ? <PastorReview onBack={()=>setScreen("home")} user={user}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
+  if(screen==="pastor-review")    return (isPastor||isAdminUser) ? <PastorReview onBack={()=>setScreen("home")} user={user} isAdmin={isAdminUser}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
   if(screen==="missionary-dashboard") return <MissionaryDashboard onBack={()=>setScreen("home")} user={user} onSubmitProof={()=>setScreen("milestone-proof")}/>;
   if(screen==="admin-approvals")  return isAdminUser ? <AdminApprovals onBack={()=>setScreen("home")} user={user}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
   if(screen==="admin-church-verification") return isAdminUser ? <AdminChurchVerification onBack={()=>setScreen("home")} user={user}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
@@ -1582,6 +1584,7 @@ export default function App() {
     <HomeScreen
       onMission={openMission} user={user} userRole={userRole} onSignOut={signOut}
       onApply={()=>setScreen("apply")} onChurch={()=>setScreen("church")}
+      onMyChurch={()=>setScreen("my-church")}
       onChurches={()=>setScreen("churches")} onProfile={()=>setScreen("profile")}
       onEmergency={()=>setScreen("emergency")} onMatching={()=>setScreen("matching")}
       onPray={()=>setScreen("pray")} onTestimonies={()=>setScreen("testimonies")}

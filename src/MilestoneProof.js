@@ -21,11 +21,10 @@ export default function MilestoneProof({ onBack, user }) {
           .select("id, title, country, city, current_milestone, status, missionary_id, pastor_email, pastor_name")
           .eq("status", "active");
         if (error) throw error;
-        // If user is logged in, try to filter to their missions
-        const myMissions = user
-          ? (data || []).filter(m => m.missionary_id === user.id)
-          : [];
-        setMissions(myMissions.length > 0 ? myMissions : (data || []));
+        // Only ever show missions belonging to the logged-in missionary.
+        // NEVER fall back to showing everyone's missions if none match —
+        // that was bug #59, and let users submit proof for any mission.
+        setMissions(user ? (data || []).filter(m => m.missionary_id === user.id) : []);
       } catch {
         setMissions([]);
       }
@@ -117,7 +116,8 @@ export default function MilestoneProof({ onBack, user }) {
             <div style={{ padding: "20px 0", textAlign: "center", color: "rgba(255,255,255,0.3)", fontSize: 13 }}>Loading your missions...</div>
           ) : missions.length === 0 ? (
             <div style={{ background: "rgba(255,255,255,0.03)", borderRadius: 12, border: "1px solid rgba(255,255,255,0.08)", padding: "20px", textAlign: "center", color: "rgba(255,255,255,0.3)", fontSize: 13 }}>
-              No active missions found linked to your account.
+              No active missions are linked to your account yet.<br />
+              If you believe this is a mistake, please contact support via the FAQ page.
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>

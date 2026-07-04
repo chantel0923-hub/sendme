@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "./supabase";
 import { sendNotification } from "./notifications";
 
-export default function PastorReview({ onBack, user }) {
+export default function PastorReview({ onBack, user, isAdmin }) {
   const [proofs, setProofs]     = useState([]);
   const [loading, setLoading]   = useState(true);
   const [acting, setActing]     = useState(null); // proof id being acted on
@@ -43,13 +43,17 @@ export default function PastorReview({ onBack, user }) {
           .from("churches")
           .select("id")
           .eq("user_id", user.id)
-          .single();
+          .maybeSingle();
 
-        if (churchData?.id) {
-          // Filter proofs to missions belonging to this pastor's church
-          filtered = filtered.filter(p => p.missions?.church_id === churchData.id);
+        // Admins see everything; pastors see ONLY their own church's proofs.
+        // NEVER fall back to showing every church's proofs if none is linked —
+        // that was bug #60, and let a pastor with no linked church see (and
+        // approve/reject) proofs belonging to churches that aren't theirs.
+        if (!isAdmin) {
+          filtered = churchData?.id
+            ? filtered.filter(p => p.missions?.church_id === churchData.id)
+            : [];
         }
-        // If no church linked yet, show all proofs (admin fallback)
       }
 
       setProofs(filtered);
