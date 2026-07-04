@@ -616,7 +616,7 @@ export default function MissionaryApplication({ onBack, user }) {
       const platformSurcharge = Math.round(goal * 0.1);
       const collectionTarget = goal + platformSurcharge;
 
-      const { error: dbError } = await supabase.from("missions").insert({
+      const { data, error: dbError } = await supabase.from("missions").insert({
         missionary_name:  form.shadowMode ? null : form.fullName,
         missionary_email: form.email,
         missionary_role:  form.role,
@@ -636,6 +636,8 @@ export default function MissionaryApplication({ onBack, user }) {
         collection_target: collectionTarget,
         platform_surcharge: platformSurcharge,
         surcharge_acknowledged: form.surchargeAcknowledged,
+        start_date:       form.startDate || null,
+        duration:         form.duration || null,
         raised:           0,
         status:           form.churchVerified ? "pending" : "pending_church",
         milestone:        0,
@@ -644,8 +646,12 @@ export default function MissionaryApplication({ onBack, user }) {
         churches:         0,
         protected:        form.shadowMode,
         missionary_id:    user?.id || null,
-      });
+      }).select("id").single();
       if (dbError) throw dbError;
+      // Safety net: if the insert silently produced no row (e.g. a DB-side
+      // trigger swallowing it without raising an error), don't show the
+      // success screen — surface it as a real, visible error instead.
+      if (!data?.id) throw new Error("Your application could not be saved. Please try again or contact support.");
       setSubmitted(true);
       notifyAdmin("mission_applied", {
         missionTitle: form.missionTitle,
