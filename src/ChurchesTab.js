@@ -86,8 +86,14 @@ const ChurchesMap = ({ churches, onChurchClick }) => {
       mapRef.current = L.map(mapContainer.current, {
         center: [10, 10],
         zoom: 2,
-        zoomControl: true,
+        zoomControl: false,
       });
+
+      // Leaflet's default zoom control renders top-left, which sits directly
+      // under our "WORLD CHURCH MAP" info box (also top-left). Move it to
+      // top-right instead — matches the layout already used on the Mission
+      // Map (MapboxMap.js), where the nav control and info box don't collide.
+      L.control.zoom({ position: "topright" }).addTo(mapRef.current);
 
       // Dark tile layer — CartoDB Dark Matter (free, no token)
       L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
