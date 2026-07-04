@@ -1595,7 +1595,7 @@ export default function App() {
   },[]);
 
   const signOut       = async()=>{await supabase.auth.signOut();setUser(null);setUserRole(null);setGuest(false);setScreen("home");};
-  const isPastor      = userRole === "pastor";
+  const isPastor      = userRole === "pastor" || userRole === "org_leader";
   const isAdminUser   = user?.email === ADMIN_EMAIL || user?.isAdmin === true;
   const openMission   = (m)  =>{setSelectedMission(m);setScreen("detail");};
   const openDonate    = ()   =>{setScreen("donate");};
@@ -1613,7 +1613,7 @@ export default function App() {
   if(screen==="pray")             return <PrayerWall missions={liveMissions} onBack={()=>setScreen("home")}/>;
   if(screen==="churches")         return <ChurchesTab onBack={()=>setScreen("home")}/>;
   if(screen==="apply")            return <MissionaryApplication onBack={()=>setScreen("home")} user={user}/>;
-  if(screen==="church")           return (isPastor||isAdminUser) ? <ChurchRegistration onBack={()=>setScreen("home")} user={user}/> : null;
+  if(screen==="church")           return (isPastor||isAdminUser) ? <ChurchRegistration onBack={()=>setScreen("home")} user={user} userRole={userRole}/> : null;
   if(screen==="my-church")        return (isPastor||isAdminUser) ? <MyChurch onBack={()=>setScreen("home")} user={user}/> : null;
   if(screen==="profile")          return <DonorProfile user={user} onBack={()=>setScreen("home")}/>;
   if(screen==="emergency")        return <EmergencyRequests onBack={()=>setScreen("home")} user={user}/>;

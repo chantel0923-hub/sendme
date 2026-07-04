@@ -14,7 +14,7 @@ const label = { fontSize:12, color:"rgba(255,255,255,0.4)", letterSpacing:1.5, t
 const sectionTitle = { fontSize:16, fontWeight:700, color:"#eef1ff", marginBottom:18, paddingBottom:10, borderBottom:"1px solid rgba(255,255,255,0.07)" };
 
 const STEPS = [
-  { number:1, label:"Church Info",  icon:"⛪" },
+  { number:1, label:"Basic Info",   icon:"⛪" },
   { number:2, label:"Leadership",   icon:"✝"  },
   { number:3, label:"References",   icon:"👥" },
   { number:4, label:"Doctrine",     icon:"📖" },
@@ -135,10 +135,10 @@ const StepBar = ({ current, totalSteps }) => (
   </div>
 );
 
-const Step1 = ({ form, set }) => (
+const Step1 = ({ form, set, isOrg }) => (
   <div>
-    <div style={sectionTitle}>Church Information</div>
-    <FInput label="Church Name *" placeholder="e.g. Eagle Ministry Tabernacle" value={form.churchName} onChange={e=>set("churchName",e.target.value)}/>
+    <div style={sectionTitle}>{isOrg ? "Organization Information" : "Church Information"}</div>
+    <FInput label={isOrg ? "Organization Name *" : "Church Name *"} placeholder={isOrg ? "e.g. Global Harvest Missions" : "e.g. Eagle Ministry Tabernacle"} value={form.churchName} onChange={e=>set("churchName",e.target.value)}/>
     <FInput label="Street Address" placeholder="e.g. 12 Main Street, Northmead" value={form.street} onChange={e=>set("street",e.target.value)}/>
     <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
       <FInput label="City *" placeholder="e.g. Benoni" value={form.city} onChange={e=>set("city",e.target.value)}/>
@@ -152,60 +152,64 @@ const Step1 = ({ form, set }) => (
       <FInput label="Please Specify Your Country *" placeholder="Enter your country name" value={form.otherCountry} onChange={e=>set("otherCountry",e.target.value)}/>
     )}
     <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
-      <FInput label="Church Phone" type="tel" placeholder="+27 11 000 0000" value={form.phone} onChange={e=>set("phone",e.target.value)}/>
-      <FInput label="Church Email *" type="email" placeholder="info@yourchurch.org" value={form.email} onChange={e=>set("email",e.target.value)}/>
+      <FInput label={isOrg ? "Organization Phone" : "Church Phone"} type="tel" placeholder="+27 11 000 0000" value={form.phone} onChange={e=>set("phone",e.target.value)}/>
+      <FInput label={isOrg ? "Organization Email *" : "Church Email *"} type="email" placeholder="info@yourorg.org" value={form.email} onChange={e=>set("email",e.target.value)}/>
     </div>
-    <FInput label="Church Website (optional)" placeholder="https://www.yourchurch.org" value={form.website} onChange={e=>set("website",e.target.value)}/>
-    <FSelect label="Congregation Size" value={form.size} onChange={e=>set("size",e.target.value)}>
+    <FInput label={isOrg ? "Organization Website (optional)" : "Church Website (optional)"} placeholder="https://www.yourorg.org" value={form.website} onChange={e=>set("website",e.target.value)}/>
+    <FSelect label={isOrg ? "Approximate Team Size" : "Congregation Size"} value={form.size} onChange={e=>set("size",e.target.value)}>
       <option value="" style={{background:"#0c1628"}}>Approximate size...</option>
       {SIZES.map(s=><option key={s} value={s} style={{background:"#0c1628"}}>{s}</option>)}
     </FSelect>
   </div>
 );
 
-const Step2 = ({ form, set }) => (
+const Step2 = ({ form, set, isOrg }) => (
   <div>
-    <div style={sectionTitle}>Church Leadership</div>
+    <div style={sectionTitle}>{isOrg ? "Organization Leadership" : "Church Leadership"}</div>
     <div style={{ background:"rgba(232,179,75,0.07)",borderRadius:12,border:"1px solid rgba(232,179,75,0.2)",padding:"12px 16px",marginBottom:20 }}>
-      <div style={{ fontSize:13,color:"rgba(255,255,255,0.5)",lineHeight:1.7 }}>The <strong style={{color:"#e8b34b"}}>Senior Pastor</strong> will receive all missionary endorsement requests from your church.</div>
+      <div style={{ fontSize:13,color:"rgba(255,255,255,0.5)",lineHeight:1.7 }}>
+        The <strong style={{color:"#e8b34b"}}>{isOrg ? "Organization Leader" : "Senior Pastor"}</strong> will receive all missionary endorsement requests from your {isOrg ? "organization" : "church"}.
+      </div>
     </div>
-    <FInput label="Senior Pastor — Full Name *" placeholder="e.g. Pastor Dewet Engelbrecht" value={form.pastorName} onChange={e=>set("pastorName",e.target.value)}/>
+    <FInput label={isOrg ? "Organization Leader — Full Name *" : "Senior Pastor — Full Name *"} placeholder={isOrg ? "e.g. John Adeyemi, Director" : "e.g. Pastor Dewet Engelbrecht"} value={form.pastorName} onChange={e=>set("pastorName",e.target.value)}/>
     <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
-      <FInput label="Pastor's Email *" type="email" placeholder="pastor@yourchurch.org" value={form.pastorEmail} onChange={e=>set("pastorEmail",e.target.value)}/>
-      <FInput label="Pastor's Phone" type="tel" placeholder="+27 82 000 0000" value={form.pastorPhone} onChange={e=>set("pastorPhone",e.target.value)}/>
+      <FInput label={isOrg ? "Leader's Email *" : "Pastor's Email *"} type="email" placeholder="leader@yourorg.org" value={form.pastorEmail} onChange={e=>set("pastorEmail",e.target.value)}/>
+      <FInput label={isOrg ? "Leader's Phone" : "Pastor's Phone"} type="tel" placeholder="+27 82 000 0000" value={form.pastorPhone} onChange={e=>set("pastorPhone",e.target.value)}/>
     </div>
     <Toggle value={form.showPhonePublic} onChange={v=>set("showPhonePublic",v)}
       label="Display Phone Number Publicly"
       description="I consent to my phone number being visible to all visitors in the Church Directory. Email will always be shown."/>
     <Toggle value={form.canEndorse} onChange={v=>set("canEndorse",v)}
       label="Endorsement Authority"
-      description="This church can endorse missionary applications on SendMe."/>
+      description={`This ${isOrg ? "organization" : "church"} can endorse missionary applications on SendMe.`}/>
   </div>
 );
 
-const Step3 = ({ form, set }) => (
+const Step3 = ({ form, set, isOrg }) => (
   <div>
-    <div style={sectionTitle}>Pastor References</div>
+    <div style={sectionTitle}>{isOrg ? "Board Member References" : "Pastor References"}</div>
     <div style={{ background:"rgba(232,179,75,0.07)",borderRadius:12,border:"1px solid rgba(232,179,75,0.2)",padding:"12px 16px",marginBottom:20 }}>
       <div style={{ fontSize:13,color:"rgba(255,255,255,0.5)",lineHeight:1.7 }}>
-        Please provide <strong style={{color:"#e8b34b"}}>two independent Message pastor references</strong> who can confirm your church's legitimacy. Admin will contact them before verifying your church.
+        {isOrg
+          ? <>Please provide <strong style={{color:"#e8b34b"}}>two board members</strong> who can confirm your organization's legitimacy. Admin will contact them before verifying your organization.</>
+          : <>Please provide <strong style={{color:"#e8b34b"}}>two independent Message pastor references</strong> who can confirm your church's legitimacy. Admin will contact them before verifying your church.</>}
       </div>
     </div>
-    <div style={{ fontSize:14,fontWeight:700,color:"#e8b34b",marginBottom:12 }}>Reference 1</div>
-    <FInput label="Pastor Name *" placeholder="e.g. Pastor Johan van der Merwe" value={form.reference1Name} onChange={e=>set("reference1Name",e.target.value)}/>
-    <FInput label="Contact (Email or Phone) *" placeholder="e.g. pastor@church.org or +27 82 000 0000" value={form.reference1Contact} onChange={e=>set("reference1Contact",e.target.value)}/>
+    <div style={{ fontSize:14,fontWeight:700,color:"#e8b34b",marginBottom:12 }}>{isOrg ? "Board Member 1" : "Reference 1"}</div>
+    <FInput label={isOrg ? "Board Member Name *" : "Pastor Name *"} placeholder={isOrg ? "e.g. John Adeyemi" : "e.g. Pastor Johan van der Merwe"} value={form.reference1Name} onChange={e=>set("reference1Name",e.target.value)}/>
+    <FInput label="Contact (Email or Phone) *" placeholder="e.g. name@org.org or +27 82 000 0000" value={form.reference1Contact} onChange={e=>set("reference1Contact",e.target.value)}/>
     <div style={{ height:1,background:"rgba(255,255,255,0.07)",margin:"16px 0 20px" }}/>
-    <div style={{ fontSize:14,fontWeight:700,color:"#e8b34b",marginBottom:12 }}>Reference 2</div>
-    <FInput label="Pastor Name *" placeholder="e.g. Pastor Frikkie Pretorius" value={form.reference2Name} onChange={e=>set("reference2Name",e.target.value)}/>
-    <FInput label="Contact (Email or Phone) *" placeholder="e.g. pastor@church.org or +27 83 000 0000" value={form.reference2Contact} onChange={e=>set("reference2Contact",e.target.value)}/>
+    <div style={{ fontSize:14,fontWeight:700,color:"#e8b34b",marginBottom:12 }}>{isOrg ? "Board Member 2" : "Reference 2"}</div>
+    <FInput label={isOrg ? "Board Member Name *" : "Pastor Name *"} placeholder={isOrg ? "e.g. Ruth Adeyemi" : "e.g. Pastor Frikkie Pretorius"} value={form.reference2Name} onChange={e=>set("reference2Name",e.target.value)}/>
+    <FInput label="Contact (Email or Phone) *" placeholder="e.g. name@org.org or +27 83 000 0000" value={form.reference2Contact} onChange={e=>set("reference2Contact",e.target.value)}/>
   </div>
 );
 
-const Step4 = ({ form, set }) => (
+const Step4 = ({ form, set, isOrg }) => (
   <div>
     <div style={sectionTitle}>Doctrinal Statement</div>
     <div style={{ background:"rgba(232,179,75,0.07)",borderRadius:12,border:"1px solid rgba(232,179,75,0.2)",padding:"12px 16px",marginBottom:20 }}>
-      <div style={{ fontSize:13,color:"rgba(255,255,255,0.5)",lineHeight:1.7 }}>SendMe is for <strong style={{color:"#e8b34b"}}>Message-believing churches</strong>. Please confirm your church's position:</div>
+      <div style={{ fontSize:13,color:"rgba(255,255,255,0.5)",lineHeight:1.7 }}>SendMe is for <strong style={{color:"#e8b34b"}}>Message-believing {isOrg ? "organizations" : "churches"}</strong>. Please confirm your {isOrg ? "organization's" : "church's"} position:</div>
     </div>
     {[
       {key:"believesMessage",   text:"We believe in the end-time Message as delivered through Rev. William Marrion Branham."},
@@ -233,16 +237,16 @@ const Step4 = ({ form, set }) => (
   </div>
 );
 
-const Step5 = ({ form, submitting, onSubmit }) => {
+const Step5 = ({ form, submitting, onSubmit, isOrg }) => {
   const allChecked = ["believesMessage","believesTrinity","believesBible","believesMission","agreesEscrow","agreesAccountability"].every(k=>form[k]);
   const summary = [
-    ["Church Name", form.churchName],
+    [isOrg ? "Organization Name" : "Church Name", form.churchName],
     ["Street",      form.street],
     ["City",        form.city],
     ["Country",     form.country==="Other" ? form.otherCountry : form.country],
     ["Email",       form.email],
-    ["Pastor",      form.pastorName],
-    ["Pastor email",form.pastorEmail],
+    [isOrg ? "Leader" : "Pastor", form.pastorName],
+    [isOrg ? "Leader email" : "Pastor email", form.pastorEmail],
     ["Size",        form.size],
     ["Endorsements",form.canEndorse?"Enabled":"Disabled"],
     ["Doctrine",    allChecked?"All confirmed":"Incomplete"],
@@ -357,27 +361,27 @@ const Step6 = ({ form, set, churchId, bankSaving, bankDone, bankError, onSaveBan
   );
 };
 
-const validate = (step, form) => {
+const validate = (step, form, isOrg=false) => {
   if (step===1) {
-    if (!form.churchName.trim()) return "Please enter your church name.";
+    if (!form.churchName.trim()) return isOrg ? "Please enter your organization name." : "Please enter your church name.";
     if (!form.city.trim())       return "Please enter your city.";
     if (!form.country)           return "Please select your country.";
     if (form.country==="Other" && !form.otherCountry.trim()) return "Please specify your country.";
-    if (!form.email.trim())      return "Please enter your church email.";
-    if (!EMAIL_RE.test(form.email.trim())) return "Please enter a valid church email address.";
-    if (form.phone.trim() && !PHONE_RE.test(form.phone.trim())) return "Please enter a valid church phone number (e.g. +27 11 000 0000).";
+    if (!form.email.trim())      return isOrg ? "Please enter your organization email." : "Please enter your church email.";
+    if (!EMAIL_RE.test(form.email.trim())) return isOrg ? "Please enter a valid organization email address." : "Please enter a valid church email address.";
+    if (form.phone.trim() && !PHONE_RE.test(form.phone.trim())) return "Please enter a valid phone number (e.g. +27 11 000 0000).";
   }
   if (step===2) {
-    if (!form.pastorName.trim())  return "Please enter your pastor's name.";
-    if (!form.pastorEmail.trim()) return "Please enter your pastor's email.";
-    if (!EMAIL_RE.test(form.pastorEmail.trim())) return "Please enter a valid pastor email address.";
-    if (form.pastorPhone.trim() && !PHONE_RE.test(form.pastorPhone.trim())) return "Please enter a valid pastor phone number (e.g. +27 82 000 0000).";
+    if (!form.pastorName.trim())  return isOrg ? "Please enter your organization leader's name." : "Please enter your pastor's name.";
+    if (!form.pastorEmail.trim()) return isOrg ? "Please enter your organization leader's email." : "Please enter your pastor's email.";
+    if (!EMAIL_RE.test(form.pastorEmail.trim())) return "Please enter a valid email address.";
+    if (form.pastorPhone.trim() && !PHONE_RE.test(form.pastorPhone.trim())) return "Please enter a valid phone number (e.g. +27 82 000 0000).";
   }
   if (step===3) {
-    if (!form.reference1Name.trim())    return "Please enter your first reference pastor's name.";
-    if (!form.reference1Contact.trim()) return "Please enter your first reference pastor's contact.";
-    if (!form.reference2Name.trim())    return "Please enter your second reference pastor's name.";
-    if (!form.reference2Contact.trim()) return "Please enter your second reference pastor's contact.";
+    if (!form.reference1Name.trim())    return isOrg ? "Please enter your first board member's name." : "Please enter your first reference pastor's name.";
+    if (!form.reference1Contact.trim()) return isOrg ? "Please enter your first board member's contact." : "Please enter your first reference pastor's contact.";
+    if (!form.reference2Name.trim())    return isOrg ? "Please enter your second board member's name." : "Please enter your second reference pastor's name.";
+    if (!form.reference2Contact.trim()) return isOrg ? "Please enter your second board member's contact." : "Please enter your second reference pastor's contact.";
   }
   if (step===4) {
     const allChecked = ["believesMessage","believesTrinity","believesBible","believesMission","agreesEscrow","agreesAccountability"].every(k=>form[k]);
@@ -386,7 +390,8 @@ const validate = (step, form) => {
   return null;
 };
 
-export default function ChurchRegistration({ onBack, user }) {
+export default function ChurchRegistration({ onBack, user, userRole }) {
+  const isOrg = userRole === "org_leader";
   const [step,setStep]               = useState(1);
   const [error,setError]             = useState("");
   const [submitting,setSubmitting]   = useState(false);
@@ -415,7 +420,7 @@ export default function ChurchRegistration({ onBack, user }) {
   const totalSteps = submitted ? 6 : 5;
 
   const nextStep = () => {
-    const err = validate(step, form);
+    const err = validate(step, form, isOrg);
     if (err) { setError(err); return; }
     setError(""); setStep(s=>Math.min(s+1, totalSteps));
     window.scrollTo({top:0,behavior:"smooth"});
@@ -436,7 +441,9 @@ export default function ChurchRegistration({ onBack, user }) {
           .eq("user_id", user.id)
           .maybeSingle();
         if (existing) {
-          setError("You've already registered a church on SendMe. Go to My Church from the home screen to view or edit it.");
+          setError(isOrg
+            ? "You've already registered an organization on SendMe. Go to My Church from the home screen to view or edit it."
+            : "You've already registered a church on SendMe. Go to My Church from the home screen to view or edit it.");
           setSubmitting(false);
           return;
         }
@@ -469,6 +476,7 @@ export default function ChurchRegistration({ onBack, user }) {
         reference_2_contact: form.reference2Contact,
         verified:     false,
         user_id:      user?.id || null,
+        entity_type:  isOrg ? "organization" : "church",
         lat,
         lng,
       }).select("id").single();
@@ -547,7 +555,7 @@ export default function ChurchRegistration({ onBack, user }) {
       <div style={{ background:"#09111f",borderBottom:"1px solid rgba(255,255,255,0.07)",padding:"16px 24px",display:"flex",alignItems:"center",gap:14,position:"sticky",top:0,zIndex:100 }}>
         <button onClick={onBack} style={{ background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"8px 16px",color:"rgba(255,255,255,0.6)",cursor:"pointer",fontSize:14,fontFamily:"Georgia, serif" }}>Back</button>
         <div>
-          <div style={{ fontSize:18,fontWeight:700 }}>Church Registration</div>
+          <div style={{ fontSize:18,fontWeight:700 }}>{isOrg ? "Organization Registration" : "Church Registration"}</div>
           <div style={{ fontSize:11,color:"rgba(255,255,255,0.3)",letterSpacing:2,marginTop:2 }}>SENDME GLOBAL MISSION FUND</div>
         </div>
         <div style={{ marginLeft:"auto",fontSize:13,color:"rgba(255,255,255,0.3)" }}>Step {step} of {totalSteps}</div>
@@ -560,11 +568,11 @@ export default function ChurchRegistration({ onBack, user }) {
           </div>
         )}
         <div style={{ background:"#0c1628",borderRadius:20,border:"1px solid rgba(255,255,255,0.08)",padding:"28px 24px",marginBottom:20 }}>
-          {step===1 && <Step1 form={form} set={set}/>}
-          {step===2 && <Step2 form={form} set={set}/>}
-          {step===3 && <Step3 form={form} set={set}/>}
-          {step===4 && <Step4 form={form} set={set}/>}
-          {step===5 && <Step5 form={form} submitting={submitting} onSubmit={handleSubmit}/>}
+          {step===1 && <Step1 form={form} set={set} isOrg={isOrg}/>}
+          {step===2 && <Step2 form={form} set={set} isOrg={isOrg}/>}
+          {step===3 && <Step3 form={form} set={set} isOrg={isOrg}/>}
+          {step===4 && <Step4 form={form} set={set} isOrg={isOrg}/>}
+          {step===5 && <Step5 form={form} submitting={submitting} onSubmit={handleSubmit} isOrg={isOrg}/>}
           {step===6 && (
             <Step6
               form={form} set={set}

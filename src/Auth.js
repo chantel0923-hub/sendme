@@ -267,6 +267,7 @@ export default function Auth({ onLogin, onGuest }) {
                 <option value="donor"      style={{ background: "#0c1628", color: "#eef1ff" }}>Donor / Supporter</option>
                 <option value="missionary" style={{ background: "#0c1628", color: "#eef1ff" }}>Missionary</option>
                 <option value="pastor"     style={{ background: "#0c1628", color: "#eef1ff" }}>Pastor (Senior Leader)</option>
+                <option value="org_leader" style={{ background: "#0c1628", color: "#eef1ff" }}>Missionary-Sending Organization</option>
                 <option value="minister"   style={{ background: "#0c1628", color: "#eef1ff" }}>Minister / Evangelist</option>
               </select>
             </>

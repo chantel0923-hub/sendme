@@ -188,8 +188,8 @@ export default function AdminChurchVerification({ onBack, user }) {
       <div style={{ background: "#09111f", borderBottom: "1px solid rgba(255,255,255,0.07)", padding: "16px 24px", display: "flex", alignItems: "center", gap: 14, position: "sticky", top: 0, zIndex: 100 }}>
         <button onClick={onBack} style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, padding: "8px 16px", color: "rgba(255,255,255,0.6)", cursor: "pointer", fontSize: 14, fontFamily: "Georgia, serif" }}>Back</button>
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 18, fontWeight: 700 }}>Church Verification</div>
-          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", letterSpacing: 2, marginTop: 2 }}>ADMIN — REGISTERED CHURCHES</div>
+          <div style={{ fontSize: 18, fontWeight: 700 }}>Church & Organization Verification</div>
+          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", letterSpacing: 2, marginTop: 2 }}>ADMIN — REGISTERED CHURCHES & ORGANIZATIONS</div>
         </div>
         {pendingCount > 0 && (
           <div style={{ background: "rgba(232,179,75,0.15)", border: "1px solid rgba(232,179,75,0.4)", borderRadius: 999, padding: "4px 14px", fontSize: 13, color: "#e8b34b", fontWeight: 700 }}>
@@ -242,13 +242,22 @@ export default function AdminChurchVerification({ onBack, user }) {
               const isActing = acting === c.id;
               const isGeocoding = geocoding === c.id;
               const missingCoords = c.lat == null || c.lng == null;
+              const isOrgRow = c.entity_type === "organization";
               return (
                 <div key={c.id} style={{ background: "#0c1628", borderRadius: 18, border: `1px solid ${!isVerified ? "rgba(232,179,75,0.25)" : "rgba(255,255,255,0.07)"}`, padding: "20px 22px" }}>
 
                   {/* Header row */}
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, marginBottom: 12 }}>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 17, fontWeight: 700, color: "#eef1ff", marginBottom: 3 }}>{c.name || "Untitled Church"}</div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
+                        <div style={{ fontSize: 17, fontWeight: 700, color: "#eef1ff" }}>{c.name || (isOrgRow ? "Untitled Organization" : "Untitled Church")}</div>
+                        <span style={{ padding: "2px 9px", borderRadius: 999, fontSize: 10, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase",
+                          background: isOrgRow ? "rgba(91,156,246,0.12)" : "rgba(232,179,75,0.12)",
+                          color: isOrgRow ? "#5b9cf6" : "#e8b34b",
+                          border: `1px solid ${isOrgRow ? "rgba(91,156,246,0.3)" : "rgba(232,179,75,0.3)"}` }}>
+                          {isOrgRow ? "Organization" : "Church"}
+                        </span>
+                      </div>
                       <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)" }}>📍 {c.city ? `${c.city}, ` : ""}{c.country || "Unknown"}{c.province ? ` (${c.province})` : ""}</div>
                     </div>
                     <span style={{ padding: "4px 12px", borderRadius: 999, fontSize: 11, fontWeight: 700, whiteSpace: "nowrap",
@@ -259,22 +268,22 @@ export default function AdminChurchVerification({ onBack, user }) {
                     </span>
                   </div>
 
-                  {/* Pastor info */}
+                  {/* Leader info */}
                   <div style={{ background: "rgba(255,255,255,0.03)", borderRadius: 12, border: "1px solid rgba(255,255,255,0.06)", padding: "14px 16px", marginBottom: 14, fontSize: 13, color: "rgba(255,255,255,0.6)", lineHeight: 1.9 }}>
-                    <div><strong style={{ color: "rgba(255,255,255,0.8)" }}>Senior Pastor:</strong> {c.pastor_name || "(not given)"} · {c.pastor_email || "no email on file"}{c.pastor_phone ? ` · ${c.pastor_phone}` : ""}</div>
-                    <div><strong style={{ color: "rgba(255,255,255,0.8)" }}>Church Contact:</strong> {c.email || "(no email)"}{c.phone ? ` · ${c.phone}` : ""}{c.website ? ` · ${c.website}` : ""}</div>
-                    <div><strong style={{ color: "rgba(255,255,255,0.8)" }}>Congregation Size:</strong> {c.size || "Not specified"}</div>
+                    <div><strong style={{ color: "rgba(255,255,255,0.8)" }}>{isOrgRow ? "Leader:" : "Senior Pastor:"}</strong> {c.pastor_name || "(not given)"} · {c.pastor_email || "no email on file"}{c.pastor_phone ? ` · ${c.pastor_phone}` : ""}</div>
+                    <div><strong style={{ color: "rgba(255,255,255,0.8)" }}>{isOrgRow ? "Organization Contact:" : "Church Contact:"}</strong> {c.email || "(no email)"}{c.phone ? ` · ${c.phone}` : ""}{c.website ? ` · ${c.website}` : ""}</div>
+                    <div><strong style={{ color: "rgba(255,255,255,0.8)" }}>{isOrgRow ? "Team Size:" : "Congregation Size:"}</strong> {c.size || "Not specified"}</div>
                   </div>
 
-                  {/* Pastor References */}
+                  {/* References */}
                   {(c.reference_1_name || c.reference_2_name) && (
                     <div style={{ background: "rgba(232,179,75,0.07)", borderRadius: 12, border: "1px solid rgba(232,179,75,0.2)", padding: "14px 16px", marginBottom: 14, fontSize: 13, color: "rgba(255,255,255,0.6)", lineHeight: 1.9 }}>
-                      <div style={{ fontSize: 12, color: "#e8b34b", fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 8 }}>Pastor References</div>
+                      <div style={{ fontSize: 12, color: "#e8b34b", fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 8 }}>{isOrgRow ? "Board Member References" : "Pastor References"}</div>
                       {c.reference_1_name && (
-                        <div><strong style={{ color: "rgba(255,255,255,0.8)" }}>Reference 1:</strong> {c.reference_1_name}{c.reference_1_contact ? ` · ${c.reference_1_contact}` : ""}</div>
+                        <div><strong style={{ color: "rgba(255,255,255,0.8)" }}>{isOrgRow ? "Board Member 1:" : "Reference 1:"}</strong> {c.reference_1_name}{c.reference_1_contact ? ` · ${c.reference_1_contact}` : ""}</div>
                       )}
                       {c.reference_2_name && (
-                        <div><strong style={{ color: "rgba(255,255,255,0.8)" }}>Reference 2:</strong> {c.reference_2_name}{c.reference_2_contact ? ` · ${c.reference_2_contact}` : ""}</div>
+                        <div><strong style={{ color: "rgba(255,255,255,0.8)" }}>{isOrgRow ? "Board Member 2:" : "Reference 2:"}</strong> {c.reference_2_name}{c.reference_2_contact ? ` · ${c.reference_2_contact}` : ""}</div>
                       )}
                       <button onClick={() => sendReferenceEmails(c)}
                         style={{ marginTop:12, padding:"9px 16px", borderRadius:10,
@@ -288,7 +297,7 @@ export default function AdminChurchVerification({ onBack, user }) {
                   )}
                   {!c.reference_1_name && !c.reference_2_name && (
                     <div style={{ background: "rgba(232,91,91,0.07)", borderRadius: 12, border: "1px solid rgba(232,91,91,0.2)", padding: "10px 14px", marginBottom: 14, fontSize: 12, color: "#e85b5b" }}>
-                      ⚠ No pastor references provided — contact church before verifying.
+                      ⚠ No {isOrgRow ? "board member references" : "pastor references"} provided — contact {isOrgRow ? "organization" : "church"} before verifying.
                     </div>
                   )}
 
