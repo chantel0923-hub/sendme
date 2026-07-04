@@ -295,7 +295,7 @@ export default function TestimonyEngine({ onBack, onMission, user }) {
               style={{ padding:"14px 0", borderRadius:14, border:"1px solid rgba(37,211,102,0.3)", background:"rgba(37,211,102,0.08)", color:"#25d366", fontWeight:700, cursor:"pointer", fontSize:15, fontFamily:"Georgia, serif" }}>
               Share on WhatsApp
             </button>
-            <button onClick={()=>setSelected(null)}
+            <button onClick={onBack}
               style={{ padding:"14px 0", borderRadius:14, border:"none", background:"linear-gradient(135deg,#e8b34b,#c8942b)", color:"#000", fontWeight:700, cursor:"pointer", fontSize:15, fontFamily:"Georgia, serif", boxShadow:"0 6px 24px rgba(232,179,75,0.4)" }}>
               Support Another Mission
             </button>

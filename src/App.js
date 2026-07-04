@@ -457,7 +457,7 @@ const DonateScreen = ({ mission: m, onBack, onPayfast }) => {
           <Bar raised={m.raised} goal={m.goal} color={m.color} height={8}/>
           <div style={{ display:"flex",justifyContent:"space-between",marginTop:8 }}>
             <span style={{ fontSize:13,color:m.color,fontWeight:700 }}>${fmt(m.raised)} raised</span>
-            <span style={{ fontSize:12,color:"rgba(255,255,255,0.3)" }}>${fmt(m.goal-m.raised)} still needed</span>
+            <span style={{ fontSize:12,color:"rgba(255,255,255,0.3)" }}>{m.raised>=m.goal?"🎉 Goal reached!":`$${fmt(m.goal-m.raised)} still needed`}</span>
           </div>
         </div>
         <div style={{ background:"rgba(232,179,75,0.06)",borderRadius:14,border:"1px solid rgba(232,179,75,0.2)",padding:"14px 18px",display:"flex",gap:10 }}>
@@ -1345,7 +1345,7 @@ const DonorBrowse = ({ onBack, onMission, user }) => {
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
                   <div style={{ display:"flex", gap:16 }}>
                     <span style={{ fontSize:13, color:m.color, fontWeight:700 }}>${fmt(m.raised)} raised</span>
-                    <span style={{ fontSize:12, color:"rgba(255,255,255,0.35)" }}>${fmt(needed)} still needed</span>
+                    <span style={{ fontSize:12, color:"rgba(255,255,255,0.35)" }}>{m.raised>=m.goal?"🎉 Goal reached!":`$${fmt(needed)} still needed`}</span>
                   </div>
                   <div style={{ fontSize:12, fontWeight:700, color:"rgba(255,255,255,0.5)",
                     background:"rgba(255,255,255,0.05)", borderRadius:8, padding:"4px 10px" }}>

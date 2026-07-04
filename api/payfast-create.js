@@ -38,6 +38,35 @@ function pfSignature(pairs, passphrase) {
   return crypto.createHash("md5").update(str).digest("hex");
 }
 
+// Converts a USD amount to its ZAR equivalent using the fawazahmed0 currency
+// API (free, no API key, same source used for mission funding-goal conversion
+// on the client). PayFast's standard checkout only ever settles in ZAR — it
+// has no currency parameter — so any USD amount MUST be converted before it
+// reaches PayFast, or donors are silently charged the raw USD number as if
+// it were Rand (e.g. a $25 gift becomes an R25.00 charge, about 1/18th of
+// the intended amount).
+async function convertUSDtoZAR(usdAmount) {
+  const toDateString = (d) => d.toISOString().split("T")[0];
+  const today = toDateString(new Date());
+  const yesterday = toDateString(new Date(Date.now() - 86400000));
+
+  const fetchRate = async (dateStr) => {
+    const res = await fetch(
+      `https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@${dateStr}/v1/currencies/usd.json`
+    );
+    if (!res.ok) throw new Error("fetch failed");
+    const data = await res.json();
+    const rate = data?.usd?.zar;
+    if (!rate) throw new Error("ZAR rate not found");
+    return rate;
+  };
+
+  let rate;
+  try { rate = await fetchRate(today); }
+  catch { rate = await fetchRate(yesterday); }
+  return usdAmount * rate;
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
@@ -46,6 +75,17 @@ export default async function handler(req, res) {
 
     const amt = Number(amount);
     if (!amt || amt <= 0) return res.status(400).json({ error: "Invalid donation amount" });
+
+    // The amount coming from the client is always USD (the donation screen
+    // has no currency picker — every amount shown to the donor is a $ figure).
+    // PayFast only settles in ZAR, so convert before building the payload.
+    let zarAmount;
+    try {
+      zarAmount = await convertUSDtoZAR(amt);
+    } catch (convErr) {
+      console.error("payfast-create: currency conversion failed", convErr);
+      return res.status(502).json({ error: "Could not fetch a live exchange rate to convert your donation. Please try again in a moment." });
+    }
 
     const site       = (process.env.SITE_URL        || "https://sendme-nine.vercel.app").replace(/\/$/, "");
     const mode       = (process.env.PAYFAST_MODE    || "sandbox").toLowerCase();
@@ -73,7 +113,7 @@ export default async function handler(req, res) {
       ["name_last",         lastName],
       ["email_address",     email || ""],
       ["m_payment_id",      m_payment_id],
-      ["amount",            amt.toFixed(2)],
+      ["amount",            zarAmount.toFixed(2)],
       ["item_name",         String(mission_title || "SendMe Mission Donation").slice(0, 100)],
       ["item_description",  "Missionary love offering via SendMe Global Mission Fund"],
       ["custom_str1",       missionIdStr],
@@ -111,6 +151,8 @@ export default async function handler(req, res) {
     return res.status(200).json({
       action,
       fields,
+      amount_usd: amt,
+      amount_zar: Number(zarAmount.toFixed(2)),
       _debug_signature_string: (() => {
         const parts = pairs
           .filter(([, v]) => v !== "" && v !== undefined && v !== null)

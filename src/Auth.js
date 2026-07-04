@@ -33,10 +33,23 @@ export default function Auth({ onLogin, onGuest }) {
     });
     setLoading(false);
     if (error) { setError(error.message); return; }
+    // Supabase doesn't return an error for signups with an already-registered
+    // email (this is intentional, to prevent account enumeration). Instead it
+    // returns a user object with an empty `identities` array. A genuinely new
+    // signup always has at least one identity — this is the only reliable way
+    // to detect the duplicate-email case client-side.
+    if (data?.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+      setError("An account with this email already exists. Please sign in instead, or use \"Forgot password?\" if you don't remember your password.");
+      return;
+    }
     if (data.user) {
-      await supabase.from("profiles").insert({
+      const { error: profileError } = await supabase.from("profiles").insert({
         id: data.user.id, email, full_name: name, role
       });
+      if (profileError) {
+        setError("Account created, but your profile could not be saved: " + profileError.message + ". Please contact support.");
+        return;
+      }
     }
     setSuccess("Account created! Please check your email to verify your account.");
   };
