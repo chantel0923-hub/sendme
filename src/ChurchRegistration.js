@@ -22,8 +22,27 @@ const STEPS = [
   { number:6, label:"Banking",      icon:"🏦" },
 ];
 
-const COUNTRIES = ["South Africa","Nigeria","Kenya","Ghana","Ethiopia","Zimbabwe","Uganda","Tanzania","Zambia","Mozambique","USA","UK","Canada","Australia","Brazil","India","Philippines","Indonesia","South Korea","Germany","France","Netherlands","Other"];
+const COUNTRIES = [
+  "South Africa","Nigeria","Kenya","Ghana","Ethiopia","Zimbabwe","Uganda","Tanzania","Zambia","Mozambique",
+  "Malawi","Botswana","Namibia","Lesotho","Eswatini","Angola","Rwanda","Burundi","DR Congo","Republic of Congo",
+  "Cameroon","Ivory Coast","Senegal","Sierra Leone","Liberia","Togo","Benin","Burkina Faso","Mali","Niger",
+  "Chad","Sudan","South Sudan","Somalia","Eritrea","Djibouti","Madagascar","Egypt","Morocco","Tunisia","Algeria","Libya",
+  "USA","Canada","Mexico","UK","Ireland","Germany","France","Netherlands","Belgium","Switzerland","Austria",
+  "Italy","Spain","Portugal","Sweden","Norway","Denmark","Finland","Poland","Czech Republic","Hungary","Romania",
+  "Ukraine","Russia","Greece","Iceland",
+  "Brazil","Argentina","Chile","Peru","Colombia","Venezuela","Ecuador","Bolivia","Paraguay","Uruguay",
+  "India","Philippines","Indonesia","South Korea","Japan","China","Vietnam","Thailand","Myanmar","Cambodia",
+  "Laos","Malaysia","Singapore","Bangladesh","Nepal","Sri Lanka","Pakistan","Mongolia","Taiwan","Hong Kong",
+  "Lebanon","Israel","Palestine","Jordan","Syria","Iraq","Turkey","Iran","Saudi Arabia","Yemen","Oman",
+  "United Arab Emirates","Qatar","Kuwait",
+  "Australia","New Zealand","Papua New Guinea","Fiji",
+  "Haiti","Dominican Republic","Jamaica","Cuba","Trinidad and Tobago","Guatemala","Honduras","El Salvador","Nicaragua","Costa Rica","Panama",
+  "Other"
+];
 const SIZES     = ["Under 50","50 – 100","100 – 300","300 – 500","500 – 1,000","Over 1,000"];
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PHONE_RE = /^\+?[0-9\s\-()]{7,20}$/;
 
 // Same hardcoded fallback used in MapboxMap.js — Vercel renames REACT_APP_
 // prefixed env vars, so process.env.REACT_APP_MAPBOX_TOKEN is undefined in
@@ -129,6 +148,9 @@ const Step1 = ({ form, set }) => (
       <option value="" style={{background:"#0c1628"}}>Select country...</option>
       {COUNTRIES.map(c=><option key={c} value={c} style={{background:"#0c1628"}}>{c}</option>)}
     </FSelect>
+    {form.country==="Other" && (
+      <FInput label="Please Specify Your Country *" placeholder="Enter your country name" value={form.otherCountry} onChange={e=>set("otherCountry",e.target.value)}/>
+    )}
     <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
       <FInput label="Church Phone" type="tel" placeholder="+27 11 000 0000" value={form.phone} onChange={e=>set("phone",e.target.value)}/>
       <FInput label="Church Email *" type="email" placeholder="info@yourchurch.org" value={form.email} onChange={e=>set("email",e.target.value)}/>
@@ -217,7 +239,7 @@ const Step5 = ({ form, submitting, onSubmit }) => {
     ["Church Name", form.churchName],
     ["Street",      form.street],
     ["City",        form.city],
-    ["Country",     form.country],
+    ["Country",     form.country==="Other" ? form.otherCountry : form.country],
     ["Email",       form.email],
     ["Pastor",      form.pastorName],
     ["Pastor email",form.pastorEmail],
@@ -340,11 +362,16 @@ const validate = (step, form) => {
     if (!form.churchName.trim()) return "Please enter your church name.";
     if (!form.city.trim())       return "Please enter your city.";
     if (!form.country)           return "Please select your country.";
+    if (form.country==="Other" && !form.otherCountry.trim()) return "Please specify your country.";
     if (!form.email.trim())      return "Please enter your church email.";
+    if (!EMAIL_RE.test(form.email.trim())) return "Please enter a valid church email address.";
+    if (form.phone.trim() && !PHONE_RE.test(form.phone.trim())) return "Please enter a valid church phone number (e.g. +27 11 000 0000).";
   }
   if (step===2) {
     if (!form.pastorName.trim())  return "Please enter your pastor's name.";
     if (!form.pastorEmail.trim()) return "Please enter your pastor's email.";
+    if (!EMAIL_RE.test(form.pastorEmail.trim())) return "Please enter a valid pastor email address.";
+    if (form.pastorPhone.trim() && !PHONE_RE.test(form.pastorPhone.trim())) return "Please enter a valid pastor phone number (e.g. +27 82 000 0000).";
   }
   if (step===3) {
     if (!form.reference1Name.trim())    return "Please enter your first reference pastor's name.";
@@ -371,7 +398,7 @@ export default function ChurchRegistration({ onBack, user }) {
 
   const [form, setForm] = useState({
     // Church fields
-    churchName:"", street:"", city:"", province:"", country:"", phone:"", email:"", website:"", size:"",
+    churchName:"", street:"", city:"", province:"", country:"", otherCountry:"", phone:"", email:"", website:"", size:"",
     pastorName:"", pastorEmail:"", pastorPhone:"", canEndorse:true, showPhonePublic:false,
     reference1Name:"", reference1Contact:"", reference2Name:"", reference2Contact:"",
     believesMessage:false, believesTrinity:false, believesBible:false,
@@ -415,13 +442,17 @@ export default function ChurchRegistration({ onBack, user }) {
         }
       }
 
-      const { lat, lng } = await geocodeLocation(form.city, form.country, form.street);
+      // #56/#57: when "Other" is selected, use the pastor's typed country name
+      // (not the literal string "Other") for both geocoding and the saved record.
+      const resolvedCountry = form.country==="Other" ? form.otherCountry.trim() : form.country;
+
+      const { lat, lng } = await geocodeLocation(form.city, resolvedCountry, form.street);
 
       const { data, error: dbError } = await supabase.from("churches").insert({
         name:         form.churchName,
         street:       form.street || null,
         city:         form.city,
-        country:      form.country,
+        country:      resolvedCountry,
         phone:        form.phone,
         email:        form.email,
         size:         form.size,
@@ -450,7 +481,7 @@ export default function ChurchRegistration({ onBack, user }) {
       notifyAdmin("church_registered", {
         churchName:  form.churchName,
         city:        form.city,
-        country:     form.country,
+        country:     resolvedCountry,
         pastorName:  form.pastorName,
         pastorEmail: form.pastorEmail,
       });
