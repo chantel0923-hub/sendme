@@ -255,11 +255,11 @@ export default function ChurchesTab({ onBack }) {
           Back
         </button>
         <div>
-          <div style={{ fontSize:18, fontWeight:700 }}>Message Church Directory</div>
+          <div style={{ fontSize:18, fontWeight:700 }}>Message Church &amp; Organization Directory</div>
           <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", letterSpacing:2, marginTop:2 }}>SENDME GLOBAL MISSION FUND</div>
         </div>
         <div style={{ marginLeft:"auto", fontSize:13, color:"rgba(255,255,255,0.3)" }}>
-          {churches.length} churches · {countryCount} countries
+          {churches.length} listed · {countryCount} countries
         </div>
       </div>
 
@@ -282,10 +282,10 @@ export default function ChurchesTab({ onBack }) {
         {/* Hero banner */}
         <div style={{ background:"rgba(232,179,75,0.08)", borderRadius:18, border:"1px solid rgba(232,179,75,0.2)", padding:"20px 24px", marginBottom:24, textAlign:"center" }}>
           <div style={{ fontSize:28, marginBottom:8 }}>⛪</div>
-          <div style={{ fontSize:20, fontWeight:700, color:"#eef1ff", marginBottom:6 }}>Message Believing Churches Worldwide</div>
+          <div style={{ fontSize:20, fontWeight:700, color:"#eef1ff", marginBottom:6 }}>Message Believing Churches &amp; Organizations Worldwide</div>
           <div style={{ fontSize:13, color:"rgba(255,255,255,0.45)", lineHeight:1.7 }}>
-            Find a fellowship of Message believers near you. Every church listed here is a<br/>
-            <strong style={{ color:"#e8b34b" }}>verified, endorsed congregation</strong> holding to the end-time Message.
+            Find a fellowship or sending organization of Message believers near you. Everyone listed here is a<br/>
+            <strong style={{ color:"#e8b34b" }}>verified, endorsed</strong> part of the end-time Message.
           </div>
         </div>
 
@@ -329,7 +329,7 @@ export default function ChurchesTab({ onBack }) {
         {/* Stats row */}
         <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12, marginBottom:24 }}>
           {[
-            ["⛪", churches.length,    "Verified Churches", "#e8b34b"],
+            ["⛪", churches.length,    "Verified Listings",  "#e8b34b"],
             ["🌍", countryCount,       "Countries",         "#5b9cf6"],
             ["✝",  visible.length,     "Showing",           "#3ecf8e"],
           ].map(([icon,val,label,c]) => (
@@ -357,6 +357,7 @@ export default function ChurchesTab({ onBack }) {
           <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
             {visible.map(c => {
               const open = expanded === c.id;
+              const isOrgRow = c.entity_type === "organization";
               return (
                 <div key={c.id} id={`church-${c.id}`}
                   style={{ background:"#0c1628", borderRadius:16,
@@ -373,12 +374,20 @@ export default function ChurchesTab({ onBack }) {
                       <div style={{ width:46, height:46, borderRadius:13, flexShrink:0,
                         background:"rgba(232,179,75,0.12)", border:"1.5px solid rgba(232,179,75,0.3)",
                         display:"flex", alignItems:"center", justifyContent:"center", fontSize:20 }}>
-                        ⛪
+                        {isOrgRow ? "🌍" : "⛪"}
                       </div>
                       <div style={{ minWidth:0 }}>
-                        <div style={{ fontSize:15, fontWeight:700, color:"#eef1ff",
-                          whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
-                          {c.name}
+                        <div style={{ display:"flex", alignItems:"center", gap:7 }}>
+                          <div style={{ fontSize:15, fontWeight:700, color:"#eef1ff",
+                            whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                            {c.name}
+                          </div>
+                          {isOrgRow && (
+                            <span style={{ padding:"2px 8px", borderRadius:999, fontSize:9, fontWeight:700, letterSpacing:0.5, textTransform:"uppercase", whiteSpace:"nowrap",
+                              background:"rgba(91,156,246,0.12)", color:"#5b9cf6", border:"1px solid rgba(91,156,246,0.3)" }}>
+                              Org
+                            </span>
+                          )}
                         </div>
                         <div style={{ fontSize:12, color:"rgba(255,255,255,0.4)", marginTop:3 }}>
                           📍 {c.city}, {c.country}
@@ -396,7 +405,7 @@ export default function ChurchesTab({ onBack }) {
                         ✓ Verified
                       </span>
                       {c.size && (
-                        <span style={{ fontSize:11, color:"rgba(255,255,255,0.3)" }}>{c.size} members</span>
+                        <span style={{ fontSize:11, color:"rgba(255,255,255,0.3)" }}>{c.size} {isOrgRow ? "team" : "members"}</span>
                       )}
                       <span style={{ fontSize:18, color:"rgba(255,255,255,0.25)", lineHeight:1 }}>
                         {open ? "▲" : "▼"}
@@ -410,15 +419,15 @@ export default function ChurchesTab({ onBack }) {
                       <div style={{ paddingTop:16, display:"flex", flexDirection:"column", gap:10 }}>
                         <div style={{ fontSize:13, color:"rgba(255,255,255,0.35)",
                           letterSpacing:1.5, textTransform:"uppercase", marginBottom:4 }}>
-                          Pastor Details
+                          {isOrgRow ? "Leader Details" : "Pastor Details"}
                         </div>
                         {[
-                          ["✝ Pastor",  c.pastor_name],
+                          [isOrgRow ? "✝ Leader" : "✝ Pastor",  c.pastor_name],
                           ["📧 Email",  c.pastor_email || c.email],
                           ["📞 Phone",  c.show_phone_public ? (c.pastor_phone || c.phone) : null],
                           ["🌐 Website",c.website],
                           ["📍 Address",c.address],
-                          ["👥 Size",   c.size ? c.size + " members" : null],
+                          ["👥 Size",   c.size ? c.size + (isOrgRow ? " team" : " members") : null],
                         ].map(([lbl, val]) => val ? (
                           <div key={lbl} style={{ display:"flex", gap:12, alignItems:"flex-start",
                             padding:"10px 14px", borderRadius:10,
@@ -443,7 +452,7 @@ export default function ChurchesTab({ onBack }) {
                             color:"#000", fontWeight:700, cursor:"pointer",
                             fontSize:14, fontFamily:"Georgia, serif",
                             boxShadow:"0 4px 20px rgba(232,179,75,0.3)" }}>
-                          Contact This Church
+                          {isOrgRow ? "Contact This Organization" : "Contact This Church"}
                         </button>
                       </div>
                     </div>

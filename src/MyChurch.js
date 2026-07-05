@@ -2,13 +2,17 @@ import { useState, useEffect } from "react";
 import { supabase } from "./supabase";
 import ChurchRegistration from "./ChurchRegistration";
 
-export default function MyChurch({ onBack, user }) {
+export default function MyChurch({ onBack, user, userRole }) {
   const [loading, setLoading] = useState(true);
   const [church, setChurch]   = useState(null);
   const [form, setForm]       = useState(null);
   const [saving, setSaving]   = useState(false);
   const [saved, setSaved]     = useState(false);
   const [error, setError]     = useState("");
+
+  // Prefer the saved record's own entity_type (authoritative), fall back to
+  // the account's role for the pre-registration screen where no record exists yet.
+  const isOrg = church ? church.entity_type === "organization" : userRole === "org_leader";
 
   useEffect(() => {
     const load = async () => {
@@ -94,7 +98,7 @@ export default function MyChurch({ onBack, user }) {
   // No church linked to this account yet — send them through registration.
   // (ChurchRegistration itself now blocks a second registration once one exists.)
   if (!church) {
-    return <ChurchRegistration onBack={onBack} user={user} />;
+    return <ChurchRegistration onBack={onBack} user={user} userRole={userRole} />;
   }
 
   return (
@@ -102,15 +106,15 @@ export default function MyChurch({ onBack, user }) {
       <div style={{ background: "#09111f", borderBottom: "1px solid rgba(255,255,255,0.07)", padding: "16px 24px", display: "flex", alignItems: "center", gap: 14, position: "sticky", top: 0, zIndex: 100 }}>
         <button onClick={onBack} style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, padding: "8px 16px", color: "rgba(255,255,255,0.6)", cursor: "pointer", fontSize: 14, fontFamily: "Georgia, serif" }}>Back</button>
         <div>
-          <div style={{ fontSize: 18, fontWeight: 700 }}>My Church</div>
-          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", letterSpacing: 2, marginTop: 2 }}>MANAGE YOUR CHURCH DETAILS</div>
+          <div style={{ fontSize: 18, fontWeight: 700 }}>{isOrg ? "My Organization" : "My Church"}</div>
+          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", letterSpacing: 2, marginTop: 2 }}>{isOrg ? "MANAGE YOUR ORGANIZATION DETAILS" : "MANAGE YOUR CHURCH DETAILS"}</div>
         </div>
       </div>
 
       <div style={{ maxWidth: 560, margin: "0 auto", padding: "28px 20px 60px" }}>
         {!church.verified && (
           <div style={{ background: "rgba(232,179,75,0.08)", border: "1px solid rgba(232,179,75,0.25)", borderRadius: 12, padding: "12px 16px", marginBottom: 20, fontSize: 13, color: "#e8b34b" }}>
-            ⏳ Your church is still pending admin verification.
+            ⏳ Your {isOrg ? "organization" : "church"} is still pending admin verification.
           </div>
         )}
         {error && (
@@ -124,7 +128,7 @@ export default function MyChurch({ onBack, user }) {
           </div>
         )}
 
-        <div style={lbl}>Church Name</div>
+        <div style={lbl}>{isOrg ? "Organization Name" : "Church Name"}</div>
         <input style={inp} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
 
         <div style={lbl}>Street Address</div>
@@ -146,22 +150,22 @@ export default function MyChurch({ onBack, user }) {
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <div>
-            <div style={lbl}>Church Phone</div>
+            <div style={lbl}>{isOrg ? "Organization Phone" : "Church Phone"}</div>
             <input style={inp} value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} />
           </div>
           <div>
-            <div style={lbl}>Pastor's Phone</div>
+            <div style={lbl}>{isOrg ? "Leader's Phone" : "Pastor's Phone"}</div>
             <input style={inp} value={form.pastor_phone} onChange={e => setForm(f => ({ ...f, pastor_phone: e.target.value }))} />
           </div>
         </div>
 
-        <div style={lbl}>Church Email</div>
+        <div style={lbl}>{isOrg ? "Organization Email" : "Church Email"}</div>
         <input style={inp} value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
 
         <div style={lbl}>Website</div>
         <input style={inp} value={form.website} onChange={e => setForm(f => ({ ...f, website: e.target.value }))} />
 
-        <div style={lbl}>Senior Pastor — Full Name</div>
+        <div style={lbl}>{isOrg ? "Organization Leader — Full Name" : "Senior Pastor — Full Name"}</div>
         <input style={inp} value={form.pastor_name} onChange={e => setForm(f => ({ ...f, pastor_name: e.target.value }))} />
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 0", borderTop: "1px solid rgba(255,255,255,0.06)", marginTop: 8 }}>
@@ -175,7 +179,7 @@ export default function MyChurch({ onBack, user }) {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 0", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
           <div>
             <div style={{ fontSize: 14, color: "#eef1ff" }}>Endorsement Authority</div>
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)" }}>This church can endorse missionary applications on SendMe</div>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)" }}>This {isOrg ? "organization" : "church"} can endorse missionary applications on SendMe</div>
           </div>
           <input type="checkbox" checked={form.can_endorse} onChange={e => setForm(f => ({ ...f, can_endorse: e.target.checked }))} style={{ width: 20, height: 20 }} />
         </div>
