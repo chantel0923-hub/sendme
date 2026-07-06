@@ -1,21 +1,21 @@
 // supabase/functions/notify-new-mission/index.ts
 // Broadcasts a push notification to every subscribed device when admin approves a mission.
-// Deploy with: supabase functions deploy notify-new-mission
+// Deploy with: supabase functions deploy notify-new-mission --use-api
 //
 // Required secrets (set once via `supabase secrets set` or the Dashboard > Edge Functions > Secrets):
-//   FIREBASE_PROJECT_ID       — from Firebase Console > Project Settings > General
-//   FIREBASE_SERVICE_ACCOUNT  — the FULL JSON content of the service account key file, as one string
+//   FIREBASE_PROJECT_ID          — from Firebase Console > Project Settings > General
+//   FIREBASE_SERVICE_ACCOUNT_B64 — the service account JSON key file, base64-encoded as ONE line
 //
 // SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are already auto-provided to every Edge Function.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { GoogleAuth } from "npm:google-auth-library@9";
 
-const FIREBASE_PROJECT_ID      = Deno.env.get("FIREBASE_PROJECT_ID")!;
-const FIREBASE_SERVICE_ACCOUNT = Deno.env.get("FIREBASE_SERVICE_ACCOUNT")!;
-const SUPABASE_URL             = Deno.env.get("SUPABASE_URL")!;
-const SUPABASE_SERVICE_ROLE_KEY= Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const SITE_URL                 = "https://sendme-nine.vercel.app";
+const FIREBASE_PROJECT_ID          = Deno.env.get("FIREBASE_PROJECT_ID")!;
+const FIREBASE_SERVICE_ACCOUNT_B64 = Deno.env.get("FIREBASE_SERVICE_ACCOUNT_B64")!;
+const SUPABASE_URL                 = Deno.env.get("SUPABASE_URL")!;
+const SUPABASE_SERVICE_ROLE_KEY    = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const SITE_URL                     = "https://sendme-nine.vercel.app";
 
 Deno.serve(async (req) => {
   const cors = {
@@ -35,7 +35,9 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ sent: 0, failed: 0 }), { status: 200, headers: cors });
     }
 
-    const credentials = JSON.parse(FIREBASE_SERVICE_ACCOUNT);
+    const credentials = JSON.parse(new TextDecoder().decode(
+      Uint8Array.from(atob(FIREBASE_SERVICE_ACCOUNT_B64), c => c.charCodeAt(0))
+    ));
     const auth = new GoogleAuth({
       credentials,
       scopes: ["https://www.googleapis.com/auth/firebase.messaging"],
@@ -75,7 +77,6 @@ Deno.serve(async (req) => {
       } else {
         failed++;
         const errText = await resp.text();
-        // Token no longer valid (user uninstalled / cleared permissions) — clean it up.
         if (errText.includes("UNREGISTERED") || errText.includes("NOT_FOUND") || errText.includes("INVALID_ARGUMENT")) {
           deadTokens.push(token);
         }

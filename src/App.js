@@ -25,6 +25,7 @@ import MissionaryDashboard from './MissionaryDashboard';
 import AdminApprovals from './AdminApprovals';
 import AdminChurchVerification from './AdminChurchVerification';
 import AdminWorkerRequests from './AdminWorkerRequests';
+import NotificationOptIn from './NotificationOptIn';
 
 const DEMO_MISSIONS = [
   { id:1, name:"Rev. Samuel Osei",   role:"Missionary",  church:"Accra Redemption Church",   city:"Addis Ababa", country:"Ethiopia", area:"Merkato District",         region:"Africa",      lat:9.03,  lng:38.74, title:"Gospel & Food Aid — Merkato",     blurb:"Feeding 400 families weekly while planting the Word in one of Addis Ababa's most densely populated slums.",           raised:9840,  goal:15000, color:"#e8b34b", status:"active",   milestone:2, souls:312, bibles:200, churches:1, prayers:87,  protected:false, trustLevel:2, journeyStep:4, riskLevel:1, budget:[{label:"Food parcels",amount:4000},{label:"Bibles & Tracts",amount:2500},{label:"Transport",amount:1500},{label:"Accommodation",amount:1840}] },
@@ -1099,6 +1100,7 @@ const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, o
         </div>
       </div>
       <div style={{ maxWidth:900,margin:"0 auto",padding:"24px 20px" }}>
+        {user && <NotificationOptIn user={user}/>}
         <div style={{ marginBottom:24 }}>
           {loading?<LoadingMap/>:<MapboxMap missions={missions} onMissionClick={onMission}/>}
         </div>

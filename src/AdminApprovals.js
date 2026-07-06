@@ -75,6 +75,10 @@ export default function AdminApprovals({ onBack, user }) {
         missionaryName: m.missionary_name,
         missionTitle: m.title,
       });
+      // Push notification to every subscribed device — new mission is live and needs support.
+      supabase.functions.invoke("notify-new-mission", {
+        body: { missionTitle: m.title, missionId: m.id, country: m.country },
+      }).catch(e => console.log("notify-new-mission error:", e));
       await load();
     } catch (e) {
       setError("Could not approve application. (" + (e.message || "") + ")");
