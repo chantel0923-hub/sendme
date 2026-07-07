@@ -42,15 +42,11 @@ export default function Auth({ onLogin, onGuest }) {
       setError("An account with this email already exists. Please sign in instead, or use \"Forgot password?\" if you don't remember your password.");
       return;
     }
-    if (data.user) {
-      const { error: profileError } = await supabase.from("profiles").insert({
-        id: data.user.id, email, full_name: name, role
-      });
-      if (profileError) {
-        setError("Account created, but your profile could not be saved: " + profileError.message + ". Please contact support.");
-        return;
-      }
-    }
+    // Note: the "profiles" row is now created automatically by a database
+    // trigger on auth.users (handle_new_user / on_auth_user_created), server-side.
+    // We intentionally no longer insert it from the client here — signUp() doesn't
+    // return an active session when email confirmation is required, so the old
+    // client-side insert would fail RLS (auth.uid() was null at that point).
     setSuccess("Account created! Please check your email to verify your account.");
   };
 
