@@ -51,11 +51,11 @@ const PHONE_RE = /^\+?[0-9\s\-()]{7,20}$/;
 const MAPBOX_TOKEN = process.env.REACT_APP_MAPBOX_TOKEN ||
   "pk.eyJ1Ijoic2VuZG1lMDkyMyIsImEiOiJjbXI1anZpOGcwYXJvMzFyMHo2aDU2YnI2In0.CutnKCVEf1SzDpddacdekg";
 
-const geocodeLocation = async (city, country, street) => {
+const geocodeLocation = async (city, country, street = "", province = "") => {
   try {
     const token = MAPBOX_TOKEN;
     if (!token) return { lat: null, lng: null };
-    const parts = [street, city, country].filter(Boolean).join(", ");
+    const parts = [street, city, province, country].filter(Boolean).join(", ");
     const query = encodeURIComponent(parts.trim());
     const res = await fetch(
       `https://api.mapbox.com/geocoding/v5/mapbox.places/${query}.json?access_token=${token}&limit=1`
@@ -63,7 +63,29 @@ const geocodeLocation = async (city, country, street) => {
     if (!res.ok) return { lat: null, lng: null };
     const data = await res.json();
     if (data?.features?.length > 0) {
-      const [lng, lat] = data.features[0].center;
+      const feature = data.features[0];
+      const [lng, lat] = feature.center;
+
+      // Sanity check: if a province/state was given, confirm the match actually
+      // falls within it. Mapbox can otherwise return a confident-looking but wrong
+      // result (e.g. a made-up street address fuzzy-matching a same-named street in
+      // a completely different city/state). Better to leave coordinates blank
+      // (visibly fixable in Admin) than silently place a wrong pin on the map.
+      if (province) {
+        const regionCtx = (feature.context || []).find(c => c.id?.startsWith("region"));
+        const regionText = (regionCtx?.text || "").toLowerCase();
+        const provinceText = province.toLowerCase();
+        const matches = regionText && (
+          regionText.includes(provinceText) ||
+          provinceText.includes(regionText) ||
+          regionCtx?.short_code?.toLowerCase()?.endsWith(provinceText.slice(0, 2))
+        );
+        if (!matches) {
+          console.warn(`Geocode mismatch: expected region "${province}" but got "${regionText}" for query "${parts}". Leaving coordinates blank for manual review.`);
+          return { lat: null, lng: null };
+        }
+      }
+
       return { lat, lng };
     }
   } catch {
@@ -453,7 +475,7 @@ export default function ChurchRegistration({ onBack, user, userRole }) {
       // (not the literal string "Other") for both geocoding and the saved record.
       const resolvedCountry = form.country==="Other" ? form.otherCountry.trim() : form.country;
 
-      const { lat, lng } = await geocodeLocation(form.city, resolvedCountry, form.street);
+      const { lat, lng } = await geocodeLocation(form.city, resolvedCountry, form.street, form.province);
 
       const { data, error: dbError } = await supabase.from("churches").insert({
         name:         form.churchName,
