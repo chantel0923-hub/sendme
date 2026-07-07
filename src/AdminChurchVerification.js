@@ -121,9 +121,10 @@ export default function AdminChurchVerification({ onBack, user }) {
       return;
     }
 
-    let sent = 0;
+    const succeeded = [];
+    const failed = [];
     for (const ref of refs) {
-      await sendNotification("reference_confirmation", ref.contact, {
+      const result = await sendNotification("reference_confirmation", ref.contact, {
         referenceName: ref.name,
         churchName:    c.name,
         pastorName:    c.pastor_name,
@@ -131,10 +132,21 @@ export default function AdminChurchVerification({ onBack, user }) {
         country:       c.country,
         adminEmail:    ADMIN_EMAIL,
       });
-      sent++;
+      if (result?.sent) succeeded.push(ref.contact);
+      else failed.push({ contact: ref.contact, error: result?.error });
     }
-    setRefEmailSent(prev => ({ ...prev, [c.id]: true }));
-    alert(`✝ Reference confirmation email${sent > 1 ? "s" : ""} sent to ${refs.map(r => r.contact).join(" and ")}`);
+
+    if (succeeded.length > 0) {
+      setRefEmailSent(prev => ({ ...prev, [c.id]: true }));
+    }
+
+    if (failed.length === 0) {
+      alert(`✝ Reference confirmation email${succeeded.length > 1 ? "s" : ""} sent to ${succeeded.join(" and ")}`);
+    } else if (succeeded.length === 0) {
+      alert(`⚠ Could not send any reference emails. Error: ${JSON.stringify(failed[0].error)}\n\nCheck the Resend dashboard (resend.com/emails) for the exact reason, and confirm the sending domain is verified.`);
+    } else {
+      alert(`⚠ Partial send — reached ${succeeded.join(", ")}, but failed for ${failed.map(f=>f.contact).join(", ")}.\nError: ${JSON.stringify(failed[0].error)}`);
+    }
   };
 
   // Fixes churches that registered with missing lat/lng (e.g. the Mapbox
