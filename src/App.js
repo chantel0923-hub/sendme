@@ -927,7 +927,7 @@ const DonorProfile = ({ user, onBack }) => {
 };
 
 // ── NAV "MORE" DROPDOWN ──────────────────────────────────────────────────────
-const NavDropdown = ({ user, userRole, onProfile, onEmergency, onTestimonies, onWorker, onMatching, onQR, onFaq, onPayout, onMilestoneProof, onPastorReview, onMissionaryDashboard }) => {
+const NavDropdown = ({ user, userRole, guest, onProfile, onEmergency, onTestimonies, onWorker, onMatching, onQR, onFaq, onPayout, onMilestoneProof, onPastorReview, onMissionaryDashboard }) => {
   const [open,setOpen] = useState(false);
   const ref = useRef(null);
 
@@ -939,9 +939,9 @@ const NavDropdown = ({ user, userRole, onProfile, onEmergency, onTestimonies, on
 
   const items = [
     user && { label:"My Profile",        icon:"✝",  color:"#e8b34b",                onClick:onProfile },
-    user && { label:"🚨 Emergency",              color:"#e85b5b",                            onClick:onEmergency },
+    !guest && { label:"🚨 Emergency",     color:"#e85b5b",                            onClick:onEmergency },
     { label:"Testimonies",               color:"#3ecf8e",                            onClick:onTestimonies },
-    user && { label:"Send Worker",               color:"#b06cf5",                            onClick:onWorker },
+    !guest && { label:"Send Worker",      color:"#b06cf5",                            onClick:onWorker },
     { label:"Find Mission",              color:"#5b9cf6",                            onClick:onMatching },
     { label:"QR Share",                  color:"rgba(255,255,255,0.65)",             onClick:onQR },
     { label:"FAQ",                       color:"#e8b34b",                            onClick:onFaq },
@@ -1082,13 +1082,13 @@ const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, o
           <button onClick={onDonate} style={{ background:"linear-gradient(135deg,#4caf7d,#3a8f63)",border:"none",borderRadius:10,padding:"8px 16px",color:"#fff",cursor:"pointer",fontSize:13,fontWeight:700 }}>💛 Donate</button>
           <button onClick={onPray} style={{ background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"8px 16px",color:"rgba(255,255,255,0.6)",cursor:"pointer",fontSize:13 }}>Pray</button>
           <button onClick={onChurches} style={{ background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"8px 16px",color:"rgba(255,255,255,0.6)",cursor:"pointer",fontSize:13 }}>Churches</button>
-          {user && <button onClick={onApply} style={{ background:"linear-gradient(135deg,#e8b34b,#c8942b)",border:"none",borderRadius:10,padding:"8px 16px",color:"#000",cursor:"pointer",fontSize:13,fontWeight:700 }}>Apply</button>}
+          {!guest && <button onClick={onApply} style={{ background:"linear-gradient(135deg,#e8b34b,#c8942b)",border:"none",borderRadius:10,padding:"8px 16px",color:"#000",cursor:"pointer",fontSize:13,fontWeight:700 }}>Apply</button>}
           {(userRole==="missionary"||isPastor) && user && <button onClick={onMilestoneProof} style={{ background:"rgba(91,156,246,0.1)",border:"1px solid rgba(91,156,246,0.3)",borderRadius:10,padding:"8px 16px",color:"#5b9cf6",cursor:"pointer",fontSize:13,fontWeight:700 }}>📋 Submit Proof</button>}
           {userRole==="missionary" && user && <button onClick={onMissionaryDashboard} style={{ background:"rgba(232,179,75,0.1)",border:"1px solid rgba(232,179,75,0.3)",borderRadius:10,padding:"8px 16px",color:"#e8b34b",cursor:"pointer",fontSize:13,fontWeight:700 }}>📊 My Dashboard</button>}
           {isPastor && <button onClick={onMyChurch} style={{ background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"8px 16px",color:"rgba(255,255,255,0.6)",cursor:"pointer",fontSize:13 }}>{userRole==="org_leader" ? "My Organization" : "My Church"}</button>}
           {isPastor && user && <PayoutsDropdown onPayout={onPayout} onPastorReview={onPastorReview} />}
           <NavDropdown
-            user={user} userRole={userRole}
+            user={user} userRole={userRole} guest={guest}
             onProfile={onProfile} onEmergency={onEmergency} onTestimonies={onTestimonies}
             onWorker={onWorker} onMatching={onMatching} onQR={onQR} onFaq={onFaq}
           />
@@ -1494,6 +1494,22 @@ const MissionVisionSplash = ({ onDone }) => (
   </div>
 );
 
+const GuestBlocked = ({ title, message, onBack, onRegister }) => (
+  <div style={{ minHeight:"100vh", background:"#060c18", color:"#eef1ff", fontFamily:"Georgia, serif", display:"flex", alignItems:"center", justifyContent:"center", padding:32 }}>
+    <div style={{ textAlign:"center", maxWidth:440 }}>
+      <div style={{ fontSize:40, marginBottom:16 }}>🔒</div>
+      <div style={{ fontSize:22, fontWeight:700, marginBottom:12 }}>{title}</div>
+      <div style={{ fontSize:14, color:"rgba(255,255,255,0.5)", lineHeight:1.7, marginBottom:28 }}>{message}</div>
+      <button onClick={onRegister} style={{ width:"100%", padding:"14px 0", borderRadius:14, border:"none", background:"linear-gradient(135deg,#e8b34b,#c8942b)", color:"#000", fontWeight:700, cursor:"pointer", fontSize:15, fontFamily:"Georgia, serif", marginBottom:12 }}>
+        ✝ Sign In / Register
+      </button>
+      <button onClick={onBack} style={{ width:"100%", padding:"12px 0", borderRadius:14, border:"1px solid rgba(255,255,255,0.1)", background:"transparent", color:"rgba(255,255,255,0.5)", cursor:"pointer", fontSize:14, fontFamily:"Georgia, serif" }}>
+        Back to Home
+      </button>
+    </div>
+  </div>
+);
+
 export default function App() {
   const [user,setUser]                         = useState(null);
   const [showSplash,setShowSplash]             = useState(false);
@@ -1504,7 +1520,6 @@ export default function App() {
   const [guest,setGuest]                       = useState(false);
   const [pfReturn,setPfReturn]                 = useState(null);
   const [pendingMissionId,setPendingMissionId] = useState(null);
-  const [pendingDeepLinkScreen,setPendingDeepLinkScreen] = useState(null);
   const [liveMissions,setLiveMissions]         = useState(DEMO_MISSIONS);
 
   const loadRole = async (u) => {
@@ -1560,25 +1575,9 @@ export default function App() {
       "/register-church":"church",
       "/emergency":"emergency",
     };
-    if(ROUTE_SCREENS[path]) setPendingDeepLinkScreen(ROUTE_SCREENS[path]);
+    if(ROUTE_SCREENS[path]) setScreen(ROUTE_SCREENS[path]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[]);
-
-  // Apply the deferred deep-link route only once we actually know whether
-  // someone is signed in. "apply" and "emergency" require a registered
-  // account — a guest (or someone still on the Auth screen) landing on
-  // /apply or /emergency via a shared link must not be dropped straight
-  // into those screens; they land on Home/Auth like a normal guest instead.
-  useEffect(()=>{
-    if(!authReady || !pendingDeepLinkScreen) return;
-    const AUTH_REQUIRED_SCREENS = ["apply","emergency"];
-    if(AUTH_REQUIRED_SCREENS.includes(pendingDeepLinkScreen) && !user){
-      setPendingDeepLinkScreen(null);
-      return;
-    }
-    setScreen(pendingDeepLinkScreen);
-    setPendingDeepLinkScreen(null);
-  },[authReady,user,pendingDeepLinkScreen]);
 
   // Resolve a deep-linked mission id (from a QR/share URL) against Supabase directly,
   // so it works even for missions not in the "active" list (e.g. completed missions).
@@ -1631,14 +1630,14 @@ export default function App() {
   if(screen==="admin-payouts")    return isAdminUser ? <AdminPayouts onBack={()=>setScreen("home")}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
   if(screen==="pray")             return <PrayerWall missions={liveMissions} onBack={()=>setScreen("home")}/>;
   if(screen==="churches")         return <ChurchesTab onBack={()=>setScreen("home")}/>;
-  if(screen==="apply")            return <MissionaryApplication onBack={()=>setScreen("home")} user={user}/>;
+  if(screen==="apply")            return guest ? <GuestBlocked title="Registration Required" message="Applying as a missionary requires a SendMe account so your application can be tracked and your church can endorse you. Please sign in or register to continue." onBack={()=>setScreen("home")} onRegister={()=>{setGuest(false);setScreen("home");}}/> : <MissionaryApplication onBack={()=>setScreen("home")} user={user}/>;
   if(screen==="church")           return (isPastor||isAdminUser) ? <ChurchRegistration onBack={()=>setScreen("home")} user={user} userRole={userRole}/> : null;
   if(screen==="my-church")        return (isPastor||isAdminUser) ? <MyChurch onBack={()=>setScreen("home")} user={user} userRole={userRole}/> : null;
   if(screen==="profile")          return <DonorProfile user={user} onBack={()=>setScreen("home")}/>;
-  if(screen==="emergency")        return <EmergencyRequests onBack={()=>setScreen("home")} user={user}/>;
+  if(screen==="emergency")        return guest ? <GuestBlocked title="Registration Required" message="Submitting an emergency mission request requires a SendMe account, so admin can verify and follow up with you directly. Please sign in or register to continue." onBack={()=>setScreen("home")} onRegister={()=>{setGuest(false);setScreen("home");}}/> : <EmergencyRequests onBack={()=>setScreen("home")} user={user}/>;
   if(screen==="matching")         return <MissionMatching missions={liveMissions} onMission={openMission} onBack={()=>setScreen("home")}/>;
   if(screen==="testimonies")      return <TestimonyEngine onBack={()=>setScreen("home")} onMission={openMission}/>;
-  if(screen==="worker")           return <SendAWorker onBack={()=>setScreen("home")} user={user}/>;
+  if(screen==="worker")           return guest ? <GuestBlocked title="Registration Required" message="Posting or responding to a worker request requires a SendMe account, so churches can coordinate and follow up directly. Please sign in or register to continue." onBack={()=>setScreen("home")} onRegister={()=>{setGuest(false);setScreen("home");}}/> : <SendAWorker onBack={()=>setScreen("home")} user={user}/>;
   if(screen==="qr")               return <QRShare missions={liveMissions} onBack={()=>setScreen("home")}/>;
   if(screen==="milestone-proof")  return <MilestoneProof onBack={()=>setScreen("home")} user={user}/>;
   if(screen==="pastor-review")    return (isPastor||isAdminUser) ? <PastorReview onBack={()=>setScreen("home")} user={user} isAdmin={isAdminUser}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
