@@ -21,7 +21,7 @@ export default function SendAWorker({ onBack, user }) {
   const [showForm, setShowForm]     = useState(false);
   const [responding, setResponding] = useState(null);
   const [form, setForm]             = useState({ title:"", description:"", church:"", city:"", country:"", type:"missionary_team", need1:"", need2:"", need3:"", contactEmail:"", contactPhone:"" });
-  const [response, setResponse]     = useState({ commitment:"", note:"" });
+  const [response, setResponse]     = useState({ commitment:"", note:"", name:"", email:"", phone:"" });
   const [submitMsg, setSubmitMsg]   = useState("");
   const [responded, setResponded]   = useState(false);
 
@@ -86,12 +86,15 @@ export default function SendAWorker({ onBack, user }) {
   };
 
   const submitResponse = async (req) => {
+    if (!response.name.trim() || !response.email.trim()) return;
     try {
       await supabase.from("worker_responses").insert({
         request_id:      req.id,
         commitment:      response.commitment,
         note:            response.note,
-        responder_email: user?.email || null,
+        responder_name:  response.name,
+        responder_email: response.email,
+        responder_phone: response.phone || null,
         user_id:         user?.id || null,
       });
       await supabase.from("worker_requests").update({ responses: (req.responses || 0) + 1 }).eq("id", req.id);
@@ -99,7 +102,9 @@ export default function SendAWorker({ onBack, user }) {
         requestTitle:   req.title,
         requestChurch:  req.church,
         commitment:     response.commitment,
-        responderEmail: user?.email || null,
+        responderName:  response.name,
+        responderEmail: response.email,
+        responderPhone: response.phone || null,
         note:           response.note,
       });
     } catch (e) {
@@ -138,6 +143,16 @@ export default function SendAWorker({ onBack, user }) {
                 <div style={{ fontSize:13, color:"rgba(255,255,255,0.4)" }}>{req.church}{req.city ? ` · ${req.city}` : ""} · {req.country}</div>
               </div>
               <div style={{ fontSize:15, fontWeight:700, color:"#eef1ff", marginBottom:14 }}>Your Response</div>
+              <div style={{ marginBottom:16 }}>
+                <div style={{ fontSize:12, color:"rgba(255,255,255,0.4)", letterSpacing:1, textTransform:"uppercase", marginBottom:6 }}>Your Contact Details</div>
+                <div style={{ fontSize:12, color:"rgba(255,255,255,0.35)", marginBottom:10, lineHeight:1.6 }}>{req.church} will use these details to reach you directly and coordinate.</div>
+                <input value={response.name} onChange={e=>setResponse(r=>({...r,name:e.target.value}))}
+                  placeholder="Your full name *" style={inp}/>
+                <input value={response.email} onChange={e=>setResponse(r=>({...r,email:e.target.value}))}
+                  placeholder="Your email *" type="email" style={inp}/>
+                <input value={response.phone} onChange={e=>setResponse(r=>({...r,phone:e.target.value}))}
+                  placeholder="Your phone / WhatsApp number (recommended)" type="tel" style={inp}/>
+              </div>
               <div style={{ marginBottom:12 }}>
                 <div style={{ fontSize:12, color:"rgba(255,255,255,0.4)", letterSpacing:1, textTransform:"uppercase", marginBottom:6 }}>What can you offer?</div>
                 {[["We will send workers","send_workers"],["We will support transport","transport"],["We will host them","hosting"],["We will provide funding","funding"]].map(([label,val]) => (
@@ -151,8 +166,8 @@ export default function SendAWorker({ onBack, user }) {
               <textarea value={response.note} onChange={e=>setResponse(r=>({...r,note:e.target.value}))}
                 placeholder="Add any additional details about your response..."
                 style={{ ...inp, resize:"none", height:80 }}/>
-              <button onClick={()=>submitResponse(req)} disabled={!response.commitment}
-                style={{ width:"100%", padding:"14px 0", borderRadius:14, border:"none", background:response.commitment?"linear-gradient(135deg,#e8b34b,#c8942b)":"rgba(255,255,255,0.06)", color:response.commitment?"#000":"rgba(255,255,255,0.25)", fontWeight:700, cursor:response.commitment?"pointer":"default", fontSize:15, fontFamily:"Georgia, serif", boxShadow:response.commitment?"0 6px 24px rgba(232,179,75,0.4)":"none" }}>
+              <button onClick={()=>submitResponse(req)} disabled={!response.commitment || !response.name.trim() || !response.email.trim()}
+                style={{ width:"100%", padding:"14px 0", borderRadius:14, border:"none", background:(response.commitment && response.name.trim() && response.email.trim())?"linear-gradient(135deg,#e8b34b,#c8942b)":"rgba(255,255,255,0.06)", color:(response.commitment && response.name.trim() && response.email.trim())?"#000":"rgba(255,255,255,0.25)", fontWeight:700, cursor:(response.commitment && response.name.trim() && response.email.trim())?"pointer":"default", fontSize:15, fontFamily:"Georgia, serif", boxShadow:(response.commitment && response.name.trim() && response.email.trim())?"0 6px 24px rgba(232,179,75,0.4)":"none" }}>
                 Submit Response
               </button>
             </>
@@ -254,7 +269,7 @@ export default function SendAWorker({ onBack, user }) {
                   </div>
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
                     <span style={{ fontSize:12, color:"rgba(255,255,255,0.3)" }}>{req.responses} {req.responses===1?"response":"responses"}</span>
-                    <button onClick={()=>{setResponding(req);setResponded(false);setResponse({commitment:"",note:""});}}
+                    <button onClick={()=>{setResponding(req);setResponded(false);setResponse({commitment:"",note:"",name:user?.user_metadata?.full_name||"",email:user?.email||"",phone:""});}}
                       style={{ padding:"9px 20px", borderRadius:10, border:"none", background:`linear-gradient(135deg,${t.color},${t.color}cc)`, color:"#000", fontWeight:700, cursor:"pointer", fontSize:13, fontFamily:"Georgia, serif" }}>
                       Respond to This Need
                     </button>
