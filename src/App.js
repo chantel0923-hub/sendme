@@ -939,9 +939,9 @@ const NavDropdown = ({ user, userRole, onProfile, onEmergency, onTestimonies, on
 
   const items = [
     user && { label:"My Profile",        icon:"✝",  color:"#e8b34b",                onClick:onProfile },
-    { label:"🚨 Emergency",              color:"#e85b5b",                            onClick:onEmergency },
+    user && { label:"🚨 Emergency",              color:"#e85b5b",                            onClick:onEmergency },
     { label:"Testimonies",               color:"#3ecf8e",                            onClick:onTestimonies },
-    { label:"Send Worker",               color:"#b06cf5",                            onClick:onWorker },
+    user && { label:"Send Worker",               color:"#b06cf5",                            onClick:onWorker },
     { label:"Find Mission",              color:"#5b9cf6",                            onClick:onMatching },
     { label:"QR Share",                  color:"rgba(255,255,255,0.65)",             onClick:onQR },
     { label:"FAQ",                       color:"#e8b34b",                            onClick:onFaq },
@@ -1082,7 +1082,7 @@ const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, o
           <button onClick={onDonate} style={{ background:"linear-gradient(135deg,#4caf7d,#3a8f63)",border:"none",borderRadius:10,padding:"8px 16px",color:"#fff",cursor:"pointer",fontSize:13,fontWeight:700 }}>💛 Donate</button>
           <button onClick={onPray} style={{ background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"8px 16px",color:"rgba(255,255,255,0.6)",cursor:"pointer",fontSize:13 }}>Pray</button>
           <button onClick={onChurches} style={{ background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"8px 16px",color:"rgba(255,255,255,0.6)",cursor:"pointer",fontSize:13 }}>Churches</button>
-          <button onClick={onApply} style={{ background:"linear-gradient(135deg,#e8b34b,#c8942b)",border:"none",borderRadius:10,padding:"8px 16px",color:"#000",cursor:"pointer",fontSize:13,fontWeight:700 }}>Apply</button>
+          {user && <button onClick={onApply} style={{ background:"linear-gradient(135deg,#e8b34b,#c8942b)",border:"none",borderRadius:10,padding:"8px 16px",color:"#000",cursor:"pointer",fontSize:13,fontWeight:700 }}>Apply</button>}
           {(userRole==="missionary"||isPastor) && user && <button onClick={onMilestoneProof} style={{ background:"rgba(91,156,246,0.1)",border:"1px solid rgba(91,156,246,0.3)",borderRadius:10,padding:"8px 16px",color:"#5b9cf6",cursor:"pointer",fontSize:13,fontWeight:700 }}>📋 Submit Proof</button>}
           {userRole==="missionary" && user && <button onClick={onMissionaryDashboard} style={{ background:"rgba(232,179,75,0.1)",border:"1px solid rgba(232,179,75,0.3)",borderRadius:10,padding:"8px 16px",color:"#e8b34b",cursor:"pointer",fontSize:13,fontWeight:700 }}>📊 My Dashboard</button>}
           {isPastor && <button onClick={onMyChurch} style={{ background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"8px 16px",color:"rgba(255,255,255,0.6)",cursor:"pointer",fontSize:13 }}>{userRole==="org_leader" ? "My Organization" : "My Church"}</button>}
@@ -1504,6 +1504,7 @@ export default function App() {
   const [guest,setGuest]                       = useState(false);
   const [pfReturn,setPfReturn]                 = useState(null);
   const [pendingMissionId,setPendingMissionId] = useState(null);
+  const [pendingDeepLinkScreen,setPendingDeepLinkScreen] = useState(null);
   const [liveMissions,setLiveMissions]         = useState(DEMO_MISSIONS);
 
   const loadRole = async (u) => {
@@ -1559,9 +1560,25 @@ export default function App() {
       "/register-church":"church",
       "/emergency":"emergency",
     };
-    if(ROUTE_SCREENS[path]) setScreen(ROUTE_SCREENS[path]);
+    if(ROUTE_SCREENS[path]) setPendingDeepLinkScreen(ROUTE_SCREENS[path]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[]);
+
+  // Apply the deferred deep-link route only once we actually know whether
+  // someone is signed in. "apply" and "emergency" require a registered
+  // account — a guest (or someone still on the Auth screen) landing on
+  // /apply or /emergency via a shared link must not be dropped straight
+  // into those screens; they land on Home/Auth like a normal guest instead.
+  useEffect(()=>{
+    if(!authReady || !pendingDeepLinkScreen) return;
+    const AUTH_REQUIRED_SCREENS = ["apply","emergency"];
+    if(AUTH_REQUIRED_SCREENS.includes(pendingDeepLinkScreen) && !user){
+      setPendingDeepLinkScreen(null);
+      return;
+    }
+    setScreen(pendingDeepLinkScreen);
+    setPendingDeepLinkScreen(null);
+  },[authReady,user,pendingDeepLinkScreen]);
 
   // Resolve a deep-linked mission id (from a QR/share URL) against Supabase directly,
   // so it works even for missions not in the "active" list (e.g. completed missions).
