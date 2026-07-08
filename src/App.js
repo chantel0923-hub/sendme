@@ -719,7 +719,7 @@ const MissionDetail = ({ mission: m, onBack, onDonate, onLedger }) => {
             <button onClick={onDonate} style={{ padding:"16px 0",borderRadius:14,border:"none",background:`linear-gradient(135deg,${m.color},${m.color}cc)`,color:"#000",fontWeight:700,cursor:"pointer",fontSize:16,fontFamily:"Georgia, serif",boxShadow:`0 6px 28px ${m.color}44` }}>
               💝 Donate to This Mission
             </button>
-            <button onClick={shareWhatsApp} style={{ padding:"16px 18px",borderRadius:14,border:"1px solid rgba(37,211,102,0.3)",background:"rgba(37,211,102,0.08)",color:"#25d366",fontWeight:700,cursor:"pointer",fontSize:14,fontFamily:"Georgia, serif",whiteSpace:"nowrap" }}>
+            <button onClick={shareWhatsApp} style={{ padding:"16px 18px",borderRadius:14,border:"1px solid rgba(62,207,142,0.3)",background:"rgba(62,207,142,0.08)",color:"#3ecf8e",fontWeight:700,cursor:"pointer",fontSize:14,fontFamily:"Georgia, serif",whiteSpace:"nowrap" }}>
               Help Spread This Mission
             </button>
             <button onClick={onLedger} style={{ padding:"16px 18px",borderRadius:14,border:"1px solid rgba(91,156,246,0.3)",background:"rgba(91,156,246,0.08)",color:"#5b9cf6",fontWeight:700,cursor:"pointer",fontSize:14,fontFamily:"Georgia, serif",whiteSpace:"nowrap" }}>
