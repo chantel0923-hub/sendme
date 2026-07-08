@@ -27,6 +27,8 @@ export default function AdminWorkerRequests({ onBack }) {
   const [loading, setLoading]       = useState(true);
   const [expanded, setExpanded]     = useState(null);
   const [filter, setFilter]         = useState("open"); // open | all
+  const [sending, setSending]       = useState(null);   // key of response currently sending
+  const [sentKeys, setSentKeys]     = useState({});     // key -> "sent" | "error"
 
   useEffect(() => {
     const load = async () => {
@@ -80,6 +82,33 @@ export default function AdminWorkerRequests({ onBack }) {
     const { error } = await supabase.from("worker_requests").delete().eq("id", id);
     if (!error) setRequests(prev => prev.filter(r => r.id !== id));
     else console.log("deleteRequest error:", error);
+  };
+
+  const sendResponseNotification = async (req, rp, key) => {
+    if (!req.contact_email) return;
+    setSending(key);
+    try {
+      const { data, error } = await supabase.functions.invoke("send-notification", {
+        body: {
+          type: "worker_response_notify",
+          to: req.contact_email,
+          data: {
+            churchName:     req.church,
+            requestTitle:   req.title,
+            commitment:     rp.commitment ? rp.commitment.replace(/_/g, " ") : "",
+            note:           rp.note || "",
+            responderEmail: rp.responder_email,
+            responderPhone: rp.responder_phone,
+          },
+        },
+      });
+      if (error || !data?.sent) throw error || new Error("send failed");
+      setSentKeys(prev => ({ ...prev, [key]: "sent" }));
+    } catch (e) {
+      console.log("sendResponseNotification error:", e);
+      setSentKeys(prev => ({ ...prev, [key]: "error" }));
+    }
+    setSending(null);
   };
 
   const filtered = filter === "open"
@@ -186,24 +215,9 @@ export default function AdminWorkerRequests({ onBack }) {
                     {isExpanded && (
                       <div style={{ marginTop:12, display:"flex", flexDirection:"column", gap:10 }}>
                         {reqResponses.map((rp, i) => {
-                          const mailBody =
-`Dear ${req.church || "Pastor"},
-
-Great news! Someone has responded to your worker request on SendMe:
-
-"${req.title}"
-
-They shared:
-${rp.commitment ? rp.commitment.replace(/_/g," ") : "They are willing to help"}
-${rp.note ? `"${rp.note}"` : ""}
-
-You can reach them directly at: ${rp.responder_email || "contact SendMe admin for details"}${rp.responder_phone ? " / " + rp.responder_phone : ""}
-
-In His service,
-SendMe Global Mission Fund`;
-                          const mailtoHref = req.contact_email
-                            ? `mailto:${req.contact_email}?subject=${encodeURIComponent(`Someone can help with "${req.title}"`)}&body=${encodeURIComponent(mailBody)}`
-                            : null;
+                          const key = rp.id || `${req.id}-${i}`;
+                          const status = sentKeys[key];
+                          const isSending = sending === key;
 
                           return (
                             <div key={i} style={{ background:"rgba(62,207,142,0.05)", borderRadius:12, border:"1px solid rgba(62,207,142,0.15)", padding:"12px 14px" }}>
@@ -213,13 +227,24 @@ SendMe Global Mission Fund`;
                               {rp.responder_email && <div style={{ fontSize:12, color:"rgba(255,255,255,0.5)", marginBottom:2 }}>✉ {rp.responder_email}{rp.responder_phone ? " · " + rp.responder_phone : ""}</div>}
                               {rp.note && <div style={{ fontSize:13, color:"rgba(255,255,255,0.55)", lineHeight:1.6, marginTop:6 }}>{rp.note}</div>}
                               <div style={{ fontSize:11, color:"rgba(255,255,255,0.25)", marginTop:6, marginBottom:10 }}>{timeAgo(rp.created_at)}</div>
-                              {mailtoHref ? (
-                                <a href={mailtoHref}
-                                  style={{ display:"inline-block", padding:"7px 14px", borderRadius:9, border:"1px solid rgba(232,179,75,0.35)", background:"rgba(232,179,75,0.08)", color:"#e8b34b", cursor:"pointer", fontSize:12, fontFamily:"Georgia, serif", fontWeight:600, textDecoration:"none" }}>
-                                  📧 Email {req.church || "the church"} — Someone Can Help
-                                </a>
+                              {req.contact_email ? (
+                                status === "sent" ? (
+                                  <div style={{ display:"inline-block", padding:"7px 14px", borderRadius:9, border:"1px solid rgba(62,207,142,0.35)", background:"rgba(62,207,142,0.08)", color:"#3ecf8e", fontSize:12, fontFamily:"Georgia, serif", fontWeight:600 }}>
+                                    ✓ Sent to {req.church || "the church"}
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={() => sendResponseNotification(req, rp, key)}
+                                    disabled={isSending}
+                                    style={{ display:"inline-block", padding:"7px 14px", borderRadius:9, border:"1px solid rgba(232,179,75,0.35)", background:"rgba(232,179,75,0.08)", color:"#e8b34b", cursor: isSending ? "default" : "pointer", fontSize:12, fontFamily:"Georgia, serif", fontWeight:600, opacity: isSending ? 0.6 : 1 }}>
+                                    {isSending ? "Sending…" : `📧 Email ${req.church || "the church"} — Someone Can Help`}
+                                  </button>
+                                )
                               ) : (
                                 <div style={{ fontSize:11, color:"rgba(255,255,255,0.25)" }}>No church email on file — contact manually.</div>
+                              )}
+                              {status === "error" && (
+                                <div style={{ fontSize:11, color:"#e85b5b", marginTop:6 }}>⚠ Send failed — please try again.</div>
                               )}
                             </div>
                           );
