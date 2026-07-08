@@ -150,7 +150,12 @@ const Step1 = ({ form, set }) => (
 const Step2 = ({ form, set }) => (
   <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
     <div style={sectionTitle}>Your Calling & Testimony</div>
-    <FInput label="How long have you been a Message believer? *" placeholder="e.g. 12 years" value={form.yearsBeliever} onChange={e=>set("yearsBeliever",e.target.value)}/>
+    <FSelect label="How long have you been a Message believer? *" value={form.yearsBeliever} onChange={e=>set("yearsBeliever",e.target.value)}>
+      <option value="" style={{background:"#0c1628"}}>Select years...</option>
+      {Array.from({length:50},(_,i)=>i+1).map(y=>(
+        <option key={y} value={y} style={{background:"#0c1628"}}>{y} {y===1?"year":"years"}</option>
+      ))}
+    </FSelect>
     <div style={{ marginBottom:14 }}>
       <label style={label}>Describe your calling to the mission field *</label>
       <textarea placeholder="Share how the Lord called you..." value={form.calling} onChange={e=>set("calling",e.target.value)} style={{...textarea,minHeight:130}}/>
@@ -401,7 +406,12 @@ const Step4 = ({ form, set }) => (
     </div>
     <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
       <FInput label="Mission Start Date" type="date" value={form.startDate} onChange={e=>set("startDate",e.target.value)}/>
-      <FInput label="Expected Duration" placeholder="e.g. 12 months" value={form.duration} onChange={e=>set("duration",e.target.value)}/>
+      <FSelect label="Expected Duration" value={form.duration} onChange={e=>set("duration",e.target.value)}>
+        <option value="" style={{background:"#0c1628"}}>Select duration...</option>
+        {Array.from({length:72},(_,i)=>i+1).map(m=>(
+          <option key={m} value={m} style={{background:"#0c1628"}}>{m} {m===1?"month":"months"}</option>
+        ))}
+      </FSelect>
     </div>
     <FundingGoalCurrency form={form} set={set}/>
     <div style={{ background:"rgba(91,156,246,0.07)",borderRadius:14,border:"1px solid rgba(91,156,246,0.25)",padding:"16px 18px",marginBottom:14 }}>
@@ -637,7 +647,7 @@ export default function MissionaryApplication({ onBack, user }) {
         platform_surcharge: platformSurcharge,
         surcharge_acknowledged: form.surchargeAcknowledged,
         start_date:       form.startDate || null,
-        duration:         form.duration || null,
+        duration_months:  form.duration ? Number(form.duration) : null,
         raised:           0,
         status:           form.churchVerified ? "pending" : "pending_church",
         milestone:        0,
