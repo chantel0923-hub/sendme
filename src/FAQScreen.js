@@ -4,8 +4,7 @@
 import React, { useState } from 'react';
 import { FEATURED_VIDEOS, SENDME_CHANNEL_URL } from './sendmeVideos';
 import YouTubeEmbed from './YouTubeEmbed';
-import { supabase } from './supabase';
-import { notifyAdmin } from './notifications';
+import { notifyAdmin, sendNotification } from './notifications';
 
 const faqs = [
   {
@@ -131,13 +130,14 @@ export default function FAQScreen({ onBack }) {
         message: contactForm.message.trim(),
       });
       // Full message captured via email so nothing is lost
-      await supabase.functions.invoke('send-notification', {
-        body: {
-          to: 'sendmemissionfund@gmail.com',
-          subject: `SendMe FAQ Contact — ${contactForm.name.trim() || 'Anonymous'}`,
-          message: `From: ${contactForm.name.trim() || 'Anonymous'} (${contactForm.email.trim()})\n\n${contactForm.message.trim()}`,
-        },
+      const emailResult = await sendNotification('contact_form', 'sendmemissionfund@gmail.com', {
+        name: contactForm.name.trim() || 'Anonymous',
+        email: contactForm.email.trim(),
+        message: contactForm.message.trim(),
       });
+      if (!emailResult?.sent) {
+        console.warn('Contact form email did not send:', emailResult?.error);
+      }
       setContactSubmitted(true);
     } catch (e) {
       setContactError('Could not send your message. Please try again, or email us directly at sendmemissionfund@gmail.com.');

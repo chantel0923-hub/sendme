@@ -188,6 +188,16 @@ const TEMPLATES: Record<string, (d: any) => { subject: string; html: string }> =
     ),
   }),
 
+  contact_form: (d) => ({
+    subject: `SendMe FAQ Contact — ${d.name || "Anonymous"}`,
+    html: wrapEmail(
+      "New Contact Form Message",
+      `<strong style="color:#eef1ff;">From:</strong> ${d.name || "Anonymous"}
+      (${d.email ? `<a href="mailto:${d.email}" style="color:#e8b34b;">${d.email}</a>` : "no email given"})<br/><br/>
+      <div style="white-space:pre-wrap;color:rgba(255,255,255,0.75);background:rgba(255,255,255,0.04);border-radius:10px;padding:14px 16px;">${(d.message || "").replace(/\n/g, "<br/>")}</div>`,
+    ),
+  }),
+
   banking_request: (d) => ({
     subject: `Action needed: Please submit your church banking details — ${d.missionTitle}`,
     html: wrapEmail(
