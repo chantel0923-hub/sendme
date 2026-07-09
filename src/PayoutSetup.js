@@ -15,6 +15,8 @@ const labelStyle = {
 export default function PayoutSetup({ onBack, user }) {
   const [missions, setMissions]   = useState([]);
   const [myChurch, setMyChurch]   = useState(null);
+  const [churchList, setChurchList] = useState([]); // #68: verified churches a missionary can route payout through
+  const [selectedChurchId, setSelectedChurchId] = useState("");
   const [mode, setMode]           = useState(""); // "missionary" | "church"
   const [selectedId, setSelectedId] = useState("");
   const [form, setForm] = useState({
@@ -33,6 +35,10 @@ export default function PayoutSetup({ onBack, user }) {
   const [done, setDone]     = useState(false);
   const [error, setError]   = useState("");
 
+  // #68: true only when a missionary (not a pastor on their own church's flow)
+  // has chosen to receive funds via a church's own registered banking.
+  const receivingViaChurch = mode !== "church" && form.recipient_type === "church";
+
   useEffect(() => {
     const load = async () => {
       const { data: missionData } = await supabase
@@ -40,6 +46,14 @@ export default function PayoutSetup({ onBack, user }) {
         .select("id, title, missionary_role, city, country")
         .order("created_at", { ascending: false });
       setMissions(missionData || []);
+
+      // #68: real list of verified churches, for the missionary "receiving as a church" flow
+      const { data: verifiedChurches } = await supabase
+        .from("churches")
+        .select("id, name, city, country")
+        .eq("verified", true)
+        .order("name", { ascending: true });
+      setChurchList(verifiedChurches || []);
 
       // Check if logged-in user is a pastor with a church
       if (user?.id) {
@@ -81,13 +95,18 @@ export default function PayoutSetup({ onBack, user }) {
 
   const submit = async () => {
     setError("");
-    if (!form.recipient_name.trim()) { setError("Please enter the full name of the account holder."); return; }
-    if (!form.bank_name.trim())      { setError("Please enter your bank name."); return; }
-    if (!form.account_holder.trim()) { setError("Please enter the account holder name."); return; }
-    if (!form.account_number.trim()) { setError("Please enter your account number."); return; }
 
     if (mode === "missionary" && !selectedId) {
       setError("Please select your mission first."); return;
+    }
+
+    if (receivingViaChurch) {
+      if (!selectedChurchId) { setError("Please select the church that will receive your funds."); return; }
+    } else {
+      if (!form.recipient_name.trim()) { setError("Please enter the full name of the account holder."); return; }
+      if (!form.bank_name.trim())      { setError("Please enter your bank name."); return; }
+      if (!form.account_holder.trim()) { setError("Please enter the account holder name."); return; }
+      if (!form.account_number.trim()) { setError("Please enter your account number."); return; }
     }
 
     setSaving(true);
@@ -103,6 +122,18 @@ export default function PayoutSetup({ onBack, user }) {
             ...form,
             updated_at: new Date().toISOString(),
           }, { onConflict: "church_id" }));
+      } else if (receivingViaChurch) {
+        // #68: link the MISSION itself to the chosen church. AdminPayouts'
+        // getBankingDetails() resolves banking via mission.church_id first,
+        // falling back to churchDetails[mission.church_id] (the church's own
+        // payout_details row) — same mechanism already used when a missionary
+        // links to a church at application time. No payout_details row is
+        // written here; the church's own banking (set up via the "church"
+        // mode above) is what actually gets used.
+        ({ error: dbError } = await supabase
+          .from("missions")
+          .update({ church_id: selectedChurchId })
+          .eq("id", selectedId));
       } else {
         ({ error: dbError } = await supabase
           .from("payout_details")
@@ -201,29 +232,48 @@ export default function PayoutSetup({ onBack, user }) {
           <option value="church">Church / Organisation</option>
         </select>
 
-        <label style={labelStyle}>Bank Name *</label>
-        <input style={inputStyle} value={form.bank_name} onChange={e => update("bank_name", e.target.value)} placeholder="e.g. Standard Bank, Capitec, FNB" />
+        {receivingViaChurch ? (
+          <>
+            <label style={labelStyle}>Select the Church *</label>
+            <select value={selectedChurchId} onChange={e => setSelectedChurchId(e.target.value)} style={inputStyle}>
+              <option value="">— Select a verified church —</option>
+              {churchList.map(c => (
+                <option key={c.id} value={c.id}>
+                  {c.name} ({c.city || c.country || "Unknown"})
+                </option>
+              ))}
+            </select>
+            <div style={{ background: "rgba(232,179,75,0.07)", borderRadius: 12, border: "1px solid rgba(232,179,75,0.2)", padding: "12px 14px", marginBottom: 14, fontSize: 13, color: "rgba(255,255,255,0.5)", lineHeight: 1.6 }}>
+              Your mission will be linked to this church. Funds will be sent to the church's own registered banking details — you don't need to enter separate bank details. If the church hasn't set up its banking yet, payouts will show as pending until they do.
+            </div>
+          </>
+        ) : (
+          <>
+            <label style={labelStyle}>Bank Name *</label>
+            <input style={inputStyle} value={form.bank_name} onChange={e => update("bank_name", e.target.value)} placeholder="e.g. Standard Bank, Capitec, FNB" />
 
-        <label style={labelStyle}>Account Holder Name (as registered with bank) *</label>
-        <input style={inputStyle} value={form.account_holder} onChange={e => update("account_holder", e.target.value)} placeholder="Exact name on the bank account" />
+            <label style={labelStyle}>Account Holder Name (as registered with bank) *</label>
+            <input style={inputStyle} value={form.account_holder} onChange={e => update("account_holder", e.target.value)} placeholder="Exact name on the bank account" />
 
-        <label style={labelStyle}>Account Number *</label>
-        <input style={inputStyle} value={form.account_number} onChange={e => update("account_number", e.target.value)} placeholder="Account number" />
+            <label style={labelStyle}>Account Number *</label>
+            <input style={inputStyle} value={form.account_number} onChange={e => update("account_number", e.target.value)} placeholder="Account number" />
 
-        <label style={labelStyle}>Branch Code (if applicable)</label>
-        <input style={inputStyle} value={form.branch_code} onChange={e => update("branch_code", e.target.value)} placeholder="e.g. 051001" />
+            <label style={labelStyle}>Branch Code (if applicable)</label>
+            <input style={inputStyle} value={form.branch_code} onChange={e => update("branch_code", e.target.value)} placeholder="e.g. 051001" />
 
-        <label style={labelStyle}>Account Type</label>
-        <select value={form.account_type} onChange={e => update("account_type", e.target.value)} style={inputStyle}>
-          <option value="cheque">Cheque / Current</option>
-          <option value="savings">Savings</option>
-        </select>
+            <label style={labelStyle}>Account Type</label>
+            <select value={form.account_type} onChange={e => update("account_type", e.target.value)} style={inputStyle}>
+              <option value="cheque">Cheque / Current</option>
+              <option value="savings">Savings</option>
+            </select>
 
-        <label style={labelStyle}>Country</label>
-        <input style={inputStyle} value={form.country} onChange={e => update("country", e.target.value)} placeholder="Country of bank account" />
+            <label style={labelStyle}>Country</label>
+            <input style={inputStyle} value={form.country} onChange={e => update("country", e.target.value)} placeholder="Country of bank account" />
 
-        <label style={labelStyle}>SWIFT / IBAN (for international transfers, if applicable)</label>
-        <input style={inputStyle} value={form.swift_code} onChange={e => update("swift_code", e.target.value)} placeholder="Only needed for international payouts" />
+            <label style={labelStyle}>SWIFT / IBAN (for international transfers, if applicable)</label>
+            <input style={inputStyle} value={form.swift_code} onChange={e => update("swift_code", e.target.value)} placeholder="Only needed for international payouts" />
+          </>
+        )}
 
         <label style={labelStyle}>Additional Notes (optional)</label>
         <textarea style={{ ...inputStyle, minHeight: 80, resize: "vertical" }} value={form.notes} onChange={e => update("notes", e.target.value)} placeholder="Anything else SendMe should know about receiving your payout" />
