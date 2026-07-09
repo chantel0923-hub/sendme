@@ -71,10 +71,15 @@ export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   try {
-    const { mission_id, mission_title, amount, name, email, type, user_id } = req.body || {};
+    const { mission_id, mission_title, emergency_id, emergency_title, amount, name, email, type, kind, user_id } = req.body || {};
+
+    const isEmergency = kind === "emergency";
+    const targetId    = isEmergency ? emergency_id : mission_id;
+    const targetTitle = isEmergency ? emergency_title : mission_title;
 
     const amt = Number(amount);
     if (!amt || amt <= 0) return res.status(400).json({ error: "Invalid donation amount" });
+    if (!targetId) return res.status(400).json({ error: isEmergency ? "No emergency request selected" : "No mission selected" });
 
     // The amount coming from the client is always USD (the donation screen
     // has no currency picker — every amount shown to the donor is a $ figure).
@@ -100,7 +105,7 @@ export default async function handler(req, res) {
     const [firstName, ...rest] = fullName.split(" ");
     const lastName  = rest.join(" ") || "Donor";
 
-    const missionIdStr = String(mission_id ?? "");
+    const missionIdStr = String(targetId ?? "");
 
     // IMPORTANT: field order must match exactly what's sent in the form POST
     const pairs = [
@@ -114,11 +119,12 @@ export default async function handler(req, res) {
       ["email_address",     email || ""],
       ["m_payment_id",      m_payment_id],
       ["amount",            zarAmount.toFixed(2)],
-      ["item_name",         String(mission_title || "SendMe Mission Donation").slice(0, 100)],
-      ["item_description",  "Missionary love offering via SendMe Global Mission Fund"],
+      ["item_name",         String(targetTitle || (isEmergency ? "SendMe Emergency Request" : "SendMe Mission Donation")).slice(0, 100)],
+      ["item_description",  isEmergency ? "Emergency relief gift via SendMe Global Mission Fund" : "Missionary love offering via SendMe Global Mission Fund"],
       ["custom_str1",       missionIdStr],
       ["custom_str2",       type || "once"],
       ["custom_str3",       user_id ? String(user_id) : ""],
+      ["custom_str4",       isEmergency ? "emergency" : "mission"],
     ];
 
     const signature = pfSignature(pairs, passphrase);
@@ -134,13 +140,14 @@ export default async function handler(req, res) {
       );
       await supabase.from("donations").insert({
         m_payment_id,
-        mission_id:    mission_id || null,
-        mission_title: mission_title || null,
+        mission_id:    targetId || null,
+        mission_title: targetTitle || null,
         amount:        amt,
         donor_name:    name || null,
         donor_email:   email || null,
         user_id:       user_id || null,
         type:          type || "once",
+        kind:          isEmergency ? "emergency" : "mission",
         status:        "pending",
       });
     } catch (dbErr) {

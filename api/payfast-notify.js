@@ -121,13 +121,16 @@ export default async function handler(req, res) {
       m_payment_id,
       payment_status,    // "COMPLETE" | "FAILED" | "PENDING"
       amount_gross,
-      custom_str1: mission_id,
+      custom_str1: target_id,
       custom_str2: type,
       custom_str3: user_id,
+      custom_str4: kind,   // "mission" | "emergency" — set by payfast-create.js
       pf_payment_id,
       name_first,
       email_address,
     } = params;
+
+    const isEmergency = kind === "emergency";
 
     const supabase = createClient(
       process.env.REACT_APP_SUPABASE_URL,
@@ -155,32 +158,43 @@ export default async function handler(req, res) {
       return res.status(200).send("OK");
     }
 
-    // Increment the mission's raised amount on COMPLETE
-    if (status === "complete" && mission_id) {
-      const { error: rpcError } = await supabase.rpc("increment_mission_raised", {
-        p_mission_id: mission_id,
-        p_amount: Number(amount_gross),
-      });
-      if (rpcError) {
-        console.error("payfast-notify: increment_mission_raised failed", rpcError);
-      }
+    // Increment the mission's (or emergency request's) raised amount on COMPLETE
+    if (status === "complete" && target_id) {
+      if (isEmergency) {
+        const { error: rpcError } = await supabase.rpc("increment_emergency_raised", {
+          p_emergency_id: target_id,
+          p_amount: Number(amount_gross),
+        });
+        if (rpcError) {
+          console.error("payfast-notify: increment_emergency_raised failed", rpcError);
+        }
+      } else {
+        const { error: rpcError } = await supabase.rpc("increment_mission_raised", {
+          p_mission_id: target_id,
+          p_amount: Number(amount_gross),
+        });
+        if (rpcError) {
+          console.error("payfast-notify: increment_mission_raised failed", rpcError);
+        }
 
-      // Also append to mission_ledger for transparency
-      const { error: ledgerError } = await supabase.from("mission_ledger").insert({
-        mission_id,
-        amount: Number(amount_gross),
-        description: `Donation via PayFast (${pf_payment_id || m_payment_id})`,
-        category: "donation",
-        donor_name: name_first || null,
-        donor_email: email_address || null,
-        user_id: user_id || null,
-      });
-      if (ledgerError) {
-        console.error("payfast-notify: ledger insert failed", ledgerError);
+        // Also append to mission_ledger for transparency (missions only —
+        // there's no equivalent ledger table for emergency requests yet)
+        const { error: ledgerError } = await supabase.from("mission_ledger").insert({
+          mission_id: target_id,
+          amount: Number(amount_gross),
+          description: `Donation via PayFast (${pf_payment_id || m_payment_id})`,
+          category: "donation",
+          donor_name: name_first || null,
+          donor_email: email_address || null,
+          user_id: user_id || null,
+        });
+        if (ledgerError) {
+          console.error("payfast-notify: ledger insert failed", ledgerError);
+        }
       }
     }
 
-    console.log("payfast-notify: processed", { m_payment_id, status, amount_gross, mission_id });
+    console.log("payfast-notify: processed", { m_payment_id, status, amount_gross, target_id, kind });
     return res.status(200).send("OK");
   } catch (err) {
     // Catch-all so an unexpected error never surfaces as a raw 500 to

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { startPayfastEmergencyDonation } from "./payfast";
 import { supabase } from "./supabase";
 import { notifyAdmin } from "./notifications";
 
@@ -42,6 +43,7 @@ export default function EmergencyRequests({ onBack, user }) {
   const [response, setResponse]     = useState({ name:"", email:"", phone:"", amount:"", note:"" });
   const [respDone, setRespDone]     = useState(false);
   const [respSaving, setRespSaving] = useState(false);
+  const [respError, setRespError]   = useState("");
 
   useEffect(() => {
     const load = async () => {
@@ -87,6 +89,7 @@ export default function EmergencyRequests({ onBack, user }) {
   const handleRespond = async () => {
     if (!response.name || !response.email) return;
     setRespSaving(true);
+    setRespError("");
     try {
       await supabase.from("emergency_responses").insert({
         emergency_id: responding.id,
@@ -101,21 +104,41 @@ export default function EmergencyRequests({ onBack, user }) {
       try {
         await supabase.functions.invoke("send-notification", {
           body: {
-            to:      "sendmemissionfund@gmail.com",
-            subject: `Emergency Response — ${responding.title}`,
-            message: `${response.name} (${response.email}${response.phone?" · "+response.phone:""}) has responded to the emergency: "${responding.title}".
-
-Amount offered: ${response.amount?"$"+response.amount:"not specified"}
-
-Note: ${response.note||"none"}`,
+            type: "emergency_response_notify",
+            to:   "sendmemissionfund@gmail.com",
+            data: {
+              requestTitle:   responding.title,
+              responderName:  response.name,
+              responderEmail: response.email,
+              responderPhone: response.phone,
+              amount:         response.amount,
+              note:           response.note,
+            },
           }
         });
       } catch(e) { console.log("notify error:", e); }
-      setRespDone(true);
     } catch(e) {
-      console.log("respond error:", e);
-      setRespDone(true);
+      console.log("respond save error:", e);
+      // Pledge record failed to save, but don't block the PayFast redirect
+      // if an amount was entered — the payment itself is the priority.
     }
+
+    const amt = Number(response.amount) || 0;
+    if (amt > 0) {
+      try {
+        // Redirect to PayFast to actually collect the pledged amount.
+        // The browser navigates away here, so nothing after this line runs
+        // on success.
+        await startPayfastEmergencyDonation({ emergency: responding, amount: amt, user });
+        return;
+      } catch (e) {
+        console.log("payfast redirect error:", e);
+        setRespError("Could not start PayFast checkout. Please try again.");
+        setRespSaving(false);
+        return;
+      }
+    }
+    setRespDone(true);
     setRespSaving(false);
   };
 
@@ -127,7 +150,7 @@ Note: ${response.note||"none"}`,
     return (
       <div style={{ minHeight:"100vh", background:"#060c18", color:"#eef1ff", fontFamily:"Georgia, serif" }}>
         <div style={{ background:"#09111f", borderBottom:"1px solid rgba(255,255,255,0.07)", padding:"16px 24px", display:"flex", alignItems:"center", gap:14, position:"sticky", top:0, zIndex:100 }}>
-          <button onClick={()=>{setResponding(null);setRespDone(false);setResponse({name:"",email:"",phone:"",amount:"",note:""});}}
+          <button onClick={()=>{setResponding(null);setRespDone(false);setRespError("");setResponse({name:"",email:"",phone:"",amount:"",note:""});}}
             style={{ background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:10, padding:"8px 16px", color:"rgba(255,255,255,0.6)", cursor:"pointer", fontSize:14, fontFamily:"Georgia, serif" }}>Back</button>
           <div style={{ fontSize:18, fontWeight:700 }}>Respond to Emergency</div>
         </div>
@@ -156,13 +179,18 @@ Note: ${response.note||"none"}`,
               <input placeholder="Your phone (optional)" type="tel" value={response.phone} onChange={e=>setResponse(r=>({...r,phone:e.target.value}))} style={inp}/>
               <input placeholder="Amount you can contribute ($) — optional" type="number" value={response.amount} onChange={e=>setResponse(r=>({...r,amount:e.target.value}))} style={inp}/>
               <textarea placeholder="Any message or additional details..." value={response.note} onChange={e=>setResponse(r=>({...r,note:e.target.value}))} style={{...inp,resize:"vertical",minHeight:80}}/>
+              {respError && (
+                <div style={{ background:"rgba(232,91,91,0.1)", border:"1px solid rgba(232,91,91,0.3)", borderRadius:10, padding:"10px 14px", color:"#e85b5b", fontSize:13, marginBottom:14 }}>
+                  {respError}
+                </div>
+              )}
               <button onClick={handleRespond} disabled={respSaving||!response.name||!response.email}
                 style={{ width:"100%", padding:"14px 0", borderRadius:14, border:"none",
                   background:response.name&&response.email?`linear-gradient(135deg,${u.color},${u.color}cc)`:"rgba(255,255,255,0.06)",
                   color:response.name&&response.email?"#fff":"rgba(255,255,255,0.25)",
                   fontWeight:700, cursor:response.name&&response.email?"pointer":"default",
                   fontSize:15, fontFamily:"Georgia, serif" }}>
-                {respSaving ? "Submitting..." : "💝 Submit Response"}
+                {respSaving ? (Number(response.amount)>0 ? "Redirecting to PayFast…" : "Submitting...") : (Number(response.amount)>0 ? `💝 Give $${response.amount} via PayFast` : "💝 Submit Response")}
               </button>
             </>
           )}
@@ -263,7 +291,7 @@ Note: ${response.note||"none"}`,
                     <span style={{ fontSize:13, color:u.color, fontWeight:700 }}>${fmt(r.raised||0)} raised</span>
                     <span style={{ fontSize:12, color:"rgba(255,255,255,0.3)" }}>${fmt((r.goal||1000)-(r.raised||0))} still needed</span>
                   </div>
-                  <button onClick={()=>{setResponding(r);setRespDone(false);setResponse({name:"",email:"",phone:"",amount:"",note:""});}} style={{ width:"100%", padding:"12px 0", borderRadius:12, border:"none", background:`linear-gradient(135deg,${u.color},${u.color}cc)`, color:"#fff", fontWeight:700, cursor:"pointer", fontSize:14, fontFamily:"Georgia, serif" }}>
+                  <button onClick={()=>{setResponding(r);setRespDone(false);setRespError("");setResponse({name:"",email:"",phone:"",amount:"",note:""});}} style={{ width:"100%", padding:"12px 0", borderRadius:12, border:"none", background:`linear-gradient(135deg,${u.color},${u.color}cc)`, color:"#fff", fontWeight:700, cursor:"pointer", fontSize:14, fontFamily:"Georgia, serif" }}>
                     💝 Respond to This Emergency
                   </button>
                 </div>
