@@ -291,6 +291,25 @@ const PrayerChain = ({ missionId, missionColor, initialCount=0 }) => {
   const [request, setRequest]   = useState("");
   const [submitted, setSubmitted] = useState(false);
 
+  // #78: the missions.prayers column (initialCount) is never actually
+  // incremented anywhere — it's stale demo data. The real number of people
+  // who joined the chain lives in mission_prayers (type:"chain"), so fetch
+  // that on mount. This is the same source Prayer Wall now reads from,
+  // keeping both screens in sync.
+  useEffect(() => {
+    const loadRealCount = async () => {
+      try {
+        const { count: realCount } = await supabase
+          .from("mission_prayers")
+          .select("id", { count: "exact", head: true })
+          .eq("mission_id", missionId)
+          .eq("type", "chain");
+        if (typeof realCount === "number") setCount(realCount);
+      } catch {}
+    };
+    loadRealCount();
+  }, [missionId]);
+
   const joinChain = async () => {
     if (joined) return;
     setPraying(true);
@@ -738,29 +757,77 @@ const PrayerWall = ({ missions, onBack }) => {
   const [joined, setJoined]           = useState({});
   const [allRequests, setAllRequests] = useState([]);
   const [loadingPrayer, setLoadingPrayer] = useState(true);
+  // #78: real global chain total, from mission_prayers — not from local clicks
+  const [totalChainCount, setTotalChainCount] = useState(0);
+  // #78: per-mission chain counts, so each request card shows its mission's real count
+  const [chainCountByMission, setChainCountByMission] = useState({});
 
   useEffect(() => {
     const fetchPrayers = async () => {
       setLoadingPrayer(true);
       try {
-        const { data, error } = await supabase
+        // Source 1: missionary-authored "Prayer Request" field reports
+        const updatesReq = supabase
           .from("mission_updates")
           .select("id, mission_id, author, text, created_at, missions(title, country)")
           .eq("type", "prayer")
           .order("created_at", { ascending: false });
-        if (error) { console.log("PrayerWall fetch error:", error); setAllRequests([]); }
-        else {
-          const mapped = (data || []).map(r => ({
-            id:      r.id,
-            mission: r.missions?.title   || "Mission",
-            country: r.missions?.country || "",
-            text:    r.text,
-            author:  r.author,
-            urgent:  false,
-            prayers: 0,
-          }));
-          setAllRequests(mapped);
-        }
+
+        // Source 2 (#69): visitor-submitted prayer requests from the Mission
+        // Detail "Prayer Chain" box — previously never queried at all.
+        const prayersReq = supabase
+          .from("mission_prayers")
+          .select("id, mission_id, text, created_at, missions(title, country)")
+          .eq("type", "request")
+          .order("created_at", { ascending: false });
+
+        // Source 3 (#78): every chain join, used to compute real counts.
+        const chainReq = supabase
+          .from("mission_prayers")
+          .select("mission_id")
+          .eq("type", "chain");
+
+        const [updatesRes, prayersRes, chainRes] = await Promise.all([updatesReq, prayersReq, chainReq]);
+
+        if (updatesRes.error) console.log("PrayerWall mission_updates fetch error:", updatesRes.error);
+        if (prayersRes.error) console.log("PrayerWall mission_prayers fetch error:", prayersRes.error);
+        if (chainRes.error)   console.log("PrayerWall chain count fetch error:", chainRes.error);
+
+        // Real per-mission chain counts
+        const byMission = {};
+        (chainRes.data || []).forEach(row => {
+          byMission[row.mission_id] = (byMission[row.mission_id] || 0) + 1;
+        });
+        setChainCountByMission(byMission);
+        setTotalChainCount((chainRes.data || []).length);
+
+        const fromUpdates = (updatesRes.data || []).map(r => ({
+          id:        `update-${r.id}`,
+          missionId: r.mission_id,
+          mission:   r.missions?.title   || "Mission",
+          country:   r.missions?.country || "",
+          text:      r.text,
+          author:    r.author || "A missionary",
+          urgent:    false,
+          created_at: r.created_at,
+        }));
+        const fromChainRequests = (prayersRes.data || []).map(r => ({
+          id:        `chain-${r.id}`,
+          missionId: r.mission_id,
+          mission:   r.missions?.title   || "Mission",
+          country:   r.missions?.country || "",
+          text:      r.text,
+          author:    "A believer praying for this mission",
+          urgent:    false,
+          created_at: r.created_at,
+        }));
+
+        const merged = [...fromUpdates, ...fromChainRequests]
+          .filter(r => r.text)
+          .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+          .map(r => ({ ...r, prayers: byMission[r.missionId] || 0 }));
+
+        setAllRequests(merged);
       } catch (e) {
         console.log("PrayerWall exception:", e);
         setAllRequests([]);
@@ -770,7 +837,17 @@ const PrayerWall = ({ missions, onBack }) => {
     fetchPrayers();
   }, []);
 
-  const totalPraying = Object.values(joined).filter(Boolean).length;
+  // #78: real total, not local-click count. Local joins still bump it
+  // optimistically until the next fetch.
+  const totalPraying = totalChainCount + Object.values(joined).filter(Boolean).length;
+
+  const joinPrayer = async (r) => {
+    if (joined[r.id]) return;
+    setJoined(j => ({ ...j, [r.id]: true }));
+    // Write back to the same table Mission Detail's "Join Prayer Chain" uses,
+    // so joining from the Wall counts toward the mission's real total too.
+    try { await supabase.from("mission_prayers").insert({ mission_id: r.missionId, type: "chain" }); } catch {}
+  };
   return (
     <div style={{ minHeight:"100vh", background:"#060c18", color:"#eef1ff", fontFamily:"Georgia, serif" }}>
       <div style={{ background:"#09111f", borderBottom:"1px solid rgba(255,255,255,0.07)", padding:"16px 24px", display:"flex", alignItems:"center", gap:14, position:"sticky", top:0, zIndex:100 }}>
@@ -824,7 +901,7 @@ const PrayerWall = ({ missions, onBack }) => {
                 </div>
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:12 }}>
                   <span style={{ fontSize:13, color:"rgba(255,255,255,0.4)" }}>{fmt(count)} believers praying</span>
-                  <button onClick={() => setJoined(j => ({...j,[r.id]:true}))} disabled={isJoined}
+                  <button onClick={() => joinPrayer(r)} disabled={isJoined}
                     style={{ padding:"8px 20px", borderRadius:10, border:"none", background:isJoined?"rgba(62,207,142,0.12)":"linear-gradient(135deg,#e8b34b,#c8942b)", color:isJoined?"#3ecf8e":"#000", fontWeight:700, cursor:isJoined?"default":"pointer", fontSize:13, fontFamily:"Georgia, serif" }}>
                     {isJoined ? "✓ Praying" : "Join Prayer"}
                   </button>
