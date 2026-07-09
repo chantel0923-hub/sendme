@@ -184,6 +184,7 @@ const UpdatesFeed = ({ missionId, missionColor, missionName }) => {
   const [newMedia, setNewMedia]   = useState("");
   const [postType, setPostType]   = useState("update");
   const [posting, setPosting]     = useState(false);
+  const [postError, setPostError] = useState("");
 
   useEffect(() => {
     const load = async () => {
@@ -203,12 +204,25 @@ const UpdatesFeed = ({ missionId, missionColor, missionName }) => {
   const postUpdate = async () => {
     if (!newText.trim()) return;
     setPosting(true);
+    setPostError("");
     const update = { mission_id:missionId, author:missionName, text:newText.trim(), type:postType, media_url:newMedia.trim()||null, created_at:new Date().toISOString() };
     try {
-      await supabase.from("mission_updates").insert(update);
+      // Supabase's client does NOT throw on a failed insert — it returns
+      // { error } instead. The old code never checked that, so every failed
+      // insert (e.g. the mission_id type-mismatch bug) silently looked like
+      // a success on screen while nothing actually saved. Check it for real.
+      const { error } = await supabase.from("mission_updates").insert(update);
+      if (error) throw error;
       setUpdates(u => [update, ...u]);
-    } catch { setUpdates(u => [update,...u]); }
-    setNewText(""); setNewMedia(""); setPosting(false);
+      setNewText(""); setNewMedia("");
+    } catch (e) {
+      console.error("postUpdate error:", e);
+      setPostError("Could not post your update — it was NOT saved. Please try again. (" + (e?.message || "unknown error") + ")");
+      // Deliberately NOT clearing newText/newMedia here, and NOT adding to
+      // local state, so a failed post doesn't look like it succeeded and
+      // the person doesn't lose what they typed.
+    }
+    setPosting(false);
   };
 
   const timeAgo = (dateStr) => {
@@ -243,6 +257,11 @@ const UpdatesFeed = ({ missionId, missionColor, missionName }) => {
           style={{ padding:"9px 20px",borderRadius:10,border:"none",background:newText.trim()?`linear-gradient(135deg,${missionColor},${missionColor}cc)`:"rgba(255,255,255,0.06)",color:newText.trim()?"#000":"rgba(255,255,255,0.25)",fontWeight:700,cursor:newText.trim()?"pointer":"default",fontSize:13,fontFamily:"Georgia,serif" }}>
           {posting?"Posting...":"Post Update"}
         </button>
+        {postError && (
+          <div style={{ marginTop:10, background:"rgba(232,91,91,0.1)", border:"1px solid rgba(232,91,91,0.3)", borderRadius:10, padding:"10px 14px", color:"#e85b5b", fontSize:13 }}>
+            ⚠ {postError}
+          </div>
+        )}
       </div>
       {loading ? (
         <div style={{ textAlign:"center",padding:"20px 0",color:"rgba(255,255,255,0.3)",fontSize:13 }}>Loading updates...</div>
