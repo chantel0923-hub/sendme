@@ -174,6 +174,20 @@ const TEMPLATES: Record<string, (d: any) => { subject: string; html: string }> =
     ),
   }),
 
+  emergency_response_notify: (d) => ({
+    subject: `Emergency Response — ${d.requestTitle} 🚨`,
+    html: wrapEmail(
+      "Someone Has Responded to an Emergency Request",
+      `<div style="background:rgba(232,91,91,0.08);border:1px solid rgba(232,91,91,0.25);border-radius:12px;padding:16px 18px;margin-bottom:16px;">
+        <strong style="color:#e85b5b;">${d.requestTitle}</strong>
+      </div>
+      <strong style="color:#eef1ff;">${d.responderName}</strong> (${d.responderEmail}${d.responderPhone ? " · " + d.responderPhone : ""})
+      has responded to this emergency request.<br/><br/>
+      <strong style="color:#eef1ff;">Amount offered:</strong> ${d.amount ? "$" + d.amount : "not specified"}<br/>
+      ${d.note ? `<strong style="color:#eef1ff;">Note:</strong> ${d.note}` : ""}`,
+    ),
+  }),
+
   banking_request: (d) => ({
     subject: `Action needed: Please submit your church banking details — ${d.missionTitle}`,
     html: wrapEmail(
