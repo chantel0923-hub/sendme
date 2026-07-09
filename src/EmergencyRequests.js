@@ -48,7 +48,7 @@ export default function EmergencyRequests({ onBack, user }) {
       setLoading(true);
       try {
         const [{ data: erData }, { data: chData }] = await Promise.all([
-          supabase.from("emergency_requests").select("*").order("created_at",{ascending:false}),
+          supabase.from("emergency_requests").select("*").eq("status","active").order("created_at",{ascending:false}),
           supabase.from("churches").select("id, name, city, country").eq("verified", true).order("name"),
         ]);
         if (erData && erData.length > 0) setRequests(erData);
@@ -70,6 +70,7 @@ export default function EmergencyRequests({ onBack, user }) {
         contact_email: form.contact_email,
         contact_phone: form.contact_phone,
         submittedBy: user?.email || "Anonymous",
+        status: "pending",
         created_at: new Date().toISOString(),
       });
       setSubmitted(true);
