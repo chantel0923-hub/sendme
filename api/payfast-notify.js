@@ -141,13 +141,29 @@ export default async function handler(req, res) {
       payment_status === "COMPLETE" ? "complete" :
       payment_status === "FAILED"   ? "failed"   : "pending";
 
-    // Update the donations row
+    // Look up the original USD amount the donor actually pledged, recorded
+    // correctly in payfast-create.js at checkout time. amount_gross in this
+    // ITN callback is in ZAR (PayFast's settlement currency) — using it
+    // directly to credit `raised` (a USD figure) would inflate every gift
+    // by roughly the exchange rate. This lookup is the fix for that.
+    const { data: donationRow, error: fetchError } = await supabase
+      .from("donations")
+      .select("amount")
+      .eq("m_payment_id", m_payment_id)
+      .single();
+    if (fetchError) {
+      console.error("payfast-notify: could not find original donation row for m_payment_id", m_payment_id, fetchError);
+    }
+    const usdAmount = donationRow?.amount ?? null;
+
+    // Update the donations row — keep the original USD `amount` untouched,
+    // record the ZAR gross separately for reconciliation only.
     const { error: updateError } = await supabase
       .from("donations")
       .update({
         status,
         pf_payment_id: pf_payment_id || null,
-        amount: Number(amount_gross) || null,
+        amount_zar: Number(amount_gross) || null,
         updated_at: new Date().toISOString(),
       })
       .eq("m_payment_id", m_payment_id);
@@ -160,10 +176,15 @@ export default async function handler(req, res) {
 
     // Increment the mission's (or emergency request's) raised amount on COMPLETE
     if (status === "complete" && target_id) {
+      // Fallback to amount_gross only if the original donation row lookup
+      // somehow failed — better to credit something than nothing, but the
+      // usdAmount path above should be the normal case.
+      const creditAmount = usdAmount ?? Number(amount_gross);
+
       if (isEmergency) {
         const { error: rpcError } = await supabase.rpc("increment_emergency_raised", {
           p_emergency_id: target_id,
-          p_amount: Number(amount_gross),
+          p_amount: creditAmount,
         });
         if (rpcError) {
           console.error("payfast-notify: increment_emergency_raised failed", rpcError);
@@ -171,7 +192,7 @@ export default async function handler(req, res) {
       } else {
         const { error: rpcError } = await supabase.rpc("increment_mission_raised", {
           p_mission_id: target_id,
-          p_amount: Number(amount_gross),
+          p_amount: creditAmount,
         });
         if (rpcError) {
           console.error("payfast-notify: increment_mission_raised failed", rpcError);
@@ -181,7 +202,7 @@ export default async function handler(req, res) {
         // there's no equivalent ledger table for emergency requests yet)
         const { error: ledgerError } = await supabase.from("mission_ledger").insert({
           mission_id: target_id,
-          amount: Number(amount_gross),
+          amount: creditAmount,
           description: `Donation via PayFast (${pf_payment_id || m_payment_id})`,
           category: "donation",
           donor_name: name_first || null,
@@ -194,7 +215,7 @@ export default async function handler(req, res) {
       }
     }
 
-    console.log("payfast-notify: processed", { m_payment_id, status, amount_gross, target_id, kind });
+    console.log("payfast-notify: processed", { m_payment_id, status, amount_gross, usdAmount, target_id, kind });
     return res.status(200).send("OK");
   } catch (err) {
     // Catch-all so an unexpected error never surfaces as a raw 500 to
