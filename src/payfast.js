@@ -26,15 +26,15 @@ function submitPayfastForm(action, fields) {
   form.submit();
 }
 
-export async function startPayfastDonation({ mission, amount, user, type = "once" }) {
+export async function startPayfastDonation({ mission, amount, user, type = "once", guestInfo = null }) {
   if (!mission) throw new Error("No mission selected");
 
   const payload = {
     mission_id: mission.id,
     mission_title: mission.protected ? mission.role : (mission.title || mission.name),
     amount,
-    name: user?.user_metadata?.full_name || user?.email?.split("@")[0] || "SendMe Donor",
-    email: user?.email || "",
+    name: guestInfo?.name || user?.user_metadata?.full_name || user?.email?.split("@")[0] || "SendMe Donor",
+    email: guestInfo?.email || user?.email || "",
     user_id: user?.id || null,
     type,
   };

@@ -108,31 +108,13 @@ const RiskBadge = ({ level=1 }) => {
 const JOURNEY_STEPS = [
   {step:1,icon:"✅",label:"Application Approved"},
   {step:2,icon:"💝",label:"Funding Goal Reached"},
-  {step:3,icon:"✈️", label:"Mission Started"},
-  {step:4,icon:"📷",label:"Proof Uploaded"},
-  {step:5,icon:"✅",label:"Mission Completed"},
+  {step:3,icon:"✈️", label:"Travelling"},
+  {step:4,icon:"📍",label:"Arrived at Location"},
+  {step:5,icon:"⛪",label:"Services Started"},
+  {step:6,icon:"🙏",label:"Souls Reached"},
+  {step:7,icon:"📷",label:"Proof Uploaded"},
+  {step:8,icon:"✅",label:"Mission Completed"},
 ];
-// Fix #76/#77: journey_step in the DB is set once at creation and nothing
-// ever updates it afterward, so missions got stuck showing "Application
-// Approved" forever. Simplified to 5 steps (per Br Donald), each with a real,
-// automatically detectable trigger — no manual admin advancement needed:
-//   1. Application Approved   — default on mission creation
-//   2. Funding Goal Reached   — raised >= goal
-//   3. Mission Started        — missionary has posted at least one Field
-//                                Report (mission_updates row with type "update")
-//   4. Proof Uploaded         — an approved row exists in milestone_proofs
-//   5. Mission Completed      — status === "complete"
-// Takes the highest applicable step so it never regresses, and still
-// respects a manually stored journey_step if one is ever set higher.
-function computeJourneyStep(m, hasFieldReport, hasApprovedProof) {
-  let step = m.journeyStep || 1;
-  if (m.goal > 0 && m.raised >= m.goal) step = Math.max(step, 2);
-  if (hasFieldReport) step = Math.max(step, 3);
-  if (hasApprovedProof) step = Math.max(step, 4);
-  if (m.status === "complete") step = Math.max(step, 5);
-  return step;
-}
-
 const JourneyTimeline = ({ currentStep, color }) => (
   <div style={{ padding:"20px 0", borderBottom:"1px solid rgba(255,255,255,0.06)" }}>
     <div style={{ fontSize:14, fontWeight:700, color:"#eef1ff", marginBottom:16 }}>Mission Journey</div>
@@ -202,7 +184,6 @@ const UpdatesFeed = ({ missionId, missionColor, missionName }) => {
   const [newMedia, setNewMedia]   = useState("");
   const [postType, setPostType]   = useState("update");
   const [posting, setPosting]     = useState(false);
-  const [postError, setPostError] = useState("");
 
   useEffect(() => {
     const load = async () => {
@@ -222,25 +203,12 @@ const UpdatesFeed = ({ missionId, missionColor, missionName }) => {
   const postUpdate = async () => {
     if (!newText.trim()) return;
     setPosting(true);
-    setPostError("");
     const update = { mission_id:missionId, author:missionName, text:newText.trim(), type:postType, media_url:newMedia.trim()||null, created_at:new Date().toISOString() };
     try {
-      // Supabase's client does NOT throw on a failed insert — it returns
-      // { error } instead. The old code never checked that, so every failed
-      // insert (e.g. the mission_id type-mismatch bug) silently looked like
-      // a success on screen while nothing actually saved. Check it for real.
-      const { error } = await supabase.from("mission_updates").insert(update);
-      if (error) throw error;
+      await supabase.from("mission_updates").insert(update);
       setUpdates(u => [update, ...u]);
-      setNewText(""); setNewMedia("");
-    } catch (e) {
-      console.error("postUpdate error:", e);
-      setPostError("Could not post your update — it was NOT saved. Please try again. (" + (e?.message || "unknown error") + ")");
-      // Deliberately NOT clearing newText/newMedia here, and NOT adding to
-      // local state, so a failed post doesn't look like it succeeded and
-      // the person doesn't lose what they typed.
-    }
-    setPosting(false);
+    } catch { setUpdates(u => [update,...u]); }
+    setNewText(""); setNewMedia(""); setPosting(false);
   };
 
   const timeAgo = (dateStr) => {
@@ -275,11 +243,6 @@ const UpdatesFeed = ({ missionId, missionColor, missionName }) => {
           style={{ padding:"9px 20px",borderRadius:10,border:"none",background:newText.trim()?`linear-gradient(135deg,${missionColor},${missionColor}cc)`:"rgba(255,255,255,0.06)",color:newText.trim()?"#000":"rgba(255,255,255,0.25)",fontWeight:700,cursor:newText.trim()?"pointer":"default",fontSize:13,fontFamily:"Georgia,serif" }}>
           {posting?"Posting...":"Post Update"}
         </button>
-        {postError && (
-          <div style={{ marginTop:10, background:"rgba(232,91,91,0.1)", border:"1px solid rgba(232,91,91,0.3)", borderRadius:10, padding:"10px 14px", color:"#e85b5b", fontSize:13 }}>
-            ⚠ {postError}
-          </div>
-        )}
       </div>
       {loading ? (
         <div style={{ textAlign:"center",padding:"20px 0",color:"rgba(255,255,255,0.3)",fontSize:13 }}>Loading updates...</div>
@@ -327,25 +290,6 @@ const PrayerChain = ({ missionId, missionColor, initialCount=0 }) => {
   const [joined, setJoined]     = useState(false);
   const [request, setRequest]   = useState("");
   const [submitted, setSubmitted] = useState(false);
-
-  // #78: the missions.prayers column (initialCount) is never actually
-  // incremented anywhere — it's stale demo data. The real number of people
-  // who joined the chain lives in mission_prayers (type:"chain"), so fetch
-  // that on mount. This is the same source Prayer Wall now reads from,
-  // keeping both screens in sync.
-  useEffect(() => {
-    const loadRealCount = async () => {
-      try {
-        const { count: realCount } = await supabase
-          .from("mission_prayers")
-          .select("id", { count: "exact", head: true })
-          .eq("mission_id", missionId)
-          .eq("type", "chain");
-        if (typeof realCount === "number") setCount(realCount);
-      } catch {}
-    };
-    loadRealCount();
-  }, [missionId]);
 
   const joinChain = async () => {
     if (joined) return;
@@ -469,7 +413,7 @@ const MsTrack = ({ current,color }) => (
   </div>
 );
 
-const DonateScreen = ({ mission: m, onBack, onPayfast }) => {
+const DonateScreen = ({ mission: m, onBack, onPayfast, user }) => {
   const [donateTab,setDonateTab] = useState("once");   // once | monthly
   const [amt,setAmt]             = useState("");
   const [monthly,setMonthly]     = useState(null);
@@ -477,14 +421,23 @@ const DonateScreen = ({ mission: m, onBack, onPayfast }) => {
   const [submitting,setSubmitting] = useState(false);
   const [monthlyDone,setMonthlyDone] = useState(false);
   const [error,setError]         = useState("");
-  const canGive = amt && Number(amt) > 0 && prayed;
+  const isGuest = !user;
+  const [guestName,setGuestName]   = useState("");
+  const [guestEmail,setGuestEmail] = useState("");
+  const guestInfoValid = !isGuest || (guestName.trim().length > 1 && /\S+@\S+\.\S+/.test(guestEmail.trim()));
+  const canGive = amt && Number(amt) > 0 && prayed && guestInfoValid;
   const MONTHLY = [10,25,50,100,200];
 
   const handleMonthlyAdopt = async () => {
-    if (!monthly) return;
+    if (!monthly || (isGuest && !guestInfoValid)) return;
     setSubmitting(true);
     try {
-      await supabase.from("donations").insert({ mission_id:m.id, amount:monthly, type:"monthly", status:"pending" });
+      await supabase.from("donations").insert({
+        mission_id:m.id, amount:monthly, type:"monthly", status:"pending",
+        donor_name:  isGuest ? guestName.trim()  : (user?.user_metadata?.full_name || null),
+        donor_email: isGuest ? guestEmail.trim() : (user?.email || null),
+        user_id:     user?.id || null,
+      });
       setMonthlyDone(true);
     } catch(e) { console.log("monthly adopt error:", e); setMonthlyDone(true); }
     setSubmitting(false);
@@ -495,7 +448,7 @@ const DonateScreen = ({ mission: m, onBack, onPayfast }) => {
     setSubmitting(true);
     setError("");
     try {
-      await onPayfast(amt);
+      await onPayfast(amt, isGuest ? { name: guestName.trim(), email: guestEmail.trim() } : null);
     } catch {
       setError("Could not start PayFast checkout. Please try again.");
       setSubmitting(false);
@@ -523,6 +476,17 @@ const DonateScreen = ({ mission: m, onBack, onPayfast }) => {
           <span style={{ fontSize:18,flexShrink:0 }}>🔐</span>
           <div style={{ fontSize:13,color:"rgba(255,255,255,0.5)",lineHeight:1.7 }}>Your donation is held in <strong style={{ color:"#e8b34b" }}>secure escrow</strong> and only released when milestone proof is verified.</div>
         </div>
+
+        {isGuest && (
+          <div style={{ background:"rgba(255,255,255,0.03)",borderRadius:14,border:"1px solid rgba(255,255,255,0.1)",padding:"18px" }}>
+            <div style={{ fontSize:14,fontWeight:700,color:"#eef1ff",marginBottom:4 }}>Your Details</div>
+            <div style={{ fontSize:12,color:"rgba(255,255,255,0.4)",marginBottom:14 }}>So we can send your receipt and keep you updated on this mission.</div>
+            <input type="text" value={guestName} onChange={e=>setGuestName(e.target.value)} placeholder="Your name"
+              style={{ width:"100%",padding:"12px 14px",borderRadius:10,background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.1)",color:"#eef1ff",fontSize:14,fontFamily:"Georgia, serif",outline:"none",boxSizing:"border-box",marginBottom:10 }}/>
+            <input type="email" value={guestEmail} onChange={e=>setGuestEmail(e.target.value)} placeholder="Your email"
+              style={{ width:"100%",padding:"12px 14px",borderRadius:10,background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.1)",color:"#eef1ff",fontSize:14,fontFamily:"Georgia, serif",outline:"none",boxSizing:"border-box" }}/>
+          </div>
+        )}
         {/* ── Giving type tabs ── */}
         <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",background:"rgba(255,255,255,0.04)",borderRadius:12,padding:3,gap:3 }}>
           {[["once","Once-off Gift"],["monthly","Monthly Support"]].map(([key,label])=>(
@@ -556,13 +520,13 @@ const DonateScreen = ({ mission: m, onBack, onPayfast }) => {
                   <button key={a} onClick={()=>setMonthly(a)} style={{ padding:"11px 0",borderRadius:12,border:`1px solid ${monthly===a?m.color:"rgba(255,255,255,0.1)"}`,background:monthly===a?`${m.color}22`:"rgba(255,255,255,0.03)",color:monthly===a?m.color:"rgba(255,255,255,0.5)",fontWeight:700,cursor:"pointer",fontSize:13,transition:"all .15s" }}>${a}</button>
                 ))}
               </div>
-              <button onClick={handleMonthlyAdopt} disabled={!monthly||submitting}
+              <button onClick={handleMonthlyAdopt} disabled={!monthly||submitting||(isGuest&&!guestInfoValid)}
                 style={{ width:"100%",padding:"15px 0",borderRadius:14,border:"none",
-                  background:monthly?`linear-gradient(135deg,${m.color},${m.color}cc)`:"rgba(255,255,255,0.06)",
-                  color:monthly?"#000":"rgba(255,255,255,0.25)",fontWeight:700,
-                  cursor:monthly&&!submitting?"pointer":"default",fontSize:15,fontFamily:"Georgia,serif",
+                  background:(monthly&&(!isGuest||guestInfoValid))?`linear-gradient(135deg,${m.color},${m.color}cc)`:"rgba(255,255,255,0.06)",
+                  color:(monthly&&(!isGuest||guestInfoValid))?"#000":"rgba(255,255,255,0.25)",fontWeight:700,
+                  cursor:monthly&&!submitting&&(!isGuest||guestInfoValid)?"pointer":"default",fontSize:15,fontFamily:"Georgia,serif",
                   boxShadow:monthly?`0 6px 24px ${m.color}44`:"none",transition:"all .2s" }}>
-                {submitting?"Processing...":(monthly?`✝  Adopt This Mission — $${monthly}/month`:"Select a monthly amount")}
+                {submitting?"Processing...":!monthly?"Select a monthly amount":(isGuest&&!guestInfoValid)?"Enter your details above":`✝  Adopt This Mission — $${monthly}/month`}
               </button>
               <div style={{ textAlign:"center",fontSize:12,color:"rgba(255,255,255,0.2)" }}>Monthly support is recorded and tracked — full transparency</div>
             </>
@@ -603,7 +567,7 @@ const DonateScreen = ({ mission: m, onBack, onPayfast }) => {
             color:canGive?"#000":"rgba(255,255,255,0.25)",fontWeight:700,cursor:canGive&&!submitting?"pointer":"default",
             fontSize:16,fontFamily:"Georgia, serif",opacity:submitting?0.7:1,
             boxShadow:canGive?`0 6px 28px ${m.color}44`:"none",transition:"all .2s" }}>
-          {!amt||Number(amt)===0?"Enter an amount to continue":!prayed?"✝  Tick the prayer commitment to give":submitting?"Redirecting to PayFast…":`💝  Give $${amt} via PayFast`}
+          {!amt||Number(amt)===0?"Enter an amount to continue":!prayed?"✝  Tick the prayer commitment to give":(isGuest&&!guestInfoValid)?"Enter your details above":submitting?"Redirecting to PayFast…":`💝  Give $${amt} via PayFast`}
           </button>
           {error && <div style={{ textAlign:"center",fontSize:13,color:"#e85b5b" }}>{error}</div>}
           <div style={{ textAlign:"center",fontSize:12,color:"rgba(255,255,255,0.2)" }}>🔒 Secure checkout via PayFast · Funds held in escrow · Released only on verified proof of work</div>
@@ -649,24 +613,6 @@ const MissionDetail = ({ mission: m, onBack, onDonate, onLedger }) => {
   const [proofTab,setProofTab]     = useState("photos");
   const [proofItems,setProofItems] = useState([]);
   const [proofLoaded,setProofLoaded] = useState(false);
-  const [hasFieldReport,setHasFieldReport] = useState(false);
-
-  useEffect(() => {
-    if (!m?.id) return;
-    const checkFieldReport = async () => {
-      try {
-        const { data, error } = await supabase
-          .from("mission_updates")
-          .select("id")
-          .eq("mission_id", m.id)
-          .eq("type", "update")
-          .limit(1);
-        if (error) { console.log("field report check error:", error); return; }
-        setHasFieldReport((data || []).length > 0);
-      } catch(e) { console.log("field report check exception:", e); }
-    };
-    checkFieldReport();
-  }, [m?.id]);
 
   useEffect(() => {
     if (!m?.id || proofLoaded) return;
@@ -744,7 +690,7 @@ const MissionDetail = ({ mission: m, onBack, onDonate, onLedger }) => {
             ))}
           </div>
         </div>
-        <JourneyTimeline currentStep={computeJourneyStep(m, hasFieldReport, proofItems.length > 0)} color={m.color} />
+        <JourneyTimeline currentStep={m.journeyStep||1} color={m.color} />
         <BudgetBreakdown budget={m.budget} goal={m.goal} color={m.color} />
         <UpdatesFeed missionId={m.id} missionColor={m.color} missionName={m.protected?"Missionary":m.name} />
         <PrayerChain missionId={m.id} missionColor={m.color} initialCount={m.prayers||0} />
@@ -812,77 +758,29 @@ const PrayerWall = ({ missions, onBack }) => {
   const [joined, setJoined]           = useState({});
   const [allRequests, setAllRequests] = useState([]);
   const [loadingPrayer, setLoadingPrayer] = useState(true);
-  // #78: real global chain total, from mission_prayers — not from local clicks
-  const [totalChainCount, setTotalChainCount] = useState(0);
-  // #78: per-mission chain counts, so each request card shows its mission's real count
-  const [chainCountByMission, setChainCountByMission] = useState({});
 
   useEffect(() => {
     const fetchPrayers = async () => {
       setLoadingPrayer(true);
       try {
-        // Source 1: missionary-authored "Prayer Request" field reports
-        const updatesReq = supabase
+        const { data, error } = await supabase
           .from("mission_updates")
           .select("id, mission_id, author, text, created_at, missions(title, country)")
           .eq("type", "prayer")
           .order("created_at", { ascending: false });
-
-        // Source 2 (#69): visitor-submitted prayer requests from the Mission
-        // Detail "Prayer Chain" box — previously never queried at all.
-        const prayersReq = supabase
-          .from("mission_prayers")
-          .select("id, mission_id, text, created_at, missions(title, country)")
-          .eq("type", "request")
-          .order("created_at", { ascending: false });
-
-        // Source 3 (#78): every chain join, used to compute real counts.
-        const chainReq = supabase
-          .from("mission_prayers")
-          .select("mission_id")
-          .eq("type", "chain");
-
-        const [updatesRes, prayersRes, chainRes] = await Promise.all([updatesReq, prayersReq, chainReq]);
-
-        if (updatesRes.error) console.log("PrayerWall mission_updates fetch error:", updatesRes.error);
-        if (prayersRes.error) console.log("PrayerWall mission_prayers fetch error:", prayersRes.error);
-        if (chainRes.error)   console.log("PrayerWall chain count fetch error:", chainRes.error);
-
-        // Real per-mission chain counts
-        const byMission = {};
-        (chainRes.data || []).forEach(row => {
-          byMission[row.mission_id] = (byMission[row.mission_id] || 0) + 1;
-        });
-        setChainCountByMission(byMission);
-        setTotalChainCount((chainRes.data || []).length);
-
-        const fromUpdates = (updatesRes.data || []).map(r => ({
-          id:        `update-${r.id}`,
-          missionId: r.mission_id,
-          mission:   r.missions?.title   || "Mission",
-          country:   r.missions?.country || "",
-          text:      r.text,
-          author:    r.author || "A missionary",
-          urgent:    false,
-          created_at: r.created_at,
-        }));
-        const fromChainRequests = (prayersRes.data || []).map(r => ({
-          id:        `chain-${r.id}`,
-          missionId: r.mission_id,
-          mission:   r.missions?.title   || "Mission",
-          country:   r.missions?.country || "",
-          text:      r.text,
-          author:    "A believer praying for this mission",
-          urgent:    false,
-          created_at: r.created_at,
-        }));
-
-        const merged = [...fromUpdates, ...fromChainRequests]
-          .filter(r => r.text)
-          .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-          .map(r => ({ ...r, prayers: byMission[r.missionId] || 0 }));
-
-        setAllRequests(merged);
+        if (error) { console.log("PrayerWall fetch error:", error); setAllRequests([]); }
+        else {
+          const mapped = (data || []).map(r => ({
+            id:      r.id,
+            mission: r.missions?.title   || "Mission",
+            country: r.missions?.country || "",
+            text:    r.text,
+            author:  r.author,
+            urgent:  false,
+            prayers: 0,
+          }));
+          setAllRequests(mapped);
+        }
       } catch (e) {
         console.log("PrayerWall exception:", e);
         setAllRequests([]);
@@ -892,17 +790,7 @@ const PrayerWall = ({ missions, onBack }) => {
     fetchPrayers();
   }, []);
 
-  // #78: real total, not local-click count. Local joins still bump it
-  // optimistically until the next fetch.
-  const totalPraying = totalChainCount + Object.values(joined).filter(Boolean).length;
-
-  const joinPrayer = async (r) => {
-    if (joined[r.id]) return;
-    setJoined(j => ({ ...j, [r.id]: true }));
-    // Write back to the same table Mission Detail's "Join Prayer Chain" uses,
-    // so joining from the Wall counts toward the mission's real total too.
-    try { await supabase.from("mission_prayers").insert({ mission_id: r.missionId, type: "chain" }); } catch {}
-  };
+  const totalPraying = Object.values(joined).filter(Boolean).length;
   return (
     <div style={{ minHeight:"100vh", background:"#060c18", color:"#eef1ff", fontFamily:"Georgia, serif" }}>
       <div style={{ background:"#09111f", borderBottom:"1px solid rgba(255,255,255,0.07)", padding:"16px 24px", display:"flex", alignItems:"center", gap:14, position:"sticky", top:0, zIndex:100 }}>
@@ -956,7 +844,7 @@ const PrayerWall = ({ missions, onBack }) => {
                 </div>
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:12 }}>
                   <span style={{ fontSize:13, color:"rgba(255,255,255,0.4)" }}>{fmt(count)} believers praying</span>
-                  <button onClick={() => joinPrayer(r)} disabled={isJoined}
+                  <button onClick={() => setJoined(j => ({...j,[r.id]:true}))} disabled={isJoined}
                     style={{ padding:"8px 20px", borderRadius:10, border:"none", background:isJoined?"rgba(62,207,142,0.12)":"linear-gradient(135deg,#e8b34b,#c8942b)", color:isJoined?"#3ecf8e":"#000", fontWeight:700, cursor:isJoined?"default":"pointer", fontSize:13, fontFamily:"Georgia, serif" }}>
                     {isJoined ? "✓ Praying" : "Join Prayer"}
                   </button>
@@ -1752,7 +1640,7 @@ export default function App() {
   const isAdminUser   = user?.email === ADMIN_EMAIL || user?.isAdmin === true;
   const openMission   = (m)  =>{setSelectedMission(m);setScreen("detail");};
   const openDonate    = ()   =>{setScreen("donate");};
-  const handlePayfastDonate = (amt) => startPayfastDonation({ mission: selectedMission, amount: amt, user });
+  const handlePayfastDonate = (amt, guestInfo) => startPayfastDonation({ mission: selectedMission, amount: amt, user, guestInfo });
 
   if(!authReady) return(<div style={{ minHeight:"100vh",background:"#060c18",display:"flex",alignItems:"center",justifyContent:"center" }}><div style={{ fontSize:48,color:"#e8b34b" }}>✝</div></div>);
   if(pfReturn) return <PayfastResultScreen status={pfReturn.status} amount={pfReturn.amount} onContinue={()=>setPfReturn(null)}/>;
@@ -1783,7 +1671,7 @@ export default function App() {
   if(screen==="admin-emergency")      return isAdminUser ? <AdminEmergencyRequests onBack={()=>setScreen("home")} adminEmail={user?.email}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
   if(screen==="ledger"&&selectedMission)  return <TransparencyLedger mission={selectedMission} onBack={()=>setScreen("detail")}/>;
   if(screen==="detail"&&selectedMission)  return <MissionDetail mission={selectedMission} onBack={()=>setScreen("home")} onDonate={openDonate} onLedger={()=>setScreen("ledger")}/>;
-  if(screen==="donate"&&selectedMission)  return <DonateScreen mission={selectedMission} onBack={()=>setScreen("detail")} onPayfast={handlePayfastDonate}/>;
+  if(screen==="donate"&&selectedMission)  return <DonateScreen mission={selectedMission} onBack={()=>setScreen("detail")} onPayfast={handlePayfastDonate} user={user}/>;
 
   return(
     <HomeScreen
