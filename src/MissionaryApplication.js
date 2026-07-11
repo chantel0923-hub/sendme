@@ -69,6 +69,54 @@ const convertToUSD = async (amount, fromCurrency) => {
   }
 };
 
+// Fix: missions never had lat/lng geocoded at all (unlike churches, which
+// got a geocoding fix earlier). A mission with no lat/lng defaults to (0,0)
+// on the map — the Gulf of Guinea near Gabon — regardless of the actual
+// target country. Same hardcoded Mapbox token fallback used in MapboxMap.js
+// and AdminChurchVerification.js — Vercel renames REACT_APP_ prefixed env
+// vars, so process.env.REACT_APP_MAPBOX_TOKEN is undefined in production.
+const MAPBOX_TOKEN = process.env.REACT_APP_MAPBOX_TOKEN ||
+  "pk.eyJ1Ijoic2VuZG1lMDkyMyIsImEiOiJjbXI1anZpOGcwYXJvMzFyMHo2aDU2YnI2In0.CutnKCVEf1SzDpddacdekg";
+
+const geocodeMissionLocation = async (area, country) => {
+  try {
+    const token = MAPBOX_TOKEN;
+    if (!token || !country) return { lat: null, lng: null };
+    const parts = [area, country].filter(Boolean).join(", ");
+    const query = encodeURIComponent(parts.trim());
+    const res = await fetch(
+      `https://api.mapbox.com/geocoding/v5/mapbox.places/${query}.json?access_token=${token}&limit=1`
+    );
+    if (!res.ok) return { lat: null, lng: null };
+    const data = await res.json();
+    if (data?.features?.length > 0) {
+      const feature = data.features[0];
+      const [lng, lat] = feature.center;
+
+      // Sanity check against country (missions don't have a province field
+      // like churches do, but country is just as reliable a cross-check).
+      // If it doesn't match, leave coordinates blank rather than silently
+      // saving a wrong pin — same pattern used for church geocoding.
+      const countryCtx = (feature.context || []).find(c => c.id?.startsWith("country"));
+      const countryText = (countryCtx?.text || feature.place_name || "").toLowerCase();
+      const enteredCountry = country.toLowerCase();
+      const matches = countryText && (
+        countryText.includes(enteredCountry) || enteredCountry.includes(countryText)
+      );
+      if (!matches) {
+        console.warn(`Mission geocode mismatch: expected country "${country}" but got "${countryText}" for query "${parts}". Leaving coordinates blank.`);
+        return { lat: null, lng: null };
+      }
+
+      return { lat, lng };
+    }
+    return { lat: null, lng: null };
+  } catch (e) {
+    console.warn("Mission geocoding failed:", e);
+    return { lat: null, lng: null };
+  }
+};
+
 const ROLES   = ["Missionary","Evangelist","Pastor","Church Planter","Bible Distributor","Medical Missionary","Children's Minister","Other"];
 const REGIONS = ["Africa","Asia","South America","Middle East","Europe","North America","Pacific Islands","Central Asia","Other"];
 
@@ -626,6 +674,8 @@ export default function MissionaryApplication({ onBack, user }) {
       const platformSurcharge = Math.round(goal * 0.1);
       const collectionTarget = goal + platformSurcharge;
 
+      const { lat, lng } = await geocodeMissionLocation(form.targetArea, form.targetCountry);
+
       const { data, error: dbError } = await supabase.from("missions").insert({
         missionary_name:  form.shadowMode ? null : form.fullName,
         missionary_email: form.email,
@@ -639,6 +689,8 @@ export default function MissionaryApplication({ onBack, user }) {
         region:           form.targetRegion,
         country:          form.targetCountry,
         area:             form.targetArea,
+        lat:              lat,
+        lng:              lng,
         blurb:            form.missionDescription,
         goal:             goal,
         local_amount:     form.localCurrency === "USD" ? null : Number(form.localAmount) || null,
