@@ -108,13 +108,31 @@ const RiskBadge = ({ level=1 }) => {
 const JOURNEY_STEPS = [
   {step:1,icon:"✅",label:"Application Approved"},
   {step:2,icon:"💝",label:"Funding Goal Reached"},
-  {step:3,icon:"✈️", label:"Travelling"},
-  {step:4,icon:"📍",label:"Arrived at Location"},
-  {step:5,icon:"⛪",label:"Services Started"},
-  {step:6,icon:"🙏",label:"Souls Reached"},
-  {step:7,icon:"📷",label:"Proof Uploaded"},
-  {step:8,icon:"✅",label:"Mission Completed"},
+  {step:3,icon:"✈️", label:"Mission Started"},
+  {step:4,icon:"📷",label:"Proof Uploaded"},
+  {step:5,icon:"✅",label:"Mission Completed"},
 ];
+// Fix #76/#77: journey_step in the DB is set once at creation and nothing
+// ever updates it afterward, so missions got stuck showing "Application
+// Approved" forever. Simplified to 5 steps (per Br Donald), each with a real,
+// automatically detectable trigger — no manual admin advancement needed:
+//   1. Application Approved   — default on mission creation
+//   2. Funding Goal Reached   — raised >= goal
+//   3. Mission Started        — missionary has posted at least one Field
+//                                Report (mission_updates row with type "update")
+//   4. Proof Uploaded         — an approved row exists in milestone_proofs
+//   5. Mission Completed      — status === "complete"
+// Takes the highest applicable step so it never regresses, and still
+// respects a manually stored journey_step if one is ever set higher.
+function computeJourneyStep(m, hasFieldReport, hasApprovedProof) {
+  let step = m.journeyStep || 1;
+  if (m.goal > 0 && m.raised >= m.goal) step = Math.max(step, 2);
+  if (hasFieldReport) step = Math.max(step, 3);
+  if (hasApprovedProof) step = Math.max(step, 4);
+  if (m.status === "complete") step = Math.max(step, 5);
+  return step;
+}
+
 const JourneyTimeline = ({ currentStep, color }) => (
   <div style={{ padding:"20px 0", borderBottom:"1px solid rgba(255,255,255,0.06)" }}>
     <div style={{ fontSize:14, fontWeight:700, color:"#eef1ff", marginBottom:16 }}>Mission Journey</div>
@@ -631,6 +649,24 @@ const MissionDetail = ({ mission: m, onBack, onDonate, onLedger }) => {
   const [proofTab,setProofTab]     = useState("photos");
   const [proofItems,setProofItems] = useState([]);
   const [proofLoaded,setProofLoaded] = useState(false);
+  const [hasFieldReport,setHasFieldReport] = useState(false);
+
+  useEffect(() => {
+    if (!m?.id) return;
+    const checkFieldReport = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("mission_updates")
+          .select("id")
+          .eq("mission_id", m.id)
+          .eq("type", "update")
+          .limit(1);
+        if (error) { console.log("field report check error:", error); return; }
+        setHasFieldReport((data || []).length > 0);
+      } catch(e) { console.log("field report check exception:", e); }
+    };
+    checkFieldReport();
+  }, [m?.id]);
 
   useEffect(() => {
     if (!m?.id || proofLoaded) return;
@@ -708,7 +744,7 @@ const MissionDetail = ({ mission: m, onBack, onDonate, onLedger }) => {
             ))}
           </div>
         </div>
-        <JourneyTimeline currentStep={m.journeyStep||1} color={m.color} />
+        <JourneyTimeline currentStep={computeJourneyStep(m, hasFieldReport, proofItems.length > 0)} color={m.color} />
         <BudgetBreakdown budget={m.budget} goal={m.goal} color={m.color} />
         <UpdatesFeed missionId={m.id} missionColor={m.color} missionName={m.protected?"Missionary":m.name} />
         <PrayerChain missionId={m.id} missionColor={m.color} initialCount={m.prayers||0} />
