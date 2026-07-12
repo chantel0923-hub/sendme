@@ -138,9 +138,16 @@ export default async function handler(req, res) {
         process.env.REACT_APP_SUPABASE_URL,
         process.env.SUPABASE_SERVICE_ROLE_KEY
       );
-      await supabase.from("donations").insert({
+      // #87 fix: donations.mission_id is a uuid column (built for real
+      // missions, which use Supabase uuid primary keys). emergency_requests
+      // uses a bigint id instead — inserting that into mission_id has been
+      // failing on EVERY emergency donation, type-mismatch, silently caught
+      // below. The dedicated emergency_id column (bigint) is where an
+      // emergency's target id belongs instead.
+      const { error: pendingInsertError } = await supabase.from("donations").insert({
         m_payment_id,
-        mission_id:    targetId || null,
+        mission_id:    isEmergency ? null : (targetId || null),
+        emergency_id:  isEmergency ? (targetId || null) : null,
         mission_title: targetTitle || null,
         amount:        amt,
         donor_name:    name || null,
@@ -150,8 +157,15 @@ export default async function handler(req, res) {
         kind:          isEmergency ? "emergency" : "mission",
         status:        "pending",
       });
+      // Supabase's JS client does NOT throw on a failed insert — it returns
+      // { error }. This MUST be checked explicitly or a blocked/mismatched
+      // insert (like the uuid/bigint mismatch that caused #87) fails
+      // completely silently.
+      if (pendingInsertError) {
+        console.error("payfast-create: pending donation insert failed", pendingInsertError);
+      }
     } catch (dbErr) {
-      console.error("payfast-create: pending donation insert failed", dbErr);
+      console.error("payfast-create: pending donation insert threw", dbErr);
       // Non-fatal — donor still goes to PayFast
     }
 
