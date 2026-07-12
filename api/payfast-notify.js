@@ -11,9 +11,14 @@
 //   PAYFAST_PASSPHRASE
 //   PAYFAST_MODE   ("sandbox" or "live")
 //   SITE_URL
+//   ADMIN_NOTIFICATION_EMAIL (optional — falls back to the same address
+//     hardcoded as ADMIN_EMAIL in src/AdminPayouts.js)
 
 import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
+
+const ADMIN_EMAIL = process.env.ADMIN_NOTIFICATION_EMAIL || "sendmemissionfund@gmail.com";
+const SITE_URL     = (process.env.SITE_URL || "https://sendme-nine.vercel.app").replace(/\/$/, "");
 
 const PAYFAST_VALID_HOSTS = [
   "www.payfast.co.za",
@@ -235,6 +240,12 @@ export default async function handler(req, res) {
       // usdAmount path above should be the normal case.
       const creditAmount = usdAmount ?? Number(amount_gross);
 
+      // #89 — admin donation-received email. Fire-and-forget, same
+      // philosophy as notifications.js: a failed/slow email must never
+      // block or fail the ITN response PayFast is waiting on. Populated
+      // per-kind below, then sent once after crediting either branch.
+      let notifyTitle = null, notifyRaised = null, notifyGoal = null, notifyPath = "/";
+
       if (isEmergency) {
         const { error: rpcError } = await supabase.rpc("increment_emergency_raised", {
           p_emergency_id: target_id,
@@ -243,6 +254,17 @@ export default async function handler(req, res) {
         if (rpcError) {
           console.error("payfast-notify: increment_emergency_raised failed", rpcError);
         }
+
+        const { data: emRow, error: emFetchError } = await supabase
+          .from("emergency_requests")
+          .select("title, raised, goal")
+          .eq("id", target_id)
+          .maybeSingle();
+        if (emFetchError) console.error("payfast-notify: emergency_requests fetch for notification failed", emFetchError);
+        notifyTitle  = emRow?.title  ?? null;
+        notifyRaised = emRow?.raised ?? null;
+        notifyGoal   = emRow?.goal   ?? null;
+        notifyPath   = "/emergency";
       } else {
         const { error: rpcError } = await supabase.rpc("increment_mission_raised", {
           p_mission_id: target_id,
@@ -266,6 +288,39 @@ export default async function handler(req, res) {
         if (ledgerError) {
           console.error("payfast-notify: ledger insert failed", ledgerError);
         }
+
+        const { data: missionRow, error: missionFetchError } = await supabase
+          .from("missions")
+          .select("title, raised, goal")
+          .eq("id", target_id)
+          .maybeSingle();
+        if (missionFetchError) console.error("payfast-notify: missions fetch for notification failed", missionFetchError);
+        notifyTitle  = missionRow?.title  ?? null;
+        notifyRaised = missionRow?.raised ?? null;
+        notifyGoal   = missionRow?.goal   ?? null;
+        notifyPath   = `/mission/${target_id}`;
+      }
+
+      try {
+        const { error: notifyError } = await supabase.functions.invoke("send-notification", {
+          body: {
+            type: "donation_received",
+            to:   ADMIN_EMAIL,
+            data: {
+              amount:      creditAmount,
+              missionTitle: notifyTitle || (isEmergency ? "an emergency request" : "a mission"),
+              donorName:   donationRow?.donor_name  || name_first    || null,
+              donorEmail:  donationRow?.donor_email || email_address || null,
+              isGuest:     !(donationRow?.user_id || user_id),
+              totalRaised: notifyRaised,
+              goal:        notifyGoal,
+              missionUrl:  `${SITE_URL}${notifyPath}`,
+            },
+          },
+        });
+        if (notifyError) console.error("payfast-notify: admin donation-received email failed", notifyError);
+      } catch (notifyErr) {
+        console.error("payfast-notify: admin donation-received email threw", notifyErr);
       }
     }
 
