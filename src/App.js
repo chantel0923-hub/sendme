@@ -174,7 +174,7 @@ const BudgetBreakdown = ({ budget=[], goal, color }) => {
   );
 };
 
-const UpdatesFeed = ({ missionId, missionColor, missionName }) => {
+const UpdatesFeed = ({ missionId, missionColor, missionName, canPost, guest }) => {
   const [updates, setUpdates]   = useState([]);
   const [loading, setLoading]   = useState(true);
   const [newText, setNewText]     = useState("");
@@ -231,6 +231,7 @@ const UpdatesFeed = ({ missionId, missionColor, missionName }) => {
     <div style={{ padding:"24px 0", borderBottom:"1px solid rgba(255,255,255,0.06)" }}>
       <div style={{ fontSize:16,fontWeight:700,color:"#eef1ff",marginBottom:6 }}>Live Mission Updates</div>
       <div style={{ fontSize:12,color:"rgba(255,255,255,0.35)",marginBottom:16 }}>Field reports, photos and prayer requests from the missionary.</div>
+      {canPost ? (
       <div style={{ background:"rgba(255,255,255,0.03)",borderRadius:14,border:"1px solid rgba(255,255,255,0.08)",padding:16,marginBottom:16 }}>
         <div style={{ display:"flex",gap:8,marginBottom:10 }}>
           {[["update","📋 Field Report"],["prayer","🙏 Prayer Request"]].map(([t,l]) => (
@@ -256,6 +257,15 @@ const UpdatesFeed = ({ missionId, missionColor, missionName }) => {
           </div>
         )}
       </div>
+      ) : (
+        // #81/#82: Donor/Supporter and guest users can still read updates below,
+        // but the post form is hidden rather than shown-then-blocked at submit.
+        <div style={{ background:"rgba(255,255,255,0.02)",borderRadius:14,border:"1px solid rgba(255,255,255,0.06)",padding:"14px 16px",marginBottom:16,fontSize:12.5,color:"rgba(255,255,255,0.35)" }}>
+          {guest
+            ? "Sign in to read along — only the mission's missionary or pastor can post Field Reports and Prayer Requests here."
+            : "Only the mission's missionary or its pastor can post Field Reports and Prayer Requests here."}
+        </div>
+      )}
       {loading ? (
         <div style={{ textAlign:"center",padding:"20px 0",color:"rgba(255,255,255,0.3)",fontSize:13 }}>Loading updates...</div>
       ) : updates.length === 0 ? (
@@ -699,7 +709,7 @@ const PayfastResultScreen = ({ status, amount, onContinue }) => (
   </div>
 );
 
-const MissionDetail = ({ mission: m, onBack, onDonate, onLedger }) => {
+const MissionDetail = ({ mission: m, onBack, onDonate, onLedger, user, userRole, guest, isAdmin }) => {
   const [proofTab,setProofTab]     = useState("photos");
   const [proofItems,setProofItems] = useState([]);
   const [proofLoaded,setProofLoaded] = useState(false);
@@ -750,6 +760,15 @@ const MissionDetail = ({ mission: m, onBack, onDonate, onLedger }) => {
     if (m.goal > 0 && m.raised >= m.goal) return 2;
     return 1;
   })();
+
+  // #81/#82: Live Mission Updates (Field Report / Prayer Request) posting is
+  // restricted to the mission's own missionary or its pastor at the DB level
+  // via RLS (mission_updates_insert_owner, from #69/#78). This is the UI-side
+  // mirror so Donor/Supporter and guest users don't see a post form they'd be
+  // blocked from submitting anyway. Role-level check only — per-mission
+  // ownership (this specific missionary/pastor vs. this specific mission) is
+  // already enforced server-side.
+  const canPostUpdates = !guest && !!user && (userRole==="missionary" || userRole==="pastor" || userRole==="org_leader" || isAdmin);
 
   const shareWhatsApp = () => {
     const name    = m.protected ? "a faithful missionary" : m.name;
@@ -812,7 +831,8 @@ const MissionDetail = ({ mission: m, onBack, onDonate, onLedger }) => {
         </div>
         <JourneyTimeline currentStep={computedJourneyStep} color={m.color} />
         <BudgetBreakdown budget={m.budget} goal={m.goal} color={m.color} />
-        <UpdatesFeed missionId={m.id} missionColor={m.color} missionName={m.protected?"Missionary":m.name} />
+        <UpdatesFeed missionId={m.id} missionColor={m.color} missionName={m.protected?"Missionary":m.name}
+          canPost={canPostUpdates} guest={guest} />
         <PrayerChain missionId={m.id} missionColor={m.color} initialCount={m.prayers||0} />
         <div style={{ padding:"24px 0",borderBottom:"1px solid rgba(255,255,255,0.06)" }}>
           <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16 }}>
@@ -1303,7 +1323,8 @@ const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, o
           <button onClick={onDonate} style={{ background:"linear-gradient(135deg,#4caf7d,#3a8f63)",border:"none",borderRadius:10,padding:"8px 16px",color:"#fff",cursor:"pointer",fontSize:13,fontWeight:700 }}>💛 Donate</button>
           <button onClick={onPray} style={{ background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"8px 16px",color:"rgba(255,255,255,0.6)",cursor:"pointer",fontSize:13 }}>Pray</button>
           <button onClick={onChurches} style={{ background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"8px 16px",color:"rgba(255,255,255,0.6)",cursor:"pointer",fontSize:13 }}>Churches</button>
-          {!guest && <button onClick={onApply} style={{ background:"linear-gradient(135deg,#e8b34b,#c8942b)",border:"none",borderRadius:10,padding:"8px 16px",color:"#000",cursor:"pointer",fontSize:13,fontWeight:700 }}>Apply</button>}
+          {/* #80: Donor/Supporter role should not see Apply in the main nav */}
+          {!guest && userRole!=="donor" && <button onClick={onApply} style={{ background:"linear-gradient(135deg,#e8b34b,#c8942b)",border:"none",borderRadius:10,padding:"8px 16px",color:"#000",cursor:"pointer",fontSize:13,fontWeight:700 }}>Apply</button>}
           {(userRole==="missionary"||isPastor) && user && <button onClick={onMilestoneProof} style={{ background:"rgba(91,156,246,0.1)",border:"1px solid rgba(91,156,246,0.3)",borderRadius:10,padding:"8px 16px",color:"#5b9cf6",cursor:"pointer",fontSize:13,fontWeight:700 }}>📋 Submit Proof</button>}
           {userRole==="missionary" && user && <button onClick={onMissionaryDashboard} style={{ background:"rgba(232,179,75,0.1)",border:"1px solid rgba(232,179,75,0.3)",borderRadius:10,padding:"8px 16px",color:"#e8b34b",cursor:"pointer",fontSize:13,fontWeight:700 }}>📊 My Dashboard</button>}
           {isPastor && <button onClick={onMyChurch} style={{ background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"8px 16px",color:"rgba(255,255,255,0.6)",cursor:"pointer",fontSize:13 }}>{userRole==="org_leader" ? "My Organization" : "My Church"}</button>}
@@ -1856,7 +1877,7 @@ export default function App() {
   if(screen==="church")           return (isPastor||isAdminUser) ? <ChurchRegistration onBack={()=>setScreen("home")} user={user} userRole={userRole}/> : null;
   if(screen==="my-church")        return (isPastor||isAdminUser) ? <MyChurch onBack={()=>setScreen("home")} user={user} userRole={userRole}/> : null;
   if(screen==="profile")          return <DonorProfile user={user} onBack={()=>setScreen("home")}/>;
-  if(screen==="emergency")        return guest ? <GuestBlocked title="Registration Required" message="Submitting an emergency mission request requires a SendMe account, so admin can verify and follow up with you directly. Please sign in or register to continue." onBack={()=>setScreen("home")} onRegister={()=>{setGuest(false);setScreen("home");}}/> : <EmergencyRequests onBack={()=>setScreen("home")} user={user}/>;
+  if(screen==="emergency")        return guest ? <GuestBlocked title="Registration Required" message="Submitting an emergency mission request requires a SendMe account, so admin can verify and follow up with you directly. Please sign in or register to continue." onBack={()=>setScreen("home")} onRegister={()=>{setGuest(false);setScreen("home");}}/> : <EmergencyRequests onBack={()=>setScreen("home")} user={user} userRole={userRole}/>;
   if(screen==="matching")         return <MissionMatching missions={liveMissions} onMission={openMission} onBack={()=>setScreen("home")}/>;
   if(screen==="testimonies")      return <TestimonyEngine onBack={()=>setScreen("home")} onMission={openMission}/>;
   if(screen==="worker")           return guest ? <GuestBlocked title="Registration Required" message="Posting or responding to a worker request requires a SendMe account, so churches can coordinate and follow up directly. Please sign in or register to continue." onBack={()=>setScreen("home")} onRegister={()=>{setGuest(false);setScreen("home");}}/> : <SendAWorker onBack={()=>setScreen("home")} user={user}/>;
@@ -1869,7 +1890,7 @@ export default function App() {
   if(screen==="admin-workers")        return isAdminUser ? <AdminWorkerRequests onBack={()=>setScreen("home")}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
   if(screen==="admin-emergency")      return isAdminUser ? <AdminEmergencyRequests onBack={()=>setScreen("home")} adminEmail={user?.email}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
   if(screen==="ledger"&&selectedMission)  return <TransparencyLedger mission={selectedMission} onBack={()=>setScreen("detail")}/>;
-  if(screen==="detail"&&selectedMission)  return <MissionDetail mission={selectedMission} onBack={()=>setScreen("home")} onDonate={openDonate} onLedger={()=>setScreen("ledger")}/>;
+  if(screen==="detail"&&selectedMission)  return <MissionDetail mission={selectedMission} onBack={()=>setScreen("home")} onDonate={openDonate} onLedger={()=>setScreen("ledger")} user={user} userRole={userRole} guest={guest} isAdmin={isAdminUser}/>;
   if(screen==="donate"&&selectedMission)  return <DonateScreen mission={selectedMission} onBack={()=>setScreen("detail")} onPayfast={handlePayfastDonate} user={user}/>;
 
   return(

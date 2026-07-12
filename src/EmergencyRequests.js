@@ -31,7 +31,12 @@ const timeAgo = (dateStr) => {
   return `${Math.floor(diff/86400)}d ago`;
 };
 
-export default function EmergencyRequests({ onBack, user }) {
+export default function EmergencyRequests({ onBack, user, userRole }) {
+  // #79: Donor/Supporter role should not see "+ Submit Emergency". Guests
+  // never reach this screen at all — App.js already routes them to
+  // GuestBlocked before EmergencyRequests renders.
+  const canSubmitEmergency = userRole !== "donor";
+
   const [requests, setRequests] = useState([]);
   const [loading, setLoading]   = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -207,9 +212,11 @@ export default function EmergencyRequests({ onBack, user }) {
           <div style={{ fontSize:18, fontWeight:700 }}>Emergency Mission Requests</div>
           <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", letterSpacing:2, marginTop:2 }}>URGENT NEEDS FROM THE FIELD</div>
         </div>
-        <button onClick={()=>setShowForm(f=>!f)} style={{ marginLeft:"auto", background:"linear-gradient(135deg,#e85b5b,#c44040)", border:"none", borderRadius:10, padding:"8px 16px", color:"#fff", cursor:"pointer", fontSize:13, fontWeight:700 }}>
-          + Submit Emergency
-        </button>
+        {canSubmitEmergency && (
+          <button onClick={()=>setShowForm(f=>!f)} style={{ marginLeft:"auto", background:"linear-gradient(135deg,#e85b5b,#c44040)", border:"none", borderRadius:10, padding:"8px 16px", color:"#fff", cursor:"pointer", fontSize:13, fontWeight:700 }}>
+            + Submit Emergency
+          </button>
+        )}
       </div>
 
       <div style={{ maxWidth:680, margin:"0 auto", padding:"28px 20px 60px" }}>
