@@ -108,12 +108,9 @@ const RiskBadge = ({ level=1 }) => {
 const JOURNEY_STEPS = [
   {step:1,icon:"✅",label:"Application Approved"},
   {step:2,icon:"💝",label:"Funding Goal Reached"},
-  {step:3,icon:"✈️", label:"Travelling"},
-  {step:4,icon:"📍",label:"Arrived at Location"},
-  {step:5,icon:"⛪",label:"Services Started"},
-  {step:6,icon:"🙏",label:"Souls Reached"},
-  {step:7,icon:"📷",label:"Proof Uploaded"},
-  {step:8,icon:"✅",label:"Mission Completed"},
+  {step:3,icon:"⛪",label:"In the Field"},
+  {step:4,icon:"🙏",label:"Impact Reported"},
+  {step:5,icon:"🏆",label:"Mission Completed"},
 ];
 const JourneyTimeline = ({ currentStep, color }) => (
   <div style={{ padding:"20px 0", borderBottom:"1px solid rgba(255,255,255,0.06)" }}>
@@ -706,6 +703,7 @@ const MissionDetail = ({ mission: m, onBack, onDonate, onLedger }) => {
   const [proofTab,setProofTab]     = useState("photos");
   const [proofItems,setProofItems] = useState([]);
   const [proofLoaded,setProofLoaded] = useState(false);
+  const [fieldReportCount, setFieldReportCount] = useState(0);
 
   useEffect(() => {
     if (!m?.id || proofLoaded) return;
@@ -724,6 +722,35 @@ const MissionDetail = ({ mission: m, onBack, onDonate, onLedger }) => {
     };
     loadProofs();
   }, [m?.id]);
+
+  // #76/#77: real signal that the missionary is actually "in the field" —
+  // at least one Field Report has been posted for this mission.
+  useEffect(() => {
+    if (!m?.id) return;
+    const loadFieldReportCount = async () => {
+      try {
+        const { count } = await supabase
+          .from("mission_updates")
+          .select("id", { count: "exact", head: true })
+          .eq("mission_id", m.id)
+          .eq("type", "update");
+        if (typeof count === "number") setFieldReportCount(count);
+      } catch (e) { console.log("fieldReportCount fetch error:", e); }
+    };
+    loadFieldReportCount();
+  }, [m?.id]);
+
+  // #76/#77: Journey step is now computed live from real data instead of
+  // a static journey_step column that was never actually incremented
+  // anywhere. Steps only ever move forward as real milestones are hit.
+  const computedJourneyStep = (() => {
+    if (m.status === "complete") return 5;
+    if (proofItems.length > 0 || (m.souls||0) > 0 || (m.bibles||0) > 0 || (m.churches||0) > 0) return 4;
+    if (fieldReportCount > 0) return 3;
+    if (m.goal > 0 && m.raised >= m.goal) return 2;
+    return 1;
+  })();
+
   const shareWhatsApp = () => {
     const name    = m.protected ? "a faithful missionary" : m.name;
     const country = m.country || m.region;
@@ -783,7 +810,7 @@ const MissionDetail = ({ mission: m, onBack, onDonate, onLedger }) => {
             ))}
           </div>
         </div>
-        <JourneyTimeline currentStep={m.journeyStep||1} color={m.color} />
+        <JourneyTimeline currentStep={computedJourneyStep} color={m.color} />
         <BudgetBreakdown budget={m.budget} goal={m.goal} color={m.color} />
         <UpdatesFeed missionId={m.id} missionColor={m.color} missionName={m.protected?"Missionary":m.name} />
         <PrayerChain missionId={m.id} missionColor={m.color} initialCount={m.prayers||0} />
