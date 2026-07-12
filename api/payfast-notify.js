@@ -128,6 +128,10 @@ export default async function handler(req, res) {
       pf_payment_id,
       name_first,
       email_address,
+      token,               // Subscription token — only present on recurring/tokenized
+                            // payments. PayFast never shows this anywhere else (not even
+                            // in the Sandbox UI) — the ITN is the ONLY place it's ever sent,
+                            // so it must be captured here to identify renewal charges later.
     } = params;
 
     const isEmergency = kind === "emergency";
@@ -146,14 +150,63 @@ export default async function handler(req, res) {
     // ITN callback is in ZAR (PayFast's settlement currency) — using it
     // directly to credit `raised` (a USD figure) would inflate every gift
     // by roughly the exchange rate. This lookup is the fix for that.
-    const { data: donationRow, error: fetchError } = await supabase
+    let { data: donationRow, error: fetchError } = await supabase
       .from("donations")
-      .select("amount")
+      .select("amount, mission_id, emergency_id, mission_title, donor_name, donor_email, user_id, type, kind")
       .eq("m_payment_id", m_payment_id)
-      .single();
+      .maybeSingle();
     if (fetchError) {
-      console.error("payfast-notify: could not find original donation row for m_payment_id", m_payment_id, fetchError);
+      console.error("payfast-notify: donation lookup by m_payment_id failed", m_payment_id, fetchError);
     }
+
+    // #88 — RECURRING RENEWAL HANDLING: the row above is pre-inserted by
+    // payfast-create.js at checkout, so it only ever matches the FIRST charge
+    // of a subscription. On every renewal (month 2 onward), PayFast mints its
+    // own brand-new m_payment_id that was never in our table — but it always
+    // resends the SAME `token` for every charge on that subscription. So if
+    // the m_payment_id lookup above comes up empty and a token is present,
+    // find the original pledge by token instead and record this cycle as a
+    // new donation row (so donation history/ledger show one row per month,
+    // not one row silently overwritten every month).
+    if (!donationRow && token) {
+      const { data: subRow, error: subErr } = await supabase
+        .from("donations")
+        .select("amount, mission_id, emergency_id, mission_title, donor_name, donor_email, user_id, type, kind")
+        .eq("payfast_token", token)
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (subErr) {
+        console.error("payfast-notify: subscription lookup by token failed", token, subErr);
+      }
+      if (subRow) {
+        const { data: renewalRow, error: insertErr } = await supabase
+          .from("donations")
+          .insert({
+            m_payment_id,
+            payfast_token: token,
+            mission_id:    subRow.mission_id,
+            emergency_id:  subRow.emergency_id,
+            mission_title: subRow.mission_title,
+            amount:        subRow.amount,
+            donor_name:    subRow.donor_name,
+            donor_email:   subRow.donor_email,
+            user_id:       subRow.user_id,
+            type:          subRow.type,
+            kind:          subRow.kind,
+            status:        "pending",
+          })
+          .select("amount, mission_id, emergency_id, mission_title, donor_name, donor_email, user_id, type, kind")
+          .single();
+        if (insertErr) {
+          console.error("payfast-notify: renewal donation insert failed", insertErr);
+        }
+        donationRow = renewalRow;
+      } else {
+        console.error("payfast-notify: no subscription found for token — cannot attribute renewal charge", token, m_payment_id);
+      }
+    }
+
     const usdAmount = donationRow?.amount ?? null;
 
     // Update the donations row — keep the original USD `amount` untouched,
@@ -164,6 +217,7 @@ export default async function handler(req, res) {
         status,
         pf_payment_id: pf_payment_id || null,
         amount_zar: Number(amount_gross) || null,
+        payfast_token: token || null,
         updated_at: new Date().toISOString(),
       })
       .eq("m_payment_id", m_payment_id);
@@ -215,7 +269,7 @@ export default async function handler(req, res) {
       }
     }
 
-    console.log("payfast-notify: processed", { m_payment_id, status, amount_gross, usdAmount, target_id, kind });
+    console.log("payfast-notify: processed", { m_payment_id, status, amount_gross, usdAmount, target_id, kind, token: token || null });
     return res.status(200).send("OK");
   } catch (err) {
     // Catch-all so an unexpected error never surfaces as a raw 500 to

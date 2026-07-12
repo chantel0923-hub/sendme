@@ -529,18 +529,24 @@ const DonateScreen = ({ mission: m, onBack, onPayfast, user }) => {
   const MONTHLY = [10,25,50,100,200];
 
   const handleMonthlyAdopt = async () => {
-    if (!monthly || (isGuest && !guestInfoValid)) return;
+    // #88 fix: this used to just insert a "pending" row straight into
+    // Supabase and immediately show the success screen — no PayFast
+    // subscription was ever actually created, so no card was ever charged
+    // and nothing ever recurred. Now it goes through the real PayFast
+    // subscription checkout, same as the once-off flow does.
+    if (!monthly || (isGuest && !guestInfoValid) || submitting) return;
     setSubmitting(true);
+    setError("");
     try {
-      await supabase.from("donations").insert({
-        mission_id:m.id, amount:monthly, type:"monthly", status:"pending",
-        donor_name:  isGuest ? guestName.trim()  : (user?.user_metadata?.full_name || null),
-        donor_email: isGuest ? guestEmail.trim() : (user?.email || null),
-        user_id:     user?.id || null,
-      });
-      setMonthlyDone(true);
-    } catch(e) { console.log("monthly adopt error:", e); setMonthlyDone(true); }
-    setSubmitting(false);
+      await onPayfast(monthly, isGuest ? { name: guestName.trim(), email: guestEmail.trim() } : null, "monthly");
+      // No setMonthlyDone(true) here — the browser is being redirected to
+      // PayFast's hosted checkout right now. Success is only real once the
+      // donor completes checkout there and payfast-notify.js's ITN confirms
+      // it; setSubmitting(false) is likewise skipped since the page is navigating away.
+    } catch {
+      setError("Could not start PayFast checkout. Please try again.");
+      setSubmitting(false);
+    }
   };
 
   const handleGive = async () => {
@@ -1874,7 +1880,7 @@ export default function App() {
   const isAdminUser   = user?.email === ADMIN_EMAIL || user?.isAdmin === true;
   const openMission   = (m)  =>{setSelectedMission(m);setScreen("detail");};
   const openDonate    = ()   =>{setScreen("donate");};
-  const handlePayfastDonate = (amt, guestInfo) => startPayfastDonation({ mission: selectedMission, amount: amt, user, guestInfo });
+  const handlePayfastDonate = (amt, guestInfo, type = "once") => startPayfastDonation({ mission: selectedMission, amount: amt, user, guestInfo, type });
 
   if(!authReady) return(<div style={{ minHeight:"100vh",background:"#060c18",display:"flex",alignItems:"center",justifyContent:"center" }}><div style={{ fontSize:48,color:"#e8b34b" }}>✝</div></div>);
   if(pfReturn) return <PayfastResultScreen status={pfReturn.status} amount={pfReturn.amount} onContinue={()=>setPfReturn(null)}/>;

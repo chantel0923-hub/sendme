@@ -127,6 +127,20 @@ export default async function handler(req, res) {
       ["custom_str4",       isEmergency ? "emergency" : "mission"],
     ];
 
+    // Recurring billing fields — MUST be appended last, after the custom_str*
+    // fields, per PayFast's documented signature field order
+    // (https://developers.payfast.co.za: Merchant → Buyer → Transaction →
+    // Custom → Recurring Billing). Only added for monthly/subscription
+    // donations; once-off and emergency gifts are unaffected.
+    if (type === "monthly") {
+      pairs.push(
+        ["subscription_type", "1"],          // 1 = subscription (2 = ad-hoc tokenization, not used here)
+        ["recurring_amount",  zarAmount.toFixed(2)], // same as 'amount' — charged every cycle going forward
+        ["frequency",         "3"],          // PayFast cycle code: 1=Daily 2=Weekly 3=Monthly 4=Quarterly 5=Biannually 6=Annual
+        ["cycles",            "0"],          // 0 = bill indefinitely until the donor cancels
+      );
+    }
+
     const signature = pfSignature(pairs, passphrase);
 
     // Build the fields object for the client to POST (same order, + signature at end)
