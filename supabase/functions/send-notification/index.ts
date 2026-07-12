@@ -115,6 +115,7 @@ const TEMPLATES: Record<string, (d: any) => { subject: string; html: string }> =
       "New Donation Received",
       `Praise God! A gift of <strong style="color:#e8b34b;">$${d.amount}</strong> has just been given toward
       <strong>${d.missionTitle}</strong>${d.donorName ? ` by ${d.donorName}` : " by an anonymous donor"}.<br/><br/>
+      ${d.donorEmail ? `<div style="font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:10px;">✉ <a href="mailto:${d.donorEmail}" style="color:#e8b34b;">${d.donorEmail}</a>${d.isGuest ? ` <span style="color:rgba(255,255,255,0.35);">(guest checkout — no SendMe account)</span>` : ""}</div>` : ""}
       Total raised so far: <strong style="color:#e8b34b;">$${d.totalRaised} of $${d.goal}</strong>.`,
       "View Mission", d.missionUrl || "https://sendme-nine.vercel.app"
     ),
