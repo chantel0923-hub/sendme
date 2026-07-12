@@ -768,7 +768,7 @@ const MissionDetail = ({ mission: m, onBack, onDonate, onLedger, user, userRole,
   // blocked from submitting anyway. Role-level check only — per-mission
   // ownership (this specific missionary/pastor vs. this specific mission) is
   // already enforced server-side.
-  const canPostUpdates = !guest && !!user && (userRole==="missionary" || userRole==="pastor" || userRole==="org_leader" || isAdmin);
+  const canPostUpdates = !guest && !!user && (userRole==="missionary" || userRole==="minister" || userRole==="pastor" || userRole==="org_leader" || isAdmin);
 
   const shareWhatsApp = () => {
     const name    = m.protected ? "a faithful missionary" : m.name;
