@@ -1087,7 +1087,15 @@ const LoadingMap = () => (
   </div>
 );
 
-const DonorProfile = ({ user, onBack }) => {
+const ROLE_LABELS = {
+  donor:      { label:"Donor / Supporter",              color:"#3ecf8e" },
+  missionary: { label:"Missionary",                     color:"#e8b34b" },
+  pastor:     { label:"Pastor (Senior Leader)",          color:"#5b9cf6" },
+  org_leader: { label:"Missionary-Sending Organization", color:"#5b9cf6" },
+  minister:   { label:"Minister / Evangelist",           color:"#b06cf5" },
+};
+
+const DonorProfile = ({ user, onBack, userRole, isAdmin }) => {
   const [donations,setDonations] = useState([]);
   const [loading,setLoading]     = useState(true);
   useEffect(() => {
@@ -1114,7 +1122,7 @@ const DonorProfile = ({ user, onBack }) => {
       <div style={{ background:"#09111f",borderBottom:"1px solid rgba(255,255,255,0.07)",padding:"16px 24px",display:"flex",alignItems:"center",gap:14,position:"sticky",top:0,zIndex:100 }}>
         <button onClick={onBack} style={{ background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"8px 16px",color:"rgba(255,255,255,0.6)",cursor:"pointer",fontSize:14,fontFamily:"Georgia, serif" }}>Back</button>
         <div>
-          <div style={{ fontSize:18,fontWeight:700 }}>My Donor Profile</div>
+          <div style={{ fontSize:18,fontWeight:700 }}>My Profile</div>
           <div style={{ fontSize:11,color:"rgba(255,255,255,0.3)",letterSpacing:2,marginTop:2 }}>SENDME GLOBAL MISSION FUND</div>
         </div>
       </div>
@@ -1122,7 +1130,13 @@ const DonorProfile = ({ user, onBack }) => {
         <div style={{ background:"linear-gradient(135deg,rgba(232,179,75,0.12),rgba(232,179,75,0.04))",borderRadius:20,border:"1px solid rgba(232,179,75,0.2)",padding:"24px",marginBottom:24,textAlign:"center" }}>
           <div style={{ width:70,height:70,borderRadius:"50%",background:"linear-gradient(135deg,#e8b34b,#c8942b)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:28,margin:"0 auto 14px",boxShadow:"0 0 28px rgba(232,179,75,0.4)" }}>✝</div>
           <div style={{ fontSize:20,fontWeight:700,color:"#eef1ff",marginBottom:4 }}>{user?.user_metadata?.full_name||user?.email?.split("@")[0]||"Believer"}</div>
-          <div style={{ fontSize:13,color:"rgba(255,255,255,0.4)",marginBottom:12 }}>{user?.email}</div>
+          <div style={{ fontSize:13,color:"rgba(255,255,255,0.4)",marginBottom:10 }}>{user?.email}</div>
+          <div style={{ display:"inline-block",fontSize:12,fontWeight:700,padding:"4px 14px",borderRadius:999,marginBottom:12,
+            background:`${(isAdmin?"#e85b5b":ROLE_LABELS[userRole]?.color)||"#3ecf8e"}18`,
+            color:isAdmin?"#e85b5b":(ROLE_LABELS[userRole]?.color||"#3ecf8e"),
+            border:`1px solid ${(isAdmin?"#e85b5b":ROLE_LABELS[userRole]?.color)||"#3ecf8e"}44` }}>
+            {isAdmin ? "Admin" : (ROLE_LABELS[userRole]?.label || "Donor / Supporter")}
+          </div>
           <div style={{ fontSize:13,color:"#e8b34b",fontStyle:"italic" }}>"Here am I Lord, send me." — Isaiah 6:8</div>
         </div>
         <div style={{ display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:24 }}>
@@ -1876,7 +1890,7 @@ export default function App() {
   if(screen==="apply")            return guest ? <GuestBlocked title="Registration Required" message="Applying as a missionary requires a SendMe account so your application can be tracked and your church can endorse you. Please sign in or register to continue." onBack={()=>setScreen("home")} onRegister={()=>{setGuest(false);setScreen("home");}}/> : userRole==="donor" ? <GuestBlocked title="Not Available for Donors" message="Applying as a missionary isn't available on a Donor/Supporter account. If you're called to the mission field, please register a separate missionary account, or contact admin to update your role." onBack={()=>setScreen("home")} primaryLabel="Back to Home" onPrimary={()=>setScreen("home")}/> : <MissionaryApplication onBack={()=>setScreen("home")} user={user}/>;
   if(screen==="church")           return (isPastor||isAdminUser) ? <ChurchRegistration onBack={()=>setScreen("home")} user={user} userRole={userRole}/> : null;
   if(screen==="my-church")        return (isPastor||isAdminUser) ? <MyChurch onBack={()=>setScreen("home")} user={user} userRole={userRole}/> : null;
-  if(screen==="profile")          return <DonorProfile user={user} onBack={()=>setScreen("home")}/>;
+  if(screen==="profile")          return <DonorProfile user={user} onBack={()=>setScreen("home")} userRole={userRole} isAdmin={isAdminUser}/>;
   if(screen==="emergency")        return guest ? <GuestBlocked title="Registration Required" message="Submitting an emergency mission request requires a SendMe account, so admin can verify and follow up with you directly. Please sign in or register to continue." onBack={()=>setScreen("home")} onRegister={()=>{setGuest(false);setScreen("home");}}/> : <EmergencyRequests onBack={()=>setScreen("home")} user={user} userRole={userRole}/>;
   if(screen==="matching")         return <MissionMatching missions={liveMissions} onMission={openMission} onBack={()=>setScreen("home")}/>;
   if(screen==="testimonies")      return <TestimonyEngine onBack={()=>setScreen("home")} onMission={openMission}/>;
