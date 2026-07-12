@@ -1737,14 +1737,14 @@ const MissionVisionSplash = ({ onDone }) => (
   </div>
 );
 
-const GuestBlocked = ({ title, message, onBack, onRegister }) => (
+const GuestBlocked = ({ title, message, onBack, onRegister, primaryLabel="✝ Sign In / Register", onPrimary }) => (
   <div style={{ minHeight:"100vh", background:"#060c18", color:"#eef1ff", fontFamily:"Georgia, serif", display:"flex", alignItems:"center", justifyContent:"center", padding:32 }}>
     <div style={{ textAlign:"center", maxWidth:440 }}>
       <div style={{ fontSize:40, marginBottom:16 }}>🔒</div>
       <div style={{ fontSize:22, fontWeight:700, marginBottom:12 }}>{title}</div>
       <div style={{ fontSize:14, color:"rgba(255,255,255,0.5)", lineHeight:1.7, marginBottom:28 }}>{message}</div>
-      <button onClick={onRegister} style={{ width:"100%", padding:"14px 0", borderRadius:14, border:"none", background:"linear-gradient(135deg,#e8b34b,#c8942b)", color:"#000", fontWeight:700, cursor:"pointer", fontSize:15, fontFamily:"Georgia, serif", marginBottom:12 }}>
-        ✝ Sign In / Register
+      <button onClick={onPrimary||onRegister} style={{ width:"100%", padding:"14px 0", borderRadius:14, border:"none", background:"linear-gradient(135deg,#e8b34b,#c8942b)", color:"#000", fontWeight:700, cursor:"pointer", fontSize:15, fontFamily:"Georgia, serif", marginBottom:12 }}>
+        {primaryLabel}
       </button>
       <button onClick={onBack} style={{ width:"100%", padding:"12px 0", borderRadius:14, border:"1px solid rgba(255,255,255,0.1)", background:"transparent", color:"rgba(255,255,255,0.5)", cursor:"pointer", fontSize:14, fontFamily:"Georgia, serif" }}>
         Back to Home
@@ -1873,7 +1873,7 @@ export default function App() {
   if(screen==="admin-payouts")    return isAdminUser ? <AdminPayouts onBack={()=>setScreen("home")}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
   if(screen==="pray")             return <PrayerWall missions={liveMissions} onBack={()=>setScreen("home")}/>;
   if(screen==="churches")         return <ChurchesTab onBack={()=>setScreen("home")}/>;
-  if(screen==="apply")            return guest ? <GuestBlocked title="Registration Required" message="Applying as a missionary requires a SendMe account so your application can be tracked and your church can endorse you. Please sign in or register to continue." onBack={()=>setScreen("home")} onRegister={()=>{setGuest(false);setScreen("home");}}/> : <MissionaryApplication onBack={()=>setScreen("home")} user={user}/>;
+  if(screen==="apply")            return guest ? <GuestBlocked title="Registration Required" message="Applying as a missionary requires a SendMe account so your application can be tracked and your church can endorse you. Please sign in or register to continue." onBack={()=>setScreen("home")} onRegister={()=>{setGuest(false);setScreen("home");}}/> : userRole==="donor" ? <GuestBlocked title="Not Available for Donors" message="Applying as a missionary isn't available on a Donor/Supporter account. If you're called to the mission field, please register a separate missionary account, or contact admin to update your role." onBack={()=>setScreen("home")} primaryLabel="Back to Home" onPrimary={()=>setScreen("home")}/> : <MissionaryApplication onBack={()=>setScreen("home")} user={user}/>;
   if(screen==="church")           return (isPastor||isAdminUser) ? <ChurchRegistration onBack={()=>setScreen("home")} user={user} userRole={userRole}/> : null;
   if(screen==="my-church")        return (isPastor||isAdminUser) ? <MyChurch onBack={()=>setScreen("home")} user={user} userRole={userRole}/> : null;
   if(screen==="profile")          return <DonorProfile user={user} onBack={()=>setScreen("home")}/>;
