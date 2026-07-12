@@ -513,7 +513,13 @@ const MsTrack = ({ current,color }) => (
   </div>
 );
 
-const DonateScreen = ({ mission: m, onBack, onPayfast, user }) => {
+const DonateScreen = ({ mission: m, onBack, onPayfast, user, onBrowseMissions }) => {
+  // #86 — a mission can cross 100% funded while the donor already has this
+  // screen open (someone else's gift just landed, or they navigated here
+  // from a stale mission card). Guard here rather than only at the button
+  // in MissionDetail, since this screen is the one that actually accepts
+  // payment.
+  const isFullyFunded = m.goal > 0 && m.raised >= m.goal;
   const [donateTab,setDonateTab] = useState("once");   // once | monthly
   const [amt,setAmt]             = useState("");
   const [monthly,setMonthly]     = useState(null);
@@ -560,6 +566,33 @@ const DonateScreen = ({ mission: m, onBack, onPayfast, user }) => {
       setSubmitting(false);
     }
   };
+
+  // #86 — fully-funded guard: message the donor and point them at another
+  // mission instead of rendering a form that would just create an
+  // over-goal donation.
+  if (isFullyFunded) {
+    return (
+      <div style={{ minHeight:"100vh",background:"#060c18",color:"#eef1ff",fontFamily:"Georgia, serif" }}>
+        <div style={{ background:"#09111f",borderBottom:"1px solid rgba(255,255,255,0.07)",padding:"16px 24px",display:"flex",alignItems:"center",gap:14,position:"sticky",top:0,zIndex:100 }}>
+          <button onClick={onBack} style={{ background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"8px 16px",color:"rgba(255,255,255,0.6)",cursor:"pointer",fontSize:14 }}>Back</button>
+          <span style={{ fontSize:18,fontWeight:700 }}>Donate to {m.protected?m.role:m.name}</span>
+        </div>
+        <div style={{ maxWidth:600,margin:"0 auto",padding:"32px 20px",display:"flex",flexDirection:"column",gap:20 }}>
+          <div style={{ background:"rgba(62,207,142,0.08)",borderRadius:18,border:"1px solid rgba(62,207,142,0.25)",padding:"32px 24px",textAlign:"center" }}>
+            <div style={{ fontSize:40,marginBottom:12 }}>🎉</div>
+            <div style={{ fontSize:19,fontWeight:700,color:"#eef1ff",marginBottom:10 }}>This mission's goal has been fully funded!</div>
+            <div style={{ fontSize:14,color:"rgba(255,255,255,0.5)",lineHeight:1.7,marginBottom:8 }}>
+              Thanks to generous givers like you, <strong style={{ color:"#3ecf8e" }}>{m.protected?"this mission":m.name}</strong> has reached its ${fmt(m.goal)} goal.
+            </div>
+            <div style={{ fontSize:13,color:"rgba(255,255,255,0.35)" }}>Your gift can go even further supporting a mission still in need.</div>
+          </div>
+          <button onClick={onBrowseMissions} style={{ width:"100%",padding:"16px 0",borderRadius:14,border:"none",background:`linear-gradient(135deg,${m.color},${m.color}cc)`,color:"#000",fontWeight:700,cursor:"pointer",fontSize:15,fontFamily:"Georgia, serif",boxShadow:`0 6px 24px ${m.color}44` }}>
+            ✝  Support Another Mission
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ minHeight:"100vh",background:"#060c18",color:"#eef1ff",fontFamily:"Georgia, serif" }}>
@@ -715,7 +748,7 @@ const PayfastResultScreen = ({ status, amount, onContinue }) => (
   </div>
 );
 
-const MissionDetail = ({ mission: m, onBack, onDonate, onLedger, user, userRole, guest, isAdmin }) => {
+const MissionDetail = ({ mission: m, onBack, onDonate, onLedger, user, userRole, guest, isAdmin, onBrowseMissions }) => {
   const [proofTab,setProofTab]     = useState("photos");
   const [proofItems,setProofItems] = useState([]);
   const [proofLoaded,setProofLoaded] = useState(false);
@@ -884,9 +917,19 @@ const MissionDetail = ({ mission: m, onBack, onDonate, onLedger, user, userRole,
         </div>
         <div style={{ padding:"20px 0 0" }}>
           <div style={{ display:"grid",gridTemplateColumns:"1fr auto auto",gap:10 }}>
-            <button onClick={onDonate} style={{ padding:"16px 0",borderRadius:14,border:"none",background:`linear-gradient(135deg,${m.color},${m.color}cc)`,color:"#000",fontWeight:700,cursor:"pointer",fontSize:16,fontFamily:"Georgia, serif",boxShadow:`0 6px 28px ${m.color}44` }}>
-              💝 Donate to This Mission
-            </button>
+            {/* #86 — once a mission hits its funding goal, point donors at
+                another mission instead of continuing to solicit gifts here.
+                (DonateScreen also guards this directly for anyone who gets
+                there another way — this is just the primary path.) */}
+            {m.goal > 0 && m.raised >= m.goal ? (
+              <button onClick={onBrowseMissions} style={{ padding:"16px 0",borderRadius:14,border:"none",background:"linear-gradient(135deg,#3ecf8e,#2fa06d)",color:"#000",fontWeight:700,cursor:"pointer",fontSize:16,fontFamily:"Georgia, serif",boxShadow:"0 6px 28px rgba(62,207,142,0.3)" }}>
+                🎉 Goal Reached — Support Another Mission
+              </button>
+            ) : (
+              <button onClick={onDonate} style={{ padding:"16px 0",borderRadius:14,border:"none",background:`linear-gradient(135deg,${m.color},${m.color}cc)`,color:"#000",fontWeight:700,cursor:"pointer",fontSize:16,fontFamily:"Georgia, serif",boxShadow:`0 6px 28px ${m.color}44` }}>
+                💝 Donate to This Mission
+              </button>
+            )}
             <button onClick={shareWhatsApp} style={{ padding:"16px 18px",borderRadius:14,border:"1px solid rgba(62,207,142,0.3)",background:"rgba(62,207,142,0.08)",color:"#3ecf8e",fontWeight:700,cursor:"pointer",fontSize:14,fontFamily:"Georgia, serif",whiteSpace:"nowrap" }}>
               Help Spread This Mission
             </button>
@@ -1910,8 +1953,8 @@ export default function App() {
   if(screen==="admin-workers")        return isAdminUser ? <AdminWorkerRequests onBack={()=>setScreen("home")}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
   if(screen==="admin-emergency")      return isAdminUser ? <AdminEmergencyRequests onBack={()=>setScreen("home")} adminEmail={user?.email}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
   if(screen==="ledger"&&selectedMission)  return <TransparencyLedger mission={selectedMission} onBack={()=>setScreen("detail")}/>;
-  if(screen==="detail"&&selectedMission)  return <MissionDetail mission={selectedMission} onBack={()=>setScreen("home")} onDonate={openDonate} onLedger={()=>setScreen("ledger")} user={user} userRole={userRole} guest={guest} isAdmin={isAdminUser}/>;
-  if(screen==="donate"&&selectedMission)  return <DonateScreen mission={selectedMission} onBack={()=>setScreen("detail")} onPayfast={handlePayfastDonate} user={user}/>;
+  if(screen==="detail"&&selectedMission)  return <MissionDetail mission={selectedMission} onBack={()=>setScreen("home")} onDonate={openDonate} onLedger={()=>setScreen("ledger")} user={user} userRole={userRole} guest={guest} isAdmin={isAdminUser} onBrowseMissions={()=>setScreen("donor-browse")}/>;
+  if(screen==="donate"&&selectedMission)  return <DonateScreen mission={selectedMission} onBack={()=>setScreen("detail")} onPayfast={handlePayfastDonate} user={user} onBrowseMissions={()=>setScreen("donor-browse")}/>;
 
   return(
     <HomeScreen
