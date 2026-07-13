@@ -100,9 +100,22 @@ export default function AdminPayouts({ onBack }) {
   };
 
   const markPaid = async (missionId, milestoneNum, amount, isPaid, missionTitle, missionaryEmail, recipientName) => {
+    const newStatus = isPaid ? "pending" : "paid";
+    // #92 — clarify this button is a records-only toggle. It has never
+    // triggered a real funds transfer (no PayFast/bank API call happens
+    // here) — confirm before flipping to "paid" so nobody assumes clicking
+    // it sends money, and to avoid an accidental double-payment if someone
+    // forgets whether they already did the EFT.
+    if (newStatus === "paid") {
+      const ok = window.confirm(
+        `This only updates SendMe's records — it does NOT send any money.\n\n` +
+        `Have you already completed the EFT transfer of $${amount} to ${recipientName || "the church/pastor"} for "${missionTitle}" (milestone ${milestoneNum}) from your own banking app?\n\n` +
+        `Click OK only if that transfer is already done.`
+      );
+      if (!ok) return;
+    }
     setMarkingPaid(`${missionId}-${milestoneNum}`);
     setError("");
-    const newStatus = isPaid ? "pending" : "paid";
     const payload = {
       mission_id: missionId,
       milestone_number: milestoneNum,
@@ -205,8 +218,18 @@ export default function AdminPayouts({ onBack }) {
   });
 
   const markEmPaid = async (em) => {
-    setMarkingEmPaid(em.id);
     const newStatus = em.paid ? "unpaid" : "paid";
+    // #92 — same clarification as markPaid above: records-only toggle,
+    // no real transfer happens here.
+    if (newStatus === "paid") {
+      const ok = window.confirm(
+        `This only updates SendMe's records — it does NOT send any money.\n\n` +
+        `Have you already completed the EFT transfer for "${em.title}" from your own banking app?\n\n` +
+        `Click OK only if that transfer is already done.`
+      );
+      if (!ok) return;
+    }
+    setMarkingEmPaid(em.id);
     const { error } = await supabase
       .from("emergency_requests")
       .update({ paid: newStatus === "paid", paid_at: newStatus === "paid" ? new Date().toISOString() : null })
