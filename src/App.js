@@ -1351,6 +1351,70 @@ const PayoutsDropdown = ({ onPayout, onPastorReview }) => {
   );
 };
 
+// ── ADMIN DROPDOWN ───────────────────────────────────────────────────────────
+// Groups the 5 admin-only nav buttons (Church Verification, Workers,
+// Emergencies, Approvals, Payouts) that used to sit as separate buttons in
+// the main nav, cluttering the bar for the one person who ever sees them.
+// Same collapsible pattern as NavDropdown ("More") and PayoutsDropdown.
+const AdminDropdown = ({ onAdminChurchVerification, onAdminWorkers, onAdminEmergency, onAdminApprovals, onAdminPayouts }) => {
+  const [open,setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(()=>{
+    const handler = (e)=>{ if(ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown",handler);
+    return ()=>document.removeEventListener("mousedown",handler);
+  },[]);
+
+  const items = [
+    { label:"⛪ Verify Churches", color:"#5b9cf6", onClick:onAdminChurchVerification },
+    { label:"👥 Worker Requests", color:"#5b9cf6", onClick:onAdminWorkers },
+    { label:"🚨 Emergencies",     color:"#e85b5b", onClick:onAdminEmergency },
+    { label:"📋 Approvals",       color:"#e8b34b", onClick:onAdminApprovals },
+    { label:"💰 Payouts",         color:"#e85b5b", onClick:onAdminPayouts },
+  ];
+
+  return (
+    <div ref={ref} style={{ position:"relative" }}>
+      <button onClick={()=>setOpen(o=>!o)} style={{
+        background:open?"rgba(232,91,91,0.12)":"rgba(232,91,91,0.08)",
+        border:`1px solid ${open?"rgba(232,91,91,0.4)":"rgba(232,91,91,0.25)"}`,
+        borderRadius:10, padding:"8px 16px",
+        color:"#e85b5b",
+        cursor:"pointer", fontSize:13, fontFamily:"Georgia, serif", fontWeight:700,
+        display:"flex", alignItems:"center", gap:5,
+      }}>
+        ⚙ Admin
+        <span style={{ fontSize:10, display:"inline-block", transform:open?"rotate(180deg)":"none", transition:"transform .15s" }}>▾</span>
+      </button>
+      {open && (
+        <div style={{
+          position:"absolute", top:"calc(100% + 8px)", right:0, minWidth:200,
+          background:"#0c1628", border:"1px solid rgba(232,91,91,0.2)",
+          borderRadius:14, boxShadow:"0 12px 40px rgba(0,0,0,0.6)",
+          padding:6, zIndex:200, display:"flex", flexDirection:"column", gap:2,
+        }}>
+          {items.map(item=>(
+            <button key={item.label}
+              onClick={()=>{ item.onClick && item.onClick(); setOpen(false); }}
+              onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,0.05)";}}
+              onMouseLeave={e=>{e.currentTarget.style.background="transparent";}}
+              style={{
+                display:"flex", alignItems:"center", gap:8,
+                width:"100%", textAlign:"left", padding:"10px 12px",
+                borderRadius:8, border:"none", background:"transparent",
+                color:item.color, cursor:"pointer", fontSize:13,
+                fontWeight:600, fontFamily:"Georgia, serif", transition:"background .12s",
+              }}>
+              {item.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ── HOME SCREEN ───────────────────────────────────────────────────────────────
 const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, onMyChurch, onChurches, onProfile, onEmergency, onMatching, onPray, onTestimonies, onWorker, onQR, onFaq, onPayout, onAdminPayouts, isAdmin, isPastor, onMilestoneProof, onPastorReview, onMissionaryDashboard, onAdminApprovals, onAdminChurchVerification, guest, onSignIn, onDonate, onAdminWorkers, onAdminEmergency }) => {
   const [region,setRegion]       = useState("All");
@@ -1397,11 +1461,7 @@ const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, o
             onProfile={onProfile} onEmergency={onEmergency} onTestimonies={onTestimonies}
             onWorker={onWorker} onMatching={onMatching} onQR={onQR} onFaq={onFaq}
           />
-          {isAdmin&&<button onClick={onAdminChurchVerification} style={{ background:"rgba(91,156,246,0.1)",border:"1px solid rgba(91,156,246,0.3)",borderRadius:10,padding:"8px 14px",color:"#5b9cf6",cursor:"pointer",fontSize:12,fontWeight:700 }}>⛪ Churches</button>}
-          {isAdmin&&<button onClick={onAdminWorkers} style={{ background:"rgba(91,156,246,0.1)",border:"1px solid rgba(91,156,246,0.3)",borderRadius:10,padding:"8px 14px",color:"#5b9cf6",cursor:"pointer",fontSize:12,fontWeight:700 }}>👥 Workers</button>}
-          {isAdmin&&<button onClick={onAdminEmergency} style={{ background:"rgba(232,91,91,0.1)",border:"1px solid rgba(232,91,91,0.3)",borderRadius:10,padding:"8px 14px",color:"#e85b5b",cursor:"pointer",fontSize:12,fontWeight:700 }}>🚨 Emergencies</button>}
-          {isAdmin&&<button onClick={onAdminApprovals} style={{ background:"rgba(232,179,75,0.1)",border:"1px solid rgba(232,179,75,0.3)",borderRadius:10,padding:"8px 14px",color:"#e8b34b",cursor:"pointer",fontSize:12,fontWeight:700 }}>📋 Approvals</button>}
-          {isAdmin&&<button onClick={onAdminPayouts} style={{ background:"rgba(232,91,91,0.1)",border:"1px solid rgba(232,91,91,0.3)",borderRadius:10,padding:"8px 14px",color:"#e85b5b",cursor:"pointer",fontSize:12,fontWeight:700 }}>💰 Payouts</button>}
+          {isAdmin && <AdminDropdown onAdminChurchVerification={onAdminChurchVerification} onAdminWorkers={onAdminWorkers} onAdminEmergency={onAdminEmergency} onAdminApprovals={onAdminApprovals} onAdminPayouts={onAdminPayouts} />}
           {user&&<button onClick={onSignOut} style={{ background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:10,padding:"8px 14px",color:"rgba(255,255,255,0.4)",cursor:"pointer",fontSize:12 }}>Sign Out</button>}
         </div>
       </div>
