@@ -3,22 +3,6 @@ import { supabase } from "./supabase";
 
 const fmt = (n) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 
-// Demo churches shown until real data exists
-const DEMO_CHURCHES = [
-  { id:1,  name:"Branham Tabernacle",            pastor_name:"Pastor William Steyn",    pastor_email:"pastor@branhamtab.org",    city:"Johannesburg", country:"South Africa", size:"100 – 300", verified:true, year_established:1987, phone:"+27 11 000 0000", website:"branhamtabernacle.org", lat:-26.20, lng:28.05 },
-  { id:2,  name:"Voice of God Fellowship",        pastor_name:"Pastor James Okafor",     pastor_email:"james@vogfellowship.org",  city:"Lagos",        country:"Nigeria",      size:"300 – 500", verified:true, year_established:1994, phone:"+234 1 000 0000", website:"vogfellowship.org", lat:6.52, lng:3.38 },
-  { id:3,  name:"End Time Message Church",        pastor_name:"Pastor David Kimotho",    pastor_email:"david@etmc.co.ke",         city:"Nairobi",      country:"Kenya",        size:"100 – 300", verified:true, year_established:2001, phone:"+254 20 000 000",  website:"etmc.co.ke", lat:-1.29, lng:36.82 },
-  { id:4,  name:"Message Believers Assembly",     pastor_name:"Pastor John Swanson",     pastor_email:"john@mba.org.au",          city:"Sydney",       country:"Australia",    size:"50 – 100",  verified:true, year_established:1999, phone:"+61 2 0000 0000",  website:"mba.org.au", lat:-33.87, lng:151.21 },
-  { id:5,  name:"Spoken Word Church",             pastor_name:"Pastor Emmanuel Asante",  pastor_email:"emmanuel@swc.gh",          city:"Accra",        country:"Ghana",        size:"100 – 300", verified:true, year_established:2005, phone:"+233 30 000 000",  website:"swc.gh", lat:5.60, lng:-0.19 },
-  { id:6,  name:"Latter Rain Tabernacle",         pastor_name:"Pastor Paul Muller",      pastor_email:"paul@lrt.co.za",           city:"Cape Town",    country:"South Africa", size:"50 – 100",  verified:true, year_established:2008, phone:"+27 21 000 0000",  website:"lrt.co.za", lat:-33.92, lng:18.42 },
-  { id:7,  name:"Harvest Time Fellowship",        pastor_name:"Pastor Samuel Achebe",    pastor_email:"samuel@htf.ng",            city:"Abuja",        country:"Nigeria",      size:"50 – 100",  verified:true, year_established:2010, phone:"+234 9 000 0000",  website:"htf.ng", lat:9.06, lng:7.49 },
-  { id:8,  name:"Word Tabernacle",                pastor_name:"Pastor George Dlamini",   pastor_email:"george@wordtab.sz",        city:"Mbabane",      country:"Eswatini",     size:"Under 50",  verified:true, year_established:2015, phone:"+268 2 000 0000",  website:"", lat:-26.32, lng:31.13 },
-  { id:9,  name:"Amazon River Message Church",    pastor_name:"Pastor Carlos Mendes",    pastor_email:"carlos@armc.br",           city:"Manaus",       country:"Brazil",       size:"50 – 100",  verified:true, year_established:2003, phone:"+55 92 0000 0000", website:"armc.br", lat:-3.10, lng:-60.00 },
-  { id:10, name:"Grace Message Assembly",         pastor_name:"Pastor Philip Raj",       pastor_email:"philip@gma.in",            city:"Chennai",      country:"India",        size:"100 – 300", verified:true, year_established:1998, phone:"+91 44 0000 0000", website:"gma.in", lat:13.08, lng:80.27 },
-  { id:11, name:"Spoken Word Tabernacle Berlin",  pastor_name:"Pastor Hans Weber",       pastor_email:"hans@swt-berlin.de",       city:"Berlin",       country:"Germany",      size:"Under 50",  verified:true, year_established:2012, phone:"+49 30 0000 0000", website:"swt-berlin.de", lat:52.52, lng:13.40 },
-  { id:12, name:"End Time Message Fellowship",    pastor_name:"Pastor Andrew Kim",       pastor_email:"andrew@etmf.kr",           city:"Seoul",        country:"South Korea",  size:"50 – 100",  verified:true, year_established:2007, phone:"+82 2 0000 0000",  website:"etmf.kr", lat:37.57, lng:126.98 },
-];
-
 const CONTINENTS = ["All","Africa","Asia","Europe","Americas","Oceania"];
 
 const regionFor = (country) => {
@@ -195,7 +179,6 @@ const ChurchesMap = ({ churches, onChurchClick }) => {
 export default function ChurchesTab({ onBack }) {
   const [churches, setChurches]   = useState([]);
   const [loading, setLoading]     = useState(true);
-  const [usingDemo, setUsingDemo] = useState(false);
   const [continent, setContinent] = useState("All");
   const [search, setSearch]       = useState("");
   const [expanded, setExpanded]   = useState(null);
@@ -211,22 +194,10 @@ export default function ChurchesTab({ onBack }) {
 
         if (error) throw error;
 
-        if (data && data.length > 0) {
-          const verified = data.filter(c => c.verified === true || c.verified == null);
-          if (verified.length > 0) {
-            setChurches(verified);
-            setUsingDemo(false);
-          } else {
-            setChurches(DEMO_CHURCHES);
-            setUsingDemo(true);
-          }
-        } else {
-          setChurches(DEMO_CHURCHES);
-          setUsingDemo(true);
-        }
+        const verified = (data || []).filter(c => c.verified === true || c.verified == null);
+        setChurches(verified);
       } catch {
-        setChurches(DEMO_CHURCHES);
-        setUsingDemo(true);
+        setChurches([]);
       }
       setLoading(false);
     };
@@ -289,16 +260,6 @@ export default function ChurchesTab({ onBack }) {
           </div>
         </div>
 
-        {/* Demo notice */}
-        {usingDemo && !loading && (
-          <div style={{ background:"rgba(232,179,75,0.06)", borderRadius:12, border:"1px solid rgba(232,179,75,0.15)", padding:"10px 16px", marginBottom:16, display:"flex", gap:10, alignItems:"center" }}>
-            <span style={{ fontSize:16 }}>📋</span>
-            <span style={{ fontSize:13, color:"rgba(255,255,255,0.4)" }}>
-              Showing <strong style={{ color:"#e8b34b" }}>demo directory</strong> — no verified churches in database yet. Register and verify a church to appear here.
-            </span>
-          </div>
-        )}
-
         {/* Search */}
         <div style={{ position:"relative", marginBottom:16 }}>
           <input
@@ -350,8 +311,10 @@ export default function ChurchesTab({ onBack }) {
           </div>
         ) : visible.length === 0 ? (
           <div style={{ textAlign:"center", padding:"60px 0", color:"rgba(255,255,255,0.3)" }}>
-            <div style={{ fontSize:32, marginBottom:12 }}>🔍</div>
-            No churches found for this filter.
+            <div style={{ fontSize:32, marginBottom:12 }}>{churches.length === 0 ? "⛪" : "🔍"}</div>
+            {churches.length === 0
+              ? "No verified churches yet — register and verify a church to appear here."
+              : "No churches found for this filter."}
           </div>
         ) : (
           <div style={{ display:"flex", flexDirection:"column", gap:12 }}>

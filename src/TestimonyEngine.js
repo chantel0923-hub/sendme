@@ -77,31 +77,6 @@ const MediaEmbed = ({ url }) => {
 const COLORS = ["#e8b34b","#4caf7d","#5b9cf6","#e85b5b","#b06cf5","#f5a44a","#3ecf8e"];
 const getColor = (i) => COLORS[i % COLORS.length];
 
-const DEMO_TESTIMONIES = [
-  {
-    id:"demo-1", mission:"Kibera Children's Ministry", missionary:"Pastor John Kimani",
-    country:"Kenya", region:"Africa", completed:"2025-04-30",
-    souls:600, bibles:600, churches:2, raised:18500, duration:"18 months",
-    color:"#5b9cf6",
-    story:"What began as a small Sunday school in Kibera has grown into a full literacy and discipleship program reaching over 600 children weekly. Entire families came to faith as children brought the Word home. Two local congregations were planted and are now self-sustaining.",
-    beforeText:"No church presence in Kibera East. Children with no education, no hope.",
-    afterText:"600 children in weekly Bible study. 2 planted churches. Local leadership trained and serving.",
-    tags:["Children Ministry","Church Planting","Africa","Education"],
-    impact:"$18,500 deployed with full accountability. Every shilling accounted for.",
-  },
-  {
-    id:"demo-2", mission:"Amazon River Mission", missionary:"Sis. Maria Santos",
-    country:"Brazil", region:"S. America", completed:"2025-03-15",
-    souls:148, bibles:312, churches:3, raised:14200, duration:"12 months",
-    color:"#4caf7d",
-    story:"Travelling by boat into 12 unreached riverside communities, Sister Maria brought the Gospel, medicines, and Bibles in the local dialect. Three permanent congregations were planted with local pastors trained and ordained.",
-    beforeText:"12 riverside villages with no Gospel witness. No access by road.",
-    afterText:"148 souls reached. 312 Bibles distributed. 3 churches planted along the river.",
-    tags:["Village Outreach","Bible Distribution","South America","Medical"],
-    impact:"$14,200 raised. All milestones verified with GPS-tagged photos.",
-  },
-];
-
 // Map a missions row to testimony shape
 const mapMissionToTestimony = (row, i, extrasMap) => {
   const extra = extrasMap[row.id] || {};
@@ -134,7 +109,6 @@ const mapMissionToTestimony = (row, i, extrasMap) => {
 export default function TestimonyEngine({ onBack, onMission, user }) {
   const [testimonies, setTestimonies] = useState([]);
   const [loading, setLoading]         = useState(true);
-  const [usingDemo, setUsingDemo]     = useState(false);
   const [selected, setSelected]       = useState(null);
   // Testimony submission form
   const [showSubmit, setShowSubmit]   = useState(false);
@@ -152,19 +126,12 @@ export default function TestimonyEngine({ onBack, onMission, user }) {
           supabase.from("testimony_extras").select("*"),
         ]);
         if (mErr) throw mErr;
-        if (mData && mData.length > 0) {
-          const extrasMap = {};
-          (eData || []).forEach(e => { extrasMap[e.mission_id] = e; });
-          setTestimonies(mData.map((row, i) => mapMissionToTestimony(row, i, extrasMap)));
-          setUsingDemo(false);
-        } else {
-          setTestimonies(DEMO_TESTIMONIES);
-          setUsingDemo(true);
-        }
+        const extrasMap = {};
+        (eData || []).forEach(e => { extrasMap[e.mission_id] = e; });
+        setTestimonies((mData || []).map((row, i) => mapMissionToTestimony(row, i, extrasMap)));
       } catch (e) {
         console.log("TestimonyEngine fetch error:", e);
-        setTestimonies(DEMO_TESTIMONIES);
-        setUsingDemo(true);
+        setTestimonies([]);
       }
       setLoading(false);
     };
@@ -302,7 +269,7 @@ export default function TestimonyEngine({ onBack, onMission, user }) {
           </div>
 
           {/* Testimony submission form — shown to logged-in users */}
-          {user && !usingDemo && (
+          {user && (
             <div style={{ marginTop:8 }}>
               {!showSubmit ? (
                 <button onClick={()=>{ setShowSubmit(true); setSubmitFor(t.id); setSubmitDone(false); setSubmitForm({ story:"", before_text:"", after_text:"", media_url:"" }); }}
@@ -351,12 +318,6 @@ export default function TestimonyEngine({ onBack, onMission, user }) {
 
       <div style={{ maxWidth:700, margin:"0 auto", padding:"28px 20px 60px" }}>
 
-        {usingDemo && (
-          <div style={{ background:"rgba(232,179,75,0.07)", borderRadius:12, border:"1px solid rgba(232,179,75,0.2)", padding:"10px 16px", marginBottom:16, fontSize:12, color:"rgba(255,255,255,0.4)" }}>
-            Showing demo testimonies. Real testimonies appear automatically when admin marks a mission as complete.
-          </div>
-        )}
-
         <div style={{ background:"rgba(232,179,75,0.08)", borderRadius:16, border:"1px solid rgba(232,179,75,0.2)", padding:"20px 24px", marginBottom:24, textAlign:"center" }}>
           <div style={{ fontSize:20, fontWeight:700, color:"#eef1ff", marginBottom:6 }}>Fruit That Remains</div>
           <div style={{ fontSize:13, color:"rgba(255,255,255,0.45)", lineHeight:1.7 }}>Every completed mission becomes a permanent testimony archive. See what God has done through faithful believers worldwide.</div>
@@ -381,6 +342,13 @@ export default function TestimonyEngine({ onBack, onMission, user }) {
         )}
 
         {loading && <div style={{ textAlign:"center", padding:"40px 0", color:"rgba(255,255,255,0.3)" }}>Loading testimonies...</div>}
+
+        {!loading && testimonies.length === 0 && (
+          <div style={{ textAlign:"center", padding:"60px 0", color:"rgba(255,255,255,0.3)" }}>
+            <div style={{ fontSize:32, marginBottom:12 }}>🙏</div>
+            No completed-mission testimonies yet — they'll appear automatically here once a mission is marked complete.
+          </div>
+        )}
 
         <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
           {testimonies.map(t => (
