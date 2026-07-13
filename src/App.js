@@ -28,23 +28,6 @@ import AdminWorkerRequests from './AdminWorkerRequests';
 import AdminEmergencyRequests from './AdminEmergencyRequests';
 import NotificationOptIn from './NotificationOptIn';
 
-const DEMO_MISSIONS = [
-  { id:1, name:"Rev. Samuel Osei",   role:"Missionary",  church:"Accra Redemption Church",   city:"Addis Ababa", country:"Ethiopia", area:"Merkato District",         region:"Africa",      lat:9.03,  lng:38.74, title:"Gospel & Food Aid — Merkato",     blurb:"Feeding 400 families weekly while planting the Word in one of Addis Ababa's most densely populated slums.",           raised:9840,  goal:15000, color:"#e8b34b", status:"active",   milestone:2, souls:312, bibles:200, churches:1, prayers:87,  protected:false, trustLevel:2, journeyStep:4, riskLevel:1, budget:[{label:"Food parcels",amount:4000},{label:"Bibles & Tracts",amount:2500},{label:"Transport",amount:1500},{label:"Accommodation",amount:1840}] },
-  { id:2, name:"Sis. Maria Santos",  role:"Minister",    church:"Manaus River Fellowship",    city:"Manaus",      country:"Brazil",   area:"Amazon Riverside Villages", region:"S. America",  lat:-3.1,  lng:-60.0, title:"Amazon River Mission",            blurb:"Travelling by boat into 12 unreached riverside communities with the Gospel, medicines, and Bibles in the local dialect.",      raised:14200, goal:22000, color:"#4caf7d", status:"active",   milestone:2, souls:148, bibles:312, churches:3, prayers:134, protected:false, trustLevel:3, journeyStep:5, riskLevel:2, budget:[{label:"Boat fuel",amount:5000},{label:"Medicines",amount:4200},{label:"Bibles",amount:3000},{label:"Food",amount:2000}] },
-  { id:3, name:"Pastor John Kimani", role:"Pastor",      church:"Nairobi First Assembly",     city:"Nairobi",     country:"Kenya",    area:"Kibera",                    region:"Africa",      lat:-1.31, lng:36.78, title:"Kibera Children's Ministry",      blurb:"Daily church, literacy classes and after-school Bible study for 600+ children in Africa's largest urban slum.",          raised:18500, goal:18500, color:"#5b9cf6", status:"complete", milestone:3, souls:600, bibles:600, churches:2, prayers:204, protected:false, trustLevel:3, journeyStep:8, riskLevel:1, budget:[{label:"School materials",amount:6000},{label:"Meals program",amount:5500},{label:"Church setup",amount:4000},{label:"Staff",amount:3000}] },
-  { id:4, name:"Ev. Grace Mensah",   role:"Evangelist",  church:"Kumasi Pentecostal Centre",  city:"Kumasi",      country:"Ghana",    area:"Northern Rural Districts",  region:"Africa",      lat:6.69,  lng:-1.62, title:"Northern Ghana Village Crusade",  blurb:"Open-air crusades across 20 unreached villages, partnering with local pastors to plant permanent congregations.",         raised:7200,  goal:9500,  color:"#e85b5b", status:"active",   milestone:2, souls:2000,bibles:400, churches:4, prayers:156, protected:false, trustLevel:1, journeyStep:6, riskLevel:2, budget:[{label:"Tent & sound",amount:4000},{label:"Transport",amount:2000},{label:"Printing",amount:2000},{label:"Food",amount:1500}] },
-  { id:5, name:"Diac. Priya Rajan",  role:"Deaconess",   church:"Chennai New Life Church",    city:"Chennai",     country:"India",    area:"Dalit Village Belt",        region:"Asia",        lat:13.08, lng:80.27, title:"Dalit Women's Bible Mission",     blurb:"Running literacy and discipleship circles for marginalised Dalit women across 15 villages south of Chennai.",             raised:5500,  goal:8000,  color:"#4caf7d", status:"active",   milestone:2, souls:180, bibles:180, churches:2, prayers:77,  protected:false, trustLevel:2, journeyStep:4, riskLevel:1, budget:[{label:"Bibles",amount:3000},{label:"Training materials",amount:2000},{label:"Transport",amount:1500},{label:"Meals",amount:1500}] },
-  { id:6, name:"Bro. David Yuen",    role:"Missionary",  church:"Bangkok Grace Church",       city:"Yangon",      country:"Myanmar",  area:"Karen Refugee Camps",       region:"Asia",        lat:16.87, lng:96.19, title:"Refugee Camp Gospel Mission",     blurb:"Bringing the Karen-language Bible and trauma counselling to displaced families in temporary camps near Yangon.",           raised:4300,  goal:12000, color:"#b06cf5", status:"active",   milestone:1, souls:89,  bibles:200, churches:0, prayers:63,  protected:true,  trustLevel:2, journeyStep:3, riskLevel:3, budget:[{label:"Bibles (Karen)",amount:4000},{label:"Counselling resources",amount:3000},{label:"Transport",amount:3000},{label:"Food aid",amount:2000}] },
-  { id:7, name:"Ptr. Leila Nassar",  role:"Minister",    church:"Beirut Evangelical Mission", city:"Beirut",      country:"Lebanon",  area:"Bekaa Valley Camps",        region:"M. East",     lat:33.88, lng:35.50, title:"Syrian Refugee Outreach",         blurb:"Quietly sharing hope and Scripture with Syrian families in the Bekaa Valley — where the name of Jesus must be whispered.", raised:6100,  goal:17000, color:"#f5a44a", status:"active",   milestone:1, souls:55,  bibles:150, churches:0, prayers:98,  protected:true,  trustLevel:2, journeyStep:2, riskLevel:3, budget:[{label:"Scripture packets",amount:6000},{label:"Food parcels",amount:5000},{label:"Transport",amount:4000},{label:"Admin",amount:2000}] },
-];
-
-const DEMO_UPDATES = [
-  { id:1, mission_id:1, author:"Rev. Samuel Osei",   text:"Day 7 — Merkato. Held our 3rd open-air service this week. 78 attended, 12 received prayer. Food parcels distributed to 40 families. Praise the Lord!", type:"update", created_at:"2025-05-14T08:30:00Z" },
-  { id:2, mission_id:1, author:"Rev. Samuel Osei",   text:"Please pray for safe travel tomorrow as we move to the eastern district. Roads are difficult this time of year.", type:"prayer",  created_at:"2025-05-12T14:00:00Z" },
-  { id:3, mission_id:2, author:"Sis. Maria Santos",  text:"Day 3 — Amazon. Arrived at village 4 by boat this morning. Held our first cottage meeting. 17 attended. The hunger for the Word here is incredible.", type:"update", created_at:"2025-05-10T10:00:00Z" },
-  { id:4, mission_id:4, author:"Ev. Grace Mensah",   text:"Night 2 of the crusade. Estimated 2,000 people gathered! The tent was full and many spilled outside. God is moving in northern Ghana!", type:"update", created_at:"2025-05-08T20:00:00Z" },
-];
-
 const COLORS = ["#e8b34b","#4caf7d","#5b9cf6","#e85b5b","#b06cf5","#f5a44a","#3ecf8e","#f06292"];
 const getColor = (id) => COLORS[id % COLORS.length];
 
@@ -190,9 +173,8 @@ const UpdatesFeed = ({ missionId, missionColor, missionName, canPost, guest }) =
         const { data } = await supabase.from("mission_updates")
           .select("*").eq("mission_id", missionId)
           .order("created_at",{ ascending:false });
-        if (data && data.length > 0) setUpdates(data);
-        else setUpdates(DEMO_UPDATES.filter(u => u.mission_id === missionId));
-      } catch { setUpdates(DEMO_UPDATES.filter(u => u.mission_id === missionId)); }
+        setUpdates(data || []);
+      } catch { setUpdates([]); }
       setLoading(false);
     };
     load();
@@ -1420,16 +1402,14 @@ const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, o
   const [region,setRegion]       = useState("All");
   const [missions,setMissions]   = useState([]);
   const [loading,setLoading]     = useState(true);
-  const [usingDemo,setUsingDemo] = useState(false);
   useEffect(()=>{
     const fetchMissions = async () => {
       setLoading(true);
       try {
         const {data,error} = await supabase.from("missions").select("*").eq("status","active").order("created_at",{ascending:false});
         if(error) throw error;
-        if(data&&data.length>0){setMissions(data.map((row,i)=>mapRow(row,i)));setUsingDemo(false);}
-        else{setMissions(DEMO_MISSIONS);setUsingDemo(true);}
-      } catch{setMissions(DEMO_MISSIONS);setUsingDemo(true);}
+        setMissions(data ? data.map((row,i)=>mapRow(row,i)) : []);
+      } catch{ setMissions([]); }
       setLoading(false);
     };
     fetchMissions();
@@ -1470,12 +1450,6 @@ const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, o
         <div style={{ marginBottom:24 }}>
           {loading?<LoadingMap/>:<MapboxMap missions={missions} onMissionClick={onMission}/>}
         </div>
-        {usingDemo&&!loading&&(
-          <div style={{ background:"rgba(232,179,75,0.06)",borderRadius:12,border:"1px solid rgba(232,179,75,0.15)",padding:"10px 16px",marginBottom:16,display:"flex",gap:10,alignItems:"center" }}>
-            <span style={{ fontSize:16 }}>📋</span>
-            <span style={{ fontSize:13,color:"rgba(255,255,255,0.4)" }}>Showing <strong style={{ color:"#e8b34b" }}>demo missions</strong> — no approved missions in database yet.</span>
-          </div>
-        )}
         {userRole==="missionary"&&user&&(
           <div onClick={onMissionaryDashboard} style={{ background:"rgba(232,179,75,0.08)",borderRadius:14,border:"1px solid rgba(232,179,75,0.25)",padding:"14px 18px",marginBottom:16,display:"flex",gap:14,alignItems:"center",cursor:"pointer",transition:"background .15s" }}
             onMouseEnter={e=>{e.currentTarget.style.background="rgba(232,179,75,0.13)";}}
@@ -1518,9 +1492,15 @@ const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, o
             </div>
           ))}
         </div>
-        <div style={{ fontSize:18,fontWeight:700,color:"#eef1ff",marginBottom:16 }}>✝ {usingDemo?"Demo Missions":"Active Missions"}</div>
+        <div style={{ fontSize:18,fontWeight:700,color:"#eef1ff",marginBottom:16 }}>✝ Active Missions</div>
         {loading?(
           <div style={{ textAlign:"center",padding:"40px 0",color:"rgba(255,255,255,0.3)",fontSize:14 }}>Loading missions...</div>
+        ):visible.length===0?(
+          <div style={{ textAlign:"center",padding:"48px 20px",color:"rgba(255,255,255,0.3)",fontSize:14,background:"rgba(255,255,255,0.02)",borderRadius:16,border:"1px solid rgba(255,255,255,0.06)" }}>
+            {region==="All"
+              ? "No active missions yet — check back soon as new missions are approved!"
+              : `No active missions in ${region} yet — try a different region or check back soon.`}
+          </div>
         ):(
           <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
             {visible.map(m=>(
@@ -1594,9 +1574,8 @@ const DonorBrowse = ({ onBack, onMission, user }) => {
           .from("missions").select("*").eq("status","active")
           .order("created_at",{ ascending:false });
         if (error) throw error;
-        if (data && data.length > 0) setMissions(data.map((r,i) => mapRow(r,i)));
-        else setMissions(DEMO_MISSIONS.filter(m => m.status==="active"));
-      } catch { setMissions(DEMO_MISSIONS.filter(m => m.status==="active")); }
+        setMissions(data ? data.map((r,i) => mapRow(r,i)) : []);
+      } catch { setMissions([]); }
       setLoading(false);
     };
     fetch_();
@@ -1886,7 +1865,7 @@ export default function App() {
   const [guest,setGuest]                       = useState(false);
   const [pfReturn,setPfReturn]                 = useState(null);
   const [pendingMissionId,setPendingMissionId] = useState(null);
-  const [liveMissions,setLiveMissions]         = useState(DEMO_MISSIONS);
+  const [liveMissions,setLiveMissions]         = useState([]);
 
   const loadRole = async (u) => {
     if (!u) { setUserRole(null); return; }
@@ -1971,9 +1950,8 @@ export default function App() {
       try{
         const { data, error } = await supabase.from("missions").select("*").eq("status","active").order("created_at",{ascending:false});
         if(error) throw error;
-        if(data && data.length>0) setLiveMissions(data.map((row,i)=>mapRow(row,i)));
-        else setLiveMissions(DEMO_MISSIONS);
-      } catch { setLiveMissions(DEMO_MISSIONS); }
+        setLiveMissions(data ? data.map((row,i)=>mapRow(row,i)) : []);
+      } catch { setLiveMissions([]); }
     };
     fetchLiveMissions();
   },[]);
