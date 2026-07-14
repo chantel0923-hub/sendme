@@ -106,6 +106,15 @@ export default function AdminChurchVerification({ onBack, user }) {
         .update({ verified: true })
         .eq("id", church.id);
       if (error) throw error;
+      // Let the pastor know their church is now live — was previously
+      // silent, so an approved pastor had no way of knowing unless they
+      // happened to check the app themselves.
+      if (church.pastor_email) {
+        sendNotification("church_approved", church.pastor_email, {
+          churchName: church.name,
+          pastorName: church.pastor_name,
+        });
+      }
       await load();
     } catch (e) {
       setError("Could not verify church. (" + (e.message || "") + ")");
