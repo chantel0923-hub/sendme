@@ -48,6 +48,19 @@ function wrapEmail(title: string, bodyHtml: string, ctaText?: string, ctaUrl?: s
 
 // ── Templates ──
 const TEMPLATES: Record<string, (d: any) => { subject: string; html: string }> = {
+  church_approved: (d) => ({
+    subject: `${d.churchName} is now verified on SendMe! ✝`,
+    html: wrapEmail(
+      "Your Church is Verified",
+      `Dear ${d.pastorName || "Pastor"},<br/><br/>
+      Praise God! <strong style="color:#e8b34b;">${d.churchName}</strong> has been reviewed and verified by SendMe.
+      Your church now appears in the public Message Church &amp; Organization Directory, and can be selected
+      by missionaries applying to SendMe as their sending church.<br/><br/>
+      Thank you for standing with the end-time Message and with those SendMe sends into the field.`,
+      "View the Directory", d.directoryUrl || "https://sendme-nine.vercel.app"
+    ),
+  }),
+
   application_approved: (d) => ({
     subject: `Your mission "${d.missionTitle}" has been approved! ✝`,
     html: wrapEmail(
