@@ -5,12 +5,6 @@ import { notifyAdmin } from "./notifications";
 
 const fmt = (n) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 
-const DEMO_EMERGENCIES = [
-  { id:1, title:"Flooding in Congo — believers displaced",          region:"Africa",    country:"DRC Congo",    urgency:"critical", raised:1200, goal:8000,  description:"Heavy flooding has displaced 3 Message-believing families in Kinshasa. Urgent need for temporary shelter and food.", created_at:"2025-05-10T08:00:00Z", submittedBy:"Ptr. Emmanuel Mutombo" },
-  { id:2, title:"Missionary transport needed — Zambia",            region:"Africa",    country:"Zambia",       urgency:"urgent",   raised:3400, goal:5000,  description:"Mission vehicle broke down mid-journey. Team of 3 missionaries stranded 200km from nearest town. Urgent repair or replacement needed.", created_at:"2025-05-08T14:00:00Z", submittedBy:"Bro. James Banda" },
-  { id:3, title:"Medical emergency — missionary in Myanmar",       region:"Asia",      country:"Myanmar",      urgency:"critical", raised:2100, goal:4500,  description:"Missionary Bro. David Yuen has been hospitalised with malaria in Yangon. Medical bills are urgent and family has no means.", created_at:"2025-05-06T10:00:00Z", submittedBy:"Bangkok Grace Church" },
-];
-
 const URGENCY = {
   critical: { color:"#e85b5b", bg:"rgba(232,91,91,0.12)",  label:"🔴 Critical" },
   urgent:   { color:"#f5a44a", bg:"rgba(245,164,74,0.12)", label:"🟠 Urgent"   },
@@ -58,10 +52,9 @@ export default function EmergencyRequests({ onBack, user, userRole }) {
           supabase.from("emergency_requests").select("*").eq("status","active").order("created_at",{ascending:false}),
           supabase.from("churches").select("id, name, city, country").eq("verified", true).order("name"),
         ]);
-        if (erData && erData.length > 0) setRequests(erData);
-        else setRequests(DEMO_EMERGENCIES);
+        setRequests(erData || []);
         if (chData) setChurches(chData);
-      } catch { setRequests(DEMO_EMERGENCIES); }
+      } catch { setRequests([]); }
       setLoading(false);
     };
     load();
@@ -275,6 +268,10 @@ export default function EmergencyRequests({ onBack, user, userRole }) {
         {/* Requests list */}
         {loading ? (
           <div style={{ textAlign:"center", padding:"40px 0", color:"rgba(255,255,255,0.3)" }}>Loading...</div>
+        ) : requests.length === 0 ? (
+          <div style={{ textAlign:"center", padding:"48px 20px", color:"rgba(255,255,255,0.3)", fontSize:14, background:"rgba(255,255,255,0.02)", borderRadius:16, border:"1px solid rgba(255,255,255,0.06)" }}>
+            No active emergency requests right now — check back soon, or submit one if you know of an urgent need.
+          </div>
         ) : (
           <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
             {requests.map((r, i) => {
@@ -296,7 +293,9 @@ export default function EmergencyRequests({ onBack, user, userRole }) {
                   <Bar raised={r.raised||0} goal={r.goal||1000} color={u.color}/>
                   <div style={{ display:"flex", justifyContent:"space-between", marginTop:8, marginBottom:14 }}>
                     <span style={{ fontSize:13, color:u.color, fontWeight:700 }}>${fmt(r.raised||0)} raised</span>
-                    <span style={{ fontSize:12, color:"rgba(255,255,255,0.3)" }}>${fmt((r.goal||1000)-(r.raised||0))} still needed</span>
+                    <span style={{ fontSize:12, color:(r.raised||0)>=(r.goal||1000)?"#3ecf8e":"rgba(255,255,255,0.3)" }}>
+                      {(r.raised||0)>=(r.goal||1000) ? "✓ Fully Funded" : `$${fmt((r.goal||1000)-(r.raised||0))} still needed`}
+                    </span>
                   </div>
                   <button onClick={()=>{setResponding(r);setRespDone(false);setRespError("");setResponse({name:"",email:"",phone:"",amount:"",note:""});}} style={{ width:"100%", padding:"12px 0", borderRadius:12, border:"none", background:`linear-gradient(135deg,${u.color},${u.color}cc)`, color:"#fff", fontWeight:700, cursor:"pointer", fontSize:14, fontFamily:"Georgia, serif" }}>
                     💝 Respond to This Emergency
