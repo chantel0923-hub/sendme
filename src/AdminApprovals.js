@@ -247,6 +247,24 @@ export default function AdminApprovals({ onBack, user }) {
                     </div>
                   </div>
 
+                  {/* Milestone payout breakdown — same 3-way split AdminPayouts.js
+                      uses once this mission starts receiving proofs, shown here
+                      up front so admin can review the actual payout schedule
+                      before approving, not just the total goal. */}
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, marginBottom: 14 }}>
+                    {[1,2,3].map(n => {
+                      const goalNum = Number(m.goal) || 0;
+                      const third = Math.floor(goalNum / 3);
+                      const amount = n < 3 ? third : goalNum - third * 2;
+                      return (
+                        <div key={n} style={{ background: "rgba(232,179,75,0.05)", borderRadius: 10, border: "1px solid rgba(232,179,75,0.15)", padding: "10px 12px", textAlign: "center" }}>
+                          <div style={{ fontSize: 15, fontWeight: 700, color: "#e8b34b" }}>${fmt(amount)}</div>
+                          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", marginTop: 2 }}>Milestone {n}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
                   {/* Blocked-approval flash notice */}
                   {blockedNotice === m.id && (
                     <div style={{ background: "rgba(232,91,91,0.12)", border: "1px solid rgba(232,91,91,0.4)", borderRadius: 10, padding: "10px 14px", marginBottom: 14, fontSize: 13, color: "#e85b5b" }}>
