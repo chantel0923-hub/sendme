@@ -11,6 +11,11 @@ const inputStyle = {
 const labelStyle = {
   fontSize: 12, color: "rgba(255,255,255,0.4)", marginBottom: 6, display: "block",
 };
+// Browsers largely ignore custom styling on the parent <select> when
+// rendering its dropdown list — the options often fall back to a default
+// white background with light text, unreadable against this dark theme.
+// Setting background/color explicitly on each <option> fixes that.
+const optionStyle = { background: "#0c1628", color: "#eef1ff" };
 
 export default function PayoutSetup({ onBack, user }) {
   const [missions, setMissions]   = useState([]);
@@ -96,7 +101,7 @@ export default function PayoutSetup({ onBack, user }) {
   const submit = async () => {
     setError("");
 
-    if (mode === "missionary" && !selectedId) {
+    if (mode !== "church" && !selectedId) {
       setError("Please select your mission first."); return;
     }
 
@@ -214,9 +219,9 @@ export default function PayoutSetup({ onBack, user }) {
         {mode !== "church" && (<>
         <label style={labelStyle}>Select Your Mission *</label>
         <select value={selectedId} onChange={e => setSelectedId(e.target.value)} style={inputStyle}>
-          <option value="">— Select your mission —</option>
+          <option value="" style={optionStyle}>— Select your mission —</option>
           {missions.map(m => (
-            <option key={m.id} value={m.id}>
+            <option key={m.id} value={m.id} style={optionStyle}>
               {m.title || "Untitled"} — {m.missionary_role || "Missionary"} ({m.city || m.country || "Unknown"})
             </option>
           ))}
@@ -228,17 +233,17 @@ export default function PayoutSetup({ onBack, user }) {
 
         <label style={labelStyle}>I am receiving funds as a *</label>
         <select value={form.recipient_type} onChange={e => update("recipient_type", e.target.value)} style={inputStyle}>
-          <option value="missionary">Missionary / Individual</option>
-          <option value="church">Church / Organisation</option>
+          <option value="missionary" style={optionStyle}>Missionary / Individual</option>
+          <option value="church" style={optionStyle}>Church / Organisation</option>
         </select>
 
         {receivingViaChurch ? (
           <>
             <label style={labelStyle}>Select the Church *</label>
             <select value={selectedChurchId} onChange={e => setSelectedChurchId(e.target.value)} style={inputStyle}>
-              <option value="">— Select a verified church —</option>
+              <option value="" style={optionStyle}>— Select a verified church —</option>
               {churchList.map(c => (
-                <option key={c.id} value={c.id}>
+                <option key={c.id} value={c.id} style={optionStyle}>
                   {c.name} ({c.city || c.country || "Unknown"})
                 </option>
               ))}
@@ -263,8 +268,8 @@ export default function PayoutSetup({ onBack, user }) {
 
             <label style={labelStyle}>Account Type</label>
             <select value={form.account_type} onChange={e => update("account_type", e.target.value)} style={inputStyle}>
-              <option value="cheque">Cheque / Current</option>
-              <option value="savings">Savings</option>
+              <option value="cheque" style={optionStyle}>Cheque / Current</option>
+              <option value="savings" style={optionStyle}>Savings</option>
             </select>
 
             <label style={labelStyle}>Country</label>
