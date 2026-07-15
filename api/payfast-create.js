@@ -141,10 +141,21 @@ export default async function handler(req, res) {
       );
     }
 
-    const signature = pfSignature(pairs, passphrase);
+    // Filter blank fields ONCE, then use this exact same array for both the
+    // signature and the form fields sent to PayFast. Previously the raw
+    // `pairs` array (blanks included, e.g. custom_str3="" for guest donors
+    // with no user_id) was used to build `fields`, while pfSignature()
+    // internally filtered those blanks out before hashing — so the signature
+    // was computed over a different set of fields than what was actually
+    // POSTed. PayFast recomputes the signature from what it receives, gets a
+    // mismatch, and rejects the payment. This bites EVERY guest donation
+    // (no user_id) and any donation missing an optional field.
+    const cleanPairs = pairs.filter(([, v]) => v !== "" && v !== undefined && v !== null);
+
+    const signature = pfSignature(cleanPairs, passphrase);
 
     // Build the fields object for the client to POST (same order, + signature at end)
-    const fields = Object.fromEntries([...pairs, ["signature", signature]]);
+    const fields = Object.fromEntries([...cleanPairs, ["signature", signature]]);
 
     // Record pending donation in Supabase
     try {
@@ -189,9 +200,7 @@ export default async function handler(req, res) {
       amount_usd: amt,
       amount_zar: Number(zarAmount.toFixed(2)),
       _debug_signature_string: (() => {
-        const parts = pairs
-          .filter(([, v]) => v !== "" && v !== undefined && v !== null)
-          .map(([k, v]) => `${k}=${phpUrlencode(String(v).trim())}`);
+        const parts = cleanPairs.map(([k, v]) => `${k}=${phpUrlencode(String(v).trim())}`);
         let str = parts.join("&");
         if (passphrase) str += `&passphrase=${phpUrlencode(String(passphrase).trim())}`;
         return str;
