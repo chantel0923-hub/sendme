@@ -23,19 +23,59 @@ const STEPS = [
 
 const CURRENCIES = [
   { code:"USD", label:"US Dollar (USD)" },
-  { code:"ZAR", label:"South African Rand (ZAR)" },
-  { code:"NGN", label:"Nigerian Naira (NGN)" },
-  { code:"KES", label:"Kenyan Shilling (KES)" },
-  { code:"GHS", label:"Ghanaian Cedi (GHS)" },
-  { code:"UGX", label:"Ugandan Shilling (UGX)" },
-  { code:"TZS", label:"Tanzanian Shilling (TZS)" },
-  { code:"ZMW", label:"Zambian Kwacha (ZMW)" },
-  { code:"INR", label:"Indian Rupee (INR)" },
-  { code:"PHP", label:"Philippine Peso (PHP)" },
-  { code:"IDR", label:"Indonesian Rupiah (IDR)" },
+  { code:"AED", label:"UAE Dirham (AED)" },
+  { code:"ARS", label:"Argentine Peso (ARS)" },
+  { code:"AUD", label:"Australian Dollar (AUD)" },
+  { code:"BDT", label:"Bangladeshi Taka (BDT)" },
   { code:"BRL", label:"Brazilian Real (BRL)" },
+  { code:"CAD", label:"Canadian Dollar (CAD)" },
+  { code:"CHF", label:"Swiss Franc (CHF)" },
+  { code:"CLP", label:"Chilean Peso (CLP)" },
+  { code:"CNY", label:"Chinese Yuan (CNY)" },
+  { code:"COP", label:"Colombian Peso (COP)" },
+  { code:"CZK", label:"Czech Koruna (CZK)" },
+  { code:"DKK", label:"Danish Krone (DKK)" },
+  { code:"EGP", label:"Egyptian Pound (EGP)" },
+  { code:"ETB", label:"Ethiopian Birr (ETB)" },
   { code:"EUR", label:"Euro (EUR)" },
   { code:"GBP", label:"British Pound (GBP)" },
+  { code:"GHS", label:"Ghanaian Cedi (GHS)" },
+  { code:"HKD", label:"Hong Kong Dollar (HKD)" },
+  { code:"HUF", label:"Hungarian Forint (HUF)" },
+  { code:"IDR", label:"Indonesian Rupiah (IDR)" },
+  { code:"ILS", label:"Israeli Shekel (ILS)" },
+  { code:"INR", label:"Indian Rupee (INR)" },
+  { code:"JPY", label:"Japanese Yen (JPY)" },
+  { code:"KES", label:"Kenyan Shilling (KES)" },
+  { code:"KRW", label:"South Korean Won (KRW)" },
+  { code:"LKR", label:"Sri Lankan Rupee (LKR)" },
+  { code:"MAD", label:"Moroccan Dirham (MAD)" },
+  { code:"MWK", label:"Malawian Kwacha (MWK)" },
+  { code:"MXN", label:"Mexican Peso (MXN)" },
+  { code:"MYR", label:"Malaysian Ringgit (MYR)" },
+  { code:"MZN", label:"Mozambican Metical (MZN)" },
+  { code:"NAD", label:"Namibian Dollar (NAD)" },
+  { code:"NGN", label:"Nigerian Naira (NGN)" },
+  { code:"NOK", label:"Norwegian Krone (NOK)" },
+  { code:"NPR", label:"Nepalese Rupee (NPR)" },
+  { code:"NZD", label:"New Zealand Dollar (NZD)" },
+  { code:"PEN", label:"Peruvian Sol (PEN)" },
+  { code:"PHP", label:"Philippine Peso (PHP)" },
+  { code:"PKR", label:"Pakistani Rupee (PKR)" },
+  { code:"PLN", label:"Polish Zloty (PLN)" },
+  { code:"RON", label:"Romanian Leu (RON)" },
+  { code:"RWF", label:"Rwandan Franc (RWF)" },
+  { code:"SEK", label:"Swedish Krona (SEK)" },
+  { code:"SGD", label:"Singapore Dollar (SGD)" },
+  { code:"THB", label:"Thai Baht (THB)" },
+  { code:"TZS", label:"Tanzanian Shilling (TZS)" },
+  { code:"UGX", label:"Ugandan Shilling (UGX)" },
+  { code:"UAH", label:"Ukrainian Hryvnia (UAH)" },
+  { code:"VND", label:"Vietnamese Dong (VND)" },
+  { code:"XAF", label:"Central African CFA Franc (XAF)" },
+  { code:"XOF", label:"West African CFA Franc (XOF)" },
+  { code:"ZAR", label:"South African Rand (ZAR)" },
+  { code:"ZMW", label:"Zambian Kwacha (ZMW)" },
 ];
 
 // Converts an amount in fromCurrency to USD using the fawazahmed0 currency API
@@ -523,10 +563,8 @@ const Step5 = ({ form, set, submitted, submitting, onSubmit }) => {
           <div style={{ fontSize:26,fontWeight:700,color:"#eef1ff",marginBottom:10 }}>Application Submitted</div>
           <div style={{ fontSize:14,color:"rgba(255,255,255,0.5)",lineHeight:1.8,maxWidth:380 }}>
             Thank you, <strong style={{color:"#e8b34b"}}>{form.fullName}</strong>. Your application has been received.<br/><br/>
-            {form.churchVerified && form.pastorEmail
+            {form.churchVerified
               ? <>An endorsement request has been sent to <strong style={{color:"#eef1ff"}}>{form.pastorName}</strong> at <strong style={{color:"#eef1ff"}}>{form.churchName}</strong>.</>
-              : form.churchVerified
-              ? <>Your church <strong style={{color:"#eef1ff"}}>{form.churchName}</strong> is verified, but we don't have an email on file for <strong style={{color:"#eef1ff"}}>{form.pastorName || "your pastor"}</strong> — our admin team will reach out directly to confirm your endorsement.</>
               : <>Our admin team will contact <strong style={{color:"#eef1ff"}}>{form.pastorName}</strong> to register <strong style={{color:"#eef1ff"}}>{form.churchName}</strong> on SendMe before your mission can be approved.</>
             }<br/><br/>
             Our admin team will review within <strong style={{color:"#e8b34b"}}>3–5 working days</strong>.
@@ -726,9 +764,6 @@ export default function MissionaryApplication({ onBack, user }) {
         surcharge_acknowledged: form.surchargeAcknowledged,
         start_date:       form.startDate || null,
         duration_months:  form.duration ? Number(form.duration) : null,
-        milestone1_desc:  form.milestone1 || null,
-        milestone2_desc:  form.milestone2 || null,
-        milestone3_desc:  form.milestone3 || null,
         raised:           0,
         status:           form.churchVerified ? "pending" : "pending_church",
         milestone:        0,
@@ -744,56 +779,12 @@ export default function MissionaryApplication({ onBack, user }) {
       // success screen — surface it as a real, visible error instead.
       if (!data?.id) throw new Error("Your application could not be saved. Please try again or contact support.");
       setSubmitted(true);
-      const missionaryNameForNotify = form.shadowMode ? "Anonymous (shadow mode)" : (form.fullName || user?.email || "Unknown");
       notifyAdmin("mission_applied", {
         missionTitle: form.missionTitle,
-        missionaryName: missionaryNameForNotify,
+        missionaryName: form.shadowMode ? "Anonymous (shadow mode)" : (form.fullName || user?.email || "Unknown"),
         country: form.targetCountry,
         churchName: form.churchName || "unregistered",
       });
-      // Fire-and-forget email notifications — never block the success screen
-      // on these, and never let a failure here surface as a submission error.
-      (async () => {
-        try {
-          await supabase.functions.invoke("send-notification", {
-            body: {
-              type: "application_submitted_admin",
-              to: "sendmemissionfund@gmail.com",
-              data: {
-                missionaryName: missionaryNameForNotify,
-                missionTitle: form.missionTitle,
-                country: form.targetCountry,
-                churchName: form.churchName || "unregistered",
-                pastorName: form.pastorName || null,
-                pastorEmail: form.pastorEmail || null,
-              },
-            },
-          });
-        } catch (notifyErr) {
-          console.error("application_submitted_admin email failed:", notifyErr);
-        }
-        if (form.pastorEmail) {
-          try {
-            await supabase.functions.invoke("send-notification", {
-              body: {
-                type: "pastor_endorsement_request",
-                to: form.pastorEmail,
-                data: {
-                  pastorName: form.pastorName,
-                  missionaryName: missionaryNameForNotify,
-                  churchName: form.churchName || "your church",
-                  missionTitle: form.missionTitle,
-                  country: form.targetCountry,
-                },
-              },
-            });
-          } catch (notifyErr) {
-            console.error("pastor_endorsement_request email failed:", notifyErr);
-          }
-        } else {
-          console.warn("No pastorEmail on file — endorsement email not sent for this application.");
-        }
-      })();
     } catch (e) {
       setError("Submission failed: " + (e.message || "Please try again."));
     }
