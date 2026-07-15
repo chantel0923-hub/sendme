@@ -256,48 +256,35 @@ const TEMPLATES: Record<string, (d: any) => { subject: string; html: string }> =
     ),
   }),
 
-  pastor_endorsement_request: (d) => ({
-    subject: `Endorsement requested: ${d.missionaryName} has applied on SendMe`,
+  // Admin-facing — fires alongside the existing WhatsApp notifyAdmin() call,
+  // not a replacement for it. Mirrors the data shape already sent to
+  // notify-admin's "mission_applied" template in supabase/functions/notify-admin.
+  mission_applied: (d) => ({
+    subject: `New Mission Application — ${d.missionTitle || "Untitled Mission"}`,
     html: wrapEmail(
-      "Missionary Endorsement Requested",
-      `Dear Pastor ${d.pastorName || ""},<br/><br/>
-      <strong style="color:#e8b34b;">${d.missionaryName || "A member of your church"}</strong>
-      has applied to become a missionary on <strong>SendMe Global Mission Fund</strong>, and has
-      listed <strong style="color:#e8b34b;">${d.churchName || "your church"}</strong> as their
-      sending/endorsing church.<br/><br/>
-      <div style="background:rgba(232,179,75,0.08);border:1px solid rgba(232,179,75,0.25);border-radius:12px;padding:16px 18px;margin:16px 0;">
-        <strong style="color:#e8b34b;">Mission applied for:</strong><br/>
-        ${d.missionTitle || "(untitled mission)"}${d.country ? " — " + d.country : ""}
-      </div>
-      <strong style="color:#eef1ff;">We are asking you to confirm the following:</strong><br/>
-      <ul style="color:rgba(255,255,255,0.6);margin:10px 0;padding-left:20px;line-height:2;">
-        <li>You personally know ${d.missionaryName || "this applicant"}</li>
-        <li>They are a member in good standing of your congregation</li>
-        <li>You endorse them for this mission field assignment</li>
-      </ul>
-      To confirm, simply reply to this email with <strong>"I confirm"</strong>, or contact SendMe admin directly at
-      <a href="mailto:${d.adminEmail || "sendmemissionfund@gmail.com"}" style="color:#e8b34b;">${d.adminEmail || "sendmemissionfund@gmail.com"}</a>.<br/><br/>
-      If you do not know this applicant or cannot endorse them, please reply and let us know right away — this
-      helps us keep the SendMe network trustworthy for donors.<br/><br/>
-      Thank you for your part in sending workers into the harvest. God bless you.`,
+      "New Mission Application",
+      `A new mission application is awaiting your review.<br/><br/>
+      <strong style="color:#e8b34b;">${d.missionTitle || "Untitled Mission"}</strong><br/>
+      Applicant: ${d.missionaryName || "unknown"}<br/>
+      Country: ${d.country || "unspecified"}<br/>
+      Church: ${d.churchName || "unregistered"}<br/><br/>
+      Please review and approve or reject this application in Admin → Approvals.`,
+      "Review in Admin", `${d.siteUrl || "https://sendme-nine.vercel.app"}`
     ),
   }),
 
-  application_submitted_admin: (d) => ({
-    subject: `New missionary application — ${d.missionTitle || "untitled mission"}`,
+  // Admin-facing — fires alongside the existing WhatsApp notifyAdmin() call.
+  emergency_submitted: (d) => ({
+    subject: `🚨 New Emergency Request — ${d.title || "Untitled Request"}`,
     html: wrapEmail(
-      "New Missionary Application Received",
-      `A new missionary application has been submitted on SendMe.<br/><br/>
-      <strong style="color:#eef1ff;">Applicant:</strong> ${d.missionaryName || "Unknown"}<br/>
-      <strong style="color:#eef1ff;">Mission:</strong> ${d.missionTitle || "(untitled mission)"}<br/>
-      <strong style="color:#eef1ff;">Country:</strong> ${d.country || "unspecified"}<br/>
-      <strong style="color:#eef1ff;">Church:</strong> ${d.churchName || "unregistered"}<br/>
-      ${d.pastorName ? `<strong style="color:#eef1ff;">Pastor:</strong> ${d.pastorName}${d.pastorEmail ? ` (${d.pastorEmail})` : ""}<br/>` : ""}
-      <br/>
-      ${d.pastorEmail ? "An endorsement request has been emailed to the pastor above." : "No pastor email was on file — no endorsement request could be sent. Please follow up manually."}
-      <br/><br/>
-      Review this application in Admin → Approvals.`,
-      "✝ Open Admin → Approvals", `${d.siteUrl || "https://sendme-nine.vercel.app"}`
+      "New Emergency Request Submitted",
+      `A new emergency request is awaiting your review.<br/><br/>
+      <strong style="color:#e8b34b;">${d.title || "Untitled Request"}</strong><br/>
+      Country: ${d.country || "unspecified"}<br/>
+      Urgency: ${d.urgency || "unspecified"}<br/>
+      Funding goal: $${d.goal ?? "unset"}<br/><br/>
+      Requests stay hidden from the public list until approved. Please review in Admin → Payouts → Emergency.`,
+      "Review in Admin", `${d.siteUrl || "https://sendme-nine.vercel.app"}`
     ),
   }),
 };

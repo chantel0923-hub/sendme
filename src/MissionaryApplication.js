@@ -779,11 +779,20 @@ export default function MissionaryApplication({ onBack, user }) {
       // success screen — surface it as a real, visible error instead.
       if (!data?.id) throw new Error("Your application could not be saved. Please try again or contact support.");
       setSubmitted(true);
-      notifyAdmin("mission_applied", {
+      const notifyData = {
         missionTitle: form.missionTitle,
         missionaryName: form.shadowMode ? "Anonymous (shadow mode)" : (form.fullName || user?.email || "Unknown"),
         country: form.targetCountry,
         churchName: form.churchName || "unregistered",
+      };
+      notifyAdmin("mission_applied", notifyData);
+      // Admin email — separate channel from the WhatsApp notifyAdmin() call
+      // above, previously missing entirely for this flow. Fire-and-forget:
+      // a slow/failed email must never block the application from completing.
+      supabase.functions.invoke("send-notification", {
+        body: { type: "mission_applied", to: "sendmemissionfund@gmail.com", data: notifyData },
+      }).then(({ error }) => {
+        if (error) console.error("mission_applied admin email failed", error);
       });
     } catch (e) {
       setError("Submission failed: " + (e.message || "Please try again."));

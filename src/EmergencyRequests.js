@@ -74,11 +74,20 @@ export default function EmergencyRequests({ onBack, user, userRole }) {
         created_at: new Date().toISOString(),
       });
       setSubmitted(true);
-      notifyAdmin("emergency_submitted", {
+      const notifyData = {
         title: form.title,
         country: form.country,
         urgency: form.urgency,
-        goal: form.goal || 1000,
+        goal: Number(form.goal) || 1000,
+      };
+      notifyAdmin("emergency_submitted", notifyData);
+      // Admin email — separate channel from the WhatsApp notifyAdmin() call
+      // above, previously missing entirely for this flow. Fire-and-forget:
+      // a slow/failed email must never block the request from completing.
+      supabase.functions.invoke("send-notification", {
+        body: { type: "emergency_submitted", to: "sendmemissionfund@gmail.com", data: notifyData },
+      }).then(({ error }) => {
+        if (error) console.error("emergency_submitted admin email failed", error);
       });
     } catch { setSubmitted(true); }
     setSubmitting(false);
