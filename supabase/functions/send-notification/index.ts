@@ -23,27 +23,51 @@ const CORS_HEADERS = {
 };
 
 // ── Shared email shell — dark navy/gold theme matching the app ──
+// NOTE: built with nested <table> + bgcolor attributes (not CSS background on <div>)
+// because Outlook desktop/Windows Mail render via the Word engine, which strips
+// div background colors, border-radius, linear-gradient, and centered max-width
+// containers. Tables + bgcolor are the only reliably cross-client approach for HTML email.
 function wrapEmail(title: string, bodyHtml: string, ctaText?: string, ctaUrl?: string) {
   return `
-  <div style="background:#060c18;padding:32px 16px;font-family:Georgia,serif;">
-    <div style="max-width:560px;margin:0 auto;background:#0c1628;border-radius:20px;border:1px solid rgba(255,255,255,0.08);overflow:hidden;">
-      <div style="background:#09111f;padding:28px 32px;text-align:center;border-bottom:1px solid rgba(255,255,255,0.07);">
-        <div style="font-size:28px;font-weight:800;color:#ffffff;">Send<span style="color:#e8b34b;">Me</span></div>
-        <div style="font-size:10px;color:rgba(255,255,255,0.3);letter-spacing:3px;margin-top:4px;">GLOBAL MISSION FUND</div>
-      </div>
-      <div style="padding:32px;">
-        <div style="font-size:18px;font-weight:700;color:#eef1ff;margin-bottom:16px;">${title}</div>
-        <div style="font-size:14px;color:rgba(255,255,255,0.6);line-height:1.8;">${bodyHtml}</div>
-        ${ctaText && ctaUrl ? `
-        <div style="text-align:center;margin-top:28px;">
-          <a href="${ctaUrl}" style="display:inline-block;padding:14px 32px;border-radius:12px;background:linear-gradient(135deg,#e8b34b,#c8942b);color:#000;font-weight:700;text-decoration:none;font-size:14px;">${ctaText}</a>
-        </div>` : ""}
-      </div>
-      <div style="padding:20px 32px;text-align:center;border-top:1px solid rgba(255,255,255,0.06);">
-        <div style="font-size:12px;color:#e8b34b;font-style:italic;">"Here am I Lord, send me." — Isaiah 6:8</div>
-      </div>
-    </div>
-  </div>`;
+  <!--[if mso]>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#060c18"><tr><td align="center">
+  <![endif]-->
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="#060c18" style="background:#060c18;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table role="presentation" width="560" cellpadding="0" cellspacing="0" bgcolor="#0c1628" style="max-width:560px;width:100%;background:#0c1628;border:1px solid #1c2942;">
+          <tr>
+            <td align="center" bgcolor="#09111f" style="background:#09111f;padding:28px 32px;border-bottom:1px solid #1c2942;">
+              <span style="font-family:Georgia,serif;font-size:28px;font-weight:800;color:#ffffff;">Send<span style="color:#e8b34b;">Me</span></span><br/>
+              <span style="font-family:Georgia,serif;font-size:10px;color:#8a94ab;letter-spacing:3px;">GLOBAL MISSION FUND</span>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:32px;font-family:Georgia,serif;">
+              <div style="font-size:18px;font-weight:700;color:#eef1ff;margin-bottom:16px;">${title}</div>
+              <div style="font-size:14px;color:#b7bfd1;line-height:1.8;">${bodyHtml}</div>
+              ${ctaText && ctaUrl ? `
+              <table role="presentation" cellpadding="0" cellspacing="0" style="margin:28px auto 0;">
+                <tr>
+                  <td align="center" bgcolor="#e8b34b" style="background:#e8b34b;border-radius:10px;">
+                    <a href="${ctaUrl}" style="display:inline-block;padding:14px 32px;font-family:Georgia,serif;font-size:14px;font-weight:700;color:#000000;text-decoration:none;">${ctaText}</a>
+                  </td>
+                </tr>
+              </table>` : ""}
+            </td>
+          </tr>
+          <tr>
+            <td align="center" bgcolor="#0c1628" style="padding:20px 32px;border-top:1px solid #1c2942;font-family:Georgia,serif;">
+              <span style="font-size:12px;color:#e8b34b;font-style:italic;">"Here am I Lord, send me." — Isaiah 6:8</span>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+  <!--[if mso]>
+  </td></tr></table>
+  <![endif]-->`;
 }
 
 // ── Templates ──

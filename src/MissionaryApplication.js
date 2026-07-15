@@ -120,6 +120,15 @@ const geocodeMissionLocation = async (area, country) => {
 const ROLES   = ["Missionary","Evangelist","Pastor","Church Planter","Bible Distributor","Medical Missionary","Children's Minister","Other"];
 const REGIONS = ["Africa","Asia","South America","Middle East","Europe","North America","Pacific Islands","Central Asia","Other"];
 
+// Mirrors RISK_LEVELS / RiskBadge in App.js (level 1-4; level 0 "Unknown" is the
+// pre-existing DB fallback and isn't offered as a self-select choice here).
+const ACCESS_LEVELS = [
+  { level:"1", label:"Easy Access",       dot:"🟢", desc:"Safe, established access — no significant travel or entry barriers" },
+  { level:"2", label:"Rural Area",        dot:"🟡", desc:"Remote or rural setting, harder to reach but not restricted" },
+  { level:"3", label:"Difficult Terrain", dot:"🟠", desc:"Challenging travel/terrain or limited infrastructure" },
+  { level:"4", label:"High Risk",         dot:"🔴", desc:"Security, political, or persecution risk in this field" },
+];
+
 const FInput = ({ label: lbl, ...props }) => {
   const [focused, setFocused] = useState(false);
   const isTextarea = props.as === "textarea";
@@ -449,6 +458,19 @@ const Step4 = ({ form, set }) => (
       <FInput label="Specific Area / District" placeholder="e.g. Merkato District" value={form.targetArea} onChange={e=>set("targetArea",e.target.value)}/>
     </div>
     <div style={{ marginBottom:14 }}>
+      <label style={label}>Field Access / Conditions *</label>
+      <select value={form.riskLevel} onChange={e=>set("riskLevel",e.target.value)}
+        style={{ ...inp, color: form.riskLevel ? "#eef1ff" : "rgba(255,255,255,0.35)", marginBottom:6 }}>
+        <option value="" style={{background:"#0c1628"}}>Select field conditions...</option>
+        {ACCESS_LEVELS.map(a=>(
+          <option key={a.level} value={a.level} style={{background:"#0c1628"}}>{a.dot} {a.label}</option>
+        ))}
+      </select>
+      <div style={{ fontSize:12, color:"rgba(255,255,255,0.4)", lineHeight:1.6 }}>
+        {ACCESS_LEVELS.find(a=>a.level===form.riskLevel)?.desc || "This shows donors what to expect getting workers and supplies to the field — pick the closest match."}
+      </div>
+    </div>
+    <div style={{ marginBottom:14 }}>
       <label style={label}>Describe your mission *</label>
       <textarea placeholder="What will you do? Who are you reaching?" value={form.missionDescription} onChange={e=>set("missionDescription",e.target.value)} style={{...textarea,minHeight:140}}/>
     </div>
@@ -610,6 +632,7 @@ const validate = (step, form) => {
     if (!form.missionTitle.trim())       return "Please enter a mission title.";
     if (!form.targetRegion)              return "Please select a target region.";
     if (!form.targetCountry.trim())      return "Please enter the target country.";
+    if (!form.riskLevel)                 return "Please select the field access/conditions level.";
     if (!form.missionDescription.trim()) return "Please describe your mission.";
     if (!form.fundingGoal||Number(form.fundingGoal)<100) return "Please enter a funding goal equivalent to at least $100 USD, and wait for the conversion to complete if using a local currency.";
   }
@@ -636,7 +659,7 @@ export default function MissionaryApplication({ onBack, user }) {
     churchCity:"", churchCountry:"", churchWebsite:"",
     churchNotOnSendMe: false, churchVerified: false,
     // Mission fields
-    missionTitle:"", targetRegion:"", targetCountry:"", targetArea:"",
+    missionTitle:"", targetRegion:"", targetCountry:"", targetArea:"", riskLevel:"",
     missionDescription:"", fundingGoal:"", localAmount:"", localCurrency:"USD",
     startDate:"", duration:"",
     milestone1:"", milestone2:"", milestone3:"", surchargeAcknowledged:false,
@@ -689,6 +712,7 @@ export default function MissionaryApplication({ onBack, user }) {
         region:           form.targetRegion,
         country:          form.targetCountry,
         area:             form.targetArea,
+        risk_level:       Number(form.riskLevel) || 1,
         lat:              lat,
         lng:              lng,
         blurb:            form.missionDescription,
