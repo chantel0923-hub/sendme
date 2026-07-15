@@ -523,8 +523,10 @@ const Step5 = ({ form, set, submitted, submitting, onSubmit }) => {
           <div style={{ fontSize:26,fontWeight:700,color:"#eef1ff",marginBottom:10 }}>Application Submitted</div>
           <div style={{ fontSize:14,color:"rgba(255,255,255,0.5)",lineHeight:1.8,maxWidth:380 }}>
             Thank you, <strong style={{color:"#e8b34b"}}>{form.fullName}</strong>. Your application has been received.<br/><br/>
-            {form.churchVerified
+            {form.churchVerified && form.pastorEmail
               ? <>An endorsement request has been sent to <strong style={{color:"#eef1ff"}}>{form.pastorName}</strong> at <strong style={{color:"#eef1ff"}}>{form.churchName}</strong>.</>
+              : form.churchVerified
+              ? <>Your church <strong style={{color:"#eef1ff"}}>{form.churchName}</strong> is verified, but we don't have an email on file for <strong style={{color:"#eef1ff"}}>{form.pastorName || "your pastor"}</strong> — our admin team will reach out directly to confirm your endorsement.</>
               : <>Our admin team will contact <strong style={{color:"#eef1ff"}}>{form.pastorName}</strong> to register <strong style={{color:"#eef1ff"}}>{form.churchName}</strong> on SendMe before your mission can be approved.</>
             }<br/><br/>
             Our admin team will review within <strong style={{color:"#e8b34b"}}>3–5 working days</strong>.
@@ -739,12 +741,56 @@ export default function MissionaryApplication({ onBack, user }) {
       // success screen — surface it as a real, visible error instead.
       if (!data?.id) throw new Error("Your application could not be saved. Please try again or contact support.");
       setSubmitted(true);
+      const missionaryNameForNotify = form.shadowMode ? "Anonymous (shadow mode)" : (form.fullName || user?.email || "Unknown");
       notifyAdmin("mission_applied", {
         missionTitle: form.missionTitle,
-        missionaryName: form.shadowMode ? "Anonymous (shadow mode)" : (form.fullName || user?.email || "Unknown"),
+        missionaryName: missionaryNameForNotify,
         country: form.targetCountry,
         churchName: form.churchName || "unregistered",
       });
+      // Fire-and-forget email notifications — never block the success screen
+      // on these, and never let a failure here surface as a submission error.
+      (async () => {
+        try {
+          await supabase.functions.invoke("send-notification", {
+            body: {
+              type: "application_submitted_admin",
+              to: "sendmemissionfund@gmail.com",
+              data: {
+                missionaryName: missionaryNameForNotify,
+                missionTitle: form.missionTitle,
+                country: form.targetCountry,
+                churchName: form.churchName || "unregistered",
+                pastorName: form.pastorName || null,
+                pastorEmail: form.pastorEmail || null,
+              },
+            },
+          });
+        } catch (notifyErr) {
+          console.error("application_submitted_admin email failed:", notifyErr);
+        }
+        if (form.pastorEmail) {
+          try {
+            await supabase.functions.invoke("send-notification", {
+              body: {
+                type: "pastor_endorsement_request",
+                to: form.pastorEmail,
+                data: {
+                  pastorName: form.pastorName,
+                  missionaryName: missionaryNameForNotify,
+                  churchName: form.churchName || "your church",
+                  missionTitle: form.missionTitle,
+                  country: form.targetCountry,
+                },
+              },
+            });
+          } catch (notifyErr) {
+            console.error("pastor_endorsement_request email failed:", notifyErr);
+          }
+        } else {
+          console.warn("No pastorEmail on file — endorsement email not sent for this application.");
+        }
+      })();
     } catch (e) {
       setError("Submission failed: " + (e.message || "Please try again."));
     }
