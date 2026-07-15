@@ -793,6 +793,8 @@ export default function MissionaryApplication({ onBack, user }) {
         body: { type: "mission_applied", to: "sendmemissionfund@gmail.com", data: notifyData },
       }).then(({ error }) => {
         if (error) console.error("mission_applied admin email failed", error);
+      }).catch((err) => {
+        console.error("mission_applied admin email threw", err);
       });
     } catch (e) {
       setError("Submission failed: " + (e.message || "Please try again."));

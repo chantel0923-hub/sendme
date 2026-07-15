@@ -88,6 +88,8 @@ export default function EmergencyRequests({ onBack, user, userRole }) {
         body: { type: "emergency_submitted", to: "sendmemissionfund@gmail.com", data: notifyData },
       }).then(({ error }) => {
         if (error) console.error("emergency_submitted admin email failed", error);
+      }).catch((err) => {
+        console.error("emergency_submitted admin email threw", err);
       });
     } catch { setSubmitted(true); }
     setSubmitting(false);
