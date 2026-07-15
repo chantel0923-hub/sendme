@@ -256,10 +256,14 @@ export default function AdminApprovals({ onBack, user }) {
                       const goalNum = Number(m.goal) || 0;
                       const third = Math.floor(goalNum / 3);
                       const amount = n < 3 ? third : goalNum - third * 2;
+                      const desc = m[`milestone${n}_desc`];
                       return (
                         <div key={n} style={{ background: "rgba(232,179,75,0.05)", borderRadius: 10, border: "1px solid rgba(232,179,75,0.15)", padding: "10px 12px", textAlign: "center" }}>
                           <div style={{ fontSize: 15, fontWeight: 700, color: "#e8b34b" }}>${fmt(amount)}</div>
                           <div style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", marginTop: 2 }}>Milestone {n}</div>
+                          <div style={{ fontSize: 11, color: desc ? "rgba(255,255,255,0.55)" : "rgba(232,91,91,0.6)", marginTop: 6, lineHeight: 1.4, fontStyle: desc ? "normal" : "italic" }}>
+                            {desc || "No milestone description given"}
+                          </div>
                         </div>
                       );
                     })}
