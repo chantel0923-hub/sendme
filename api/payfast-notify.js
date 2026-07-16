@@ -59,7 +59,15 @@ function pfSignature(data, passphrase) {
     pfOutput += `${key}=${encodeURIComponent(String(val).trim()).replace(/%20/g, "+")}&`;
   }
   let getString = pfOutput.slice(0, -1);
-  if (passphrase !== undefined && passphrase !== null) {
+  // Truthy check, not `!== undefined && !== null` — process.env.PAYFAST_PASSPHRASE
+  // resolves to "" (empty string) when unset, which is neither undefined nor
+  // null and would previously slip past the old check, appending a stray
+  // "&passphrase=" that PayFast's own signature (computed with no passphrase
+  // configured on this account) never includes. That mismatch caused EVERY
+  // ITN callback to fail signature verification, so no donation ever
+  // advanced past "pending" — confirmed by Vercel logs showing 400s on
+  // every /api/payfast-notify call.
+  if (passphrase) {
     getString += `&passphrase=${encodeURIComponent(String(passphrase).trim()).replace(/%20/g, "+")}`;
   }
   return crypto.createHash("md5").update(getString).digest("hex");
