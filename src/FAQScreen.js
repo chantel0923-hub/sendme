@@ -63,6 +63,18 @@ const faqs = [
         q: "Can our church use SendMe to coordinate sending a worker to another church?",
         a: `Yes — that's exactly what the Send a Worker feature is built for. If your church needs a teacher, song leader, or helper for a specific season, you can post that need and another church can respond. It's Kingdom coordination made simple.`
       },
+      {
+        q: "What should we include when posting a Send a Worker request?",
+        a: `The clearer your request, the faster you'll find the right person. Include the role you need, roughly when, how long, and what the work involves — the same way you'd describe it to a trusted friend, not just "we need help."`
+      },
+      {
+        q: "What kinds of needs can we post through Send a Worker?",
+        a: `Teachers, song leaders, evangelists, translators, short-term outreach helpers, or anyone your church needs for a season of ministry. If it's Kingdom work and you need hands, post it.`
+      },
+      {
+        q: "Once a worker responds, who's responsible for what?",
+        a: `As the hosting church, you carry the venue, local logistics, and hospitality. The one who comes carries the calling and character they represented in their profile. SendMe makes the connection — the outworking is between the churches, the same trust that runs through the whole platform.`
+      },
     ]
   },
   {
