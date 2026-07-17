@@ -44,6 +44,13 @@ const TEMPLATES: Record<string, (d: any) => string> = {
     `📍 ${d.country} | Urgency: ${d.urgency || "unspecified"}\n` +
     `💰 Goal: $${d.goal || "unset"}\n\n` +
     `⚠ Review in Admin → Payouts → Emergency`,
+  donation_received: (d) =>
+    `💝 SendMe — New Donation Received\n\n` +
+    `💰 $${d.amount || 0} — *${d.missionTitle || "a mission"}*\n` +
+    `👤 ${d.donorName || "Anonymous"}${d.isGuest ? " (guest checkout)" : ""}\n` +
+    `✉ ${d.donorEmail || "no email given"}\n\n` +
+    `📊 Now at $${d.totalRaised || 0} of $${d.goal || "?"}\n\n` +
+    `View: ${d.missionUrl || "Admin → Payouts"}`,
   banking_missing: (d) =>
     `⚠ SendMe — Banking Details Missing\n\n` +
     `Mission *${d.missionTitle}* has reached a payout milestone but has no banking details on file.\n\n` +
