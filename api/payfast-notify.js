@@ -309,26 +309,40 @@ export default async function handler(req, res) {
         notifyPath   = `/mission/${target_id}`;
       }
 
+      // Shared payload for both the admin email and the admin WhatsApp ping —
+      // built once so the two channels can never drift out of sync with
+      // each other on what they report.
+      const notifyData = {
+        amount:      creditAmount,
+        missionTitle: notifyTitle || (isEmergency ? "an emergency request" : "a mission"),
+        donorName:   donationRow?.donor_name  || name_first    || null,
+        donorEmail:  donationRow?.donor_email || email_address || null,
+        isGuest:     !(donationRow?.user_id || user_id),
+        totalRaised: notifyRaised,
+        goal:        notifyGoal,
+        missionUrl:  `${SITE_URL}${notifyPath}`,
+      };
+
       try {
         const { error: notifyError } = await supabase.functions.invoke("send-notification", {
-          body: {
-            type: "donation_received",
-            to:   ADMIN_EMAIL,
-            data: {
-              amount:      creditAmount,
-              missionTitle: notifyTitle || (isEmergency ? "an emergency request" : "a mission"),
-              donorName:   donationRow?.donor_name  || name_first    || null,
-              donorEmail:  donationRow?.donor_email || email_address || null,
-              isGuest:     !(donationRow?.user_id || user_id),
-              totalRaised: notifyRaised,
-              goal:        notifyGoal,
-              missionUrl:  `${SITE_URL}${notifyPath}`,
-            },
-          },
+          body: { type: "donation_received", to: ADMIN_EMAIL, data: notifyData },
         });
         if (notifyError) console.error("payfast-notify: admin donation-received email failed", notifyError);
       } catch (notifyErr) {
         console.error("payfast-notify: admin donation-received email threw", notifyErr);
+      }
+
+      // #94 — WhatsApp ping to admin on every completed donation (guest or
+      // logged-in, mission or emergency). Fire-and-forget, same as the
+      // email above — a failed/slow WhatsApp send must never block or fail
+      // the ITN response PayFast is waiting on.
+      try {
+        const { error: waError } = await supabase.functions.invoke("notify-admin", {
+          body: { type: "donation_received", data: notifyData },
+        });
+        if (waError) console.error("payfast-notify: admin donation-received WhatsApp failed", waError);
+      } catch (waErr) {
+        console.error("payfast-notify: admin donation-received WhatsApp threw", waErr);
       }
     }
 
