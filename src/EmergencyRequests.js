@@ -133,6 +133,17 @@ export default function EmergencyRequests({ onBack, user, userRole }) {
     }
 
     const amt = Number(response.amount) || 0;
+    // #106 — once this emergency request is already fully funded, refuse to
+    // start a PayFast donation even if an amount was somehow entered. The
+    // amount input itself is hidden below once fully funded (see the
+    // "Fully Funded" guard in the respond view), but this check protects
+    // against a stale form state or a submit that slips through.
+    const isFullyFunded = (responding.raised || 0) >= (responding.goal || 1000);
+    if (amt > 0 && isFullyFunded) {
+      setRespError("This emergency has already reached its funding goal — donations are closed, but you can still offer to help below.");
+      setRespSaving(false);
+      return;
+    }
     if (amt > 0) {
       try {
         // Redirect to PayFast to actually collect the pledged amount.
@@ -186,7 +197,17 @@ export default function EmergencyRequests({ onBack, user, userRole }) {
               <input placeholder="Your name *" value={response.name} onChange={e=>setResponse(r=>({...r,name:e.target.value}))} style={inp}/>
               <input placeholder="Your email * (we'll contact you here)" type="email" value={response.email} onChange={e=>setResponse(r=>({...r,email:e.target.value}))} style={inp}/>
               <input placeholder="Your phone (optional)" type="tel" value={response.phone} onChange={e=>setResponse(r=>({...r,phone:e.target.value}))} style={inp}/>
-              <input placeholder="Amount you can contribute ($) — optional" type="number" value={response.amount} onChange={e=>setResponse(r=>({...r,amount:e.target.value}))} style={inp}/>
+              {/* #106 — once fully funded, the donation amount field is
+                  removed entirely rather than just disabled, so there's no
+                  way to submit a donation through this form. Non-monetary
+                  help (contact details + note) can still be offered below. */}
+              {(responding.raised||0) >= (responding.goal||1000) ? (
+                <div style={{ background:"rgba(62,207,142,0.08)", border:"1px solid rgba(62,207,142,0.25)", borderRadius:10, padding:"12px 14px", marginBottom:12, fontSize:13, color:"#3ecf8e" }}>
+                  ✓ This emergency has reached its funding goal — donations are closed. You can still offer to help with your time, skills, or supplies using the message below.
+                </div>
+              ) : (
+                <input placeholder="Amount you can contribute ($) — optional" type="number" value={response.amount} onChange={e=>setResponse(r=>({...r,amount:e.target.value}))} style={inp}/>
+              )}
               <textarea placeholder="Any message or additional details..." value={response.note} onChange={e=>setResponse(r=>({...r,note:e.target.value}))} style={{...inp,resize:"vertical",minHeight:80}}/>
               {respError && (
                 <div style={{ background:"rgba(232,91,91,0.1)", border:"1px solid rgba(232,91,91,0.3)", borderRadius:10, padding:"10px 14px", color:"#e85b5b", fontSize:13, marginBottom:14 }}>
@@ -309,7 +330,7 @@ export default function EmergencyRequests({ onBack, user, userRole }) {
                     </span>
                   </div>
                   <button onClick={()=>{setResponding(r);setRespDone(false);setRespError("");setResponse({name:"",email:"",phone:"",amount:"",note:""});}} style={{ width:"100%", padding:"12px 0", borderRadius:12, border:"none", background:`linear-gradient(135deg,${u.color},${u.color}cc)`, color:"#fff", fontWeight:700, cursor:"pointer", fontSize:14, fontFamily:"Georgia, serif" }}>
-                    💝 Respond to This Emergency
+                    {(r.raised||0)>=(r.goal||1000) ? "🙏 Goal Reached — Offer Non-Monetary Help" : "💝 Respond to This Emergency"}
                   </button>
                 </div>
               );

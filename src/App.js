@@ -195,7 +195,18 @@ const UpdatesFeed = ({ missionId, missionColor, missionName, canPost, guest }) =
       setNewText(""); setNewMedia("");
     } catch (e) {
       console.error("postUpdate error:", e);
-      setPostError("Could not post your update — it was NOT saved. Please try again. (" + (e?.message || "unknown error") + ")");
+      // #95 — this specific RLS policy (mission_updates_insert_owner) blocks
+      // anyone who isn't THIS mission's own missionary or pastor, even
+      // though the UI-level canPostUpdates check above only confirms their
+      // general role. A missionary who didn't create this particular
+      // mission hits exactly this case. Give a message that explains what
+      // actually happened instead of surfacing the raw Postgres RLS error.
+      const isOwnershipBlock = e?.message?.includes("row-level security policy") || e?.code === "42501";
+      setPostError(
+        isOwnershipBlock
+          ? "You can only post Field Reports and Prayer Requests on a mission you personally created (as its missionary or pastor). This looks like a different mission — if you believe you should have access here, please contact SendMe support via the FAQ page so Admin can help."
+          : "Could not post your update — it was NOT saved. Please try again. (" + (e?.message || "unknown error") + ")"
+      );
     }
     setPosting(false);
   };
