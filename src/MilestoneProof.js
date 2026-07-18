@@ -11,6 +11,13 @@ export default function MilestoneProof({ onBack, user }) {
   const [success, setSuccess]       = useState(false);
   const [error, setError]           = useState("");
   const [loading, setLoading]       = useState(true);
+  // #102 — if the missionary already has a pending proof in for this
+  // mission's current milestone, we show it instead of a blank editable
+  // form. Previously re-entering this screen after submitting always
+  // showed a fresh blank form, which looked like the submission had been
+  // lost even though it was safely sitting in the database the whole time.
+  const [existingProof, setExistingProof] = useState(null);
+  const [checkingExisting, setCheckingExisting] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -18,7 +25,7 @@ export default function MilestoneProof({ onBack, user }) {
       try {
         const { data, error } = await supabase
           .from("missions")
-          .select("id, title, country, city, current_milestone, status, missionary_id, pastor_email, pastor_name")
+          .select("id, title, country, city, current_milestone, status, missionary_id, pastor_email, pastor_name, milestone_1_detail, milestone_2_detail, milestone_3_detail")
           .eq("status", "active");
         if (error) throw error;
         // Only ever show missions belonging to the logged-in missionary.
@@ -32,6 +39,38 @@ export default function MilestoneProof({ onBack, user }) {
     };
     load();
   }, [user]);
+
+  // #102 — check for an existing pending proof whenever the selected
+  // mission (or its current milestone) changes.
+  useEffect(() => {
+    if (!selected) { setExistingProof(null); return; }
+    let cancelled = false;
+    setCheckingExisting(true);
+    (async () => {
+      const { data } = await supabase
+        .from("milestone_proofs")
+        .select("id, description, media_url, status, submitted_at")
+        .eq("mission_id", selected.id)
+        .eq("milestone_number", selected.current_milestone || 1)
+        .eq("status", "pending")
+        .order("submitted_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (!cancelled) {
+        setExistingProof(data || null);
+        setCheckingExisting(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [selected]);
+
+  // #98/#99 — resolve the right milestone_N_detail column for whichever
+  // milestone number a mission is currently on.
+  const getMilestoneDetail = (mission) => {
+    if (!mission) return null;
+    const n = mission.current_milestone || 1;
+    return mission[`milestone_${n}_detail`] || null;
+  };
 
   const handleSubmit = async () => {
     if (!selected || !description.trim()) {
@@ -143,7 +182,7 @@ export default function MilestoneProof({ onBack, user }) {
         {selected && (
           <>
             {/* Current milestone badge */}
-            <div style={{ background: "rgba(91,156,246,0.08)", borderRadius: 12, border: "1px solid rgba(91,156,246,0.2)", padding: "12px 16px", marginBottom: 20, display: "flex", gap: 12, alignItems: "center" }}>
+            <div style={{ background: "rgba(91,156,246,0.08)", borderRadius: 12, border: "1px solid rgba(91,156,246,0.2)", padding: "12px 16px", marginBottom: 14, display: "flex", gap: 12, alignItems: "center" }}>
               <span style={{ fontSize: 24 }}>📋</span>
               <div>
                 <div style={{ fontSize: 13, fontWeight: 700, color: "#5b9cf6" }}>Submitting proof for Milestone {selected.current_milestone || 1}</div>
@@ -151,54 +190,93 @@ export default function MilestoneProof({ onBack, user }) {
               </div>
             </div>
 
-            {/* Description */}
-            <div style={{ marginBottom: 6 }}>
-              <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", marginBottom: 8 }}>Field Report / Description <span style={{ color: "#e85b5b" }}>*</span></div>
-              <textarea
-                value={description}
-                onChange={e => setDescription(e.target.value)}
-                placeholder="Describe what was accomplished during this milestone. Include souls reached, activities completed, and any challenges. Be specific — your pastor will use this to verify the work."
-                style={{ ...inp, minHeight: 140, resize: "vertical", marginBottom: 0 }}
-              />
-              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.2)", marginBottom: 14 }}>{description.length} characters</div>
-            </div>
-
-            {/* Media URL */}
-            <div style={{ marginBottom: 6 }}>
-              <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", marginBottom: 8 }}>Photo / Video URL <span style={{ color: "rgba(255,255,255,0.2)" }}>(optional but recommended)</span></div>
-              <input
-                value={mediaUrl}
-                onChange={e => setMediaUrl(e.target.value)}
-                placeholder="e.g. https://photos.google.com/... or YouTube link"
-                style={inp}
-              />
-              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.25)", marginBottom: 14, lineHeight: 1.6 }}>
-                Upload your photo/video to Google Photos, YouTube, or Dropbox and paste the link here. This evidence is key to your pastor's review.
+            {/* #99 — what's actually required for this milestone, set by the
+                pastor. Falls back to a plain note if nothing's been defined
+                yet, rather than showing nothing at all. */}
+            <div style={{ background: "rgba(232,179,75,0.06)", borderRadius: 12, border: "1px solid rgba(232,179,75,0.18)", padding: "14px 16px", marginBottom: 20 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#e8b34b", marginBottom: 6 }}>What's required for this milestone</div>
+              <div style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", lineHeight: 1.7 }}>
+                {getMilestoneDetail(selected) || "Your pastor hasn't written specific requirements for this milestone yet. Describe your work as thoroughly as you can — souls reached, activities completed, and any challenges."}
               </div>
             </div>
 
-            {/* Error */}
-            {error && (
-              <div style={{ background: "rgba(240,82,82,0.1)", border: "1px solid rgba(240,82,82,0.3)", borderRadius: 10, padding: "10px 14px", marginBottom: 16, fontSize: 13, color: "#f05252" }}>
-                ⚠ {error}
+            {checkingExisting ? (
+              <div style={{ padding: "20px 0", textAlign: "center", color: "rgba(255,255,255,0.3)", fontSize: 13 }}>Checking for an existing submission...</div>
+            ) : existingProof ? (
+              /* #102 — a pending proof already exists for this milestone.
+                 Show what was actually submitted instead of an empty form,
+                 so returning here never looks like the submission vanished. */
+              <div style={{ background: "rgba(232,179,75,0.06)", borderRadius: 14, border: "1px solid rgba(232,179,75,0.25)", padding: "18px 20px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                  <span style={{ fontSize: 18 }}>⏳</span>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: "#e8b34b" }}>Already submitted — waiting on your pastor's review</span>
+                </div>
+                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", marginBottom: 6 }}>Your Field Report / Description:</div>
+                <div style={{ fontSize: 14, color: "rgba(255,255,255,0.7)", lineHeight: 1.75, background: "rgba(255,255,255,0.03)", borderRadius: 10, padding: "12px 14px", marginBottom: existingProof.media_url ? 12 : 0 }}>
+                  {existingProof.description}
+                </div>
+                {existingProof.media_url && (
+                  <a href={existingProof.media_url} target="_blank" rel="noopener noreferrer"
+                    style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 10, background: "rgba(91,156,246,0.1)", border: "1px solid rgba(91,156,246,0.25)", color: "#5b9cf6", fontSize: 13, textDecoration: "none", fontFamily: "Georgia, serif", fontWeight: 600 }}>
+                    📎 View Your Submitted Evidence ↗
+                  </a>
+                )}
+                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.25)", marginTop: 14 }}>
+                  You'll be notified once your pastor approves or asks for changes. There's nothing more to do here right now.
+                </div>
               </div>
+            ) : (
+              <>
+                {/* Description */}
+                <div style={{ marginBottom: 6 }}>
+                  <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", marginBottom: 8 }}>Field Report / Description <span style={{ color: "#e85b5b" }}>*</span></div>
+                  <textarea
+                    value={description}
+                    onChange={e => setDescription(e.target.value)}
+                    placeholder="Describe what was accomplished during this milestone. Include souls reached, activities completed, and any challenges. Be specific — your pastor will use this to verify the work."
+                    style={{ ...inp, minHeight: 140, resize: "vertical", marginBottom: 0 }}
+                  />
+                  <div style={{ fontSize: 11, color: "rgba(255,255,255,0.2)", marginBottom: 14 }}>{description.length} characters</div>
+                </div>
+
+                {/* Media URL */}
+                <div style={{ marginBottom: 6 }}>
+                  <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", marginBottom: 8 }}>Photo / Video URL <span style={{ color: "rgba(255,255,255,0.2)" }}>(optional but recommended)</span></div>
+                  <input
+                    value={mediaUrl}
+                    onChange={e => setMediaUrl(e.target.value)}
+                    placeholder="e.g. https://photos.google.com/... or YouTube link"
+                    style={inp}
+                  />
+                  <div style={{ fontSize: 12, color: "rgba(255,255,255,0.25)", marginBottom: 14, lineHeight: 1.6 }}>
+                    Upload your photo/video to Google Photos, YouTube, or Dropbox and paste the link here. This evidence is key to your pastor's review.
+                  </div>
+                </div>
+
+                {/* Error */}
+                {error && (
+                  <div style={{ background: "rgba(240,82,82,0.1)", border: "1px solid rgba(240,82,82,0.3)", borderRadius: 10, padding: "10px 14px", marginBottom: 16, fontSize: 13, color: "#f05252" }}>
+                    ⚠ {error}
+                  </div>
+                )}
+
+                {/* Submit */}
+                <button onClick={handleSubmit} disabled={submitting || !description.trim()}
+                  style={{ width: "100%", padding: "15px 0", borderRadius: 14, border: "none",
+                    background: description.trim() ? "linear-gradient(135deg,#e8b34b,#c8942b)" : "rgba(255,255,255,0.06)",
+                    color: description.trim() ? "#000" : "rgba(255,255,255,0.25)",
+                    fontWeight: 700, cursor: description.trim() && !submitting ? "pointer" : "default",
+                    fontSize: 15, fontFamily: "Georgia, serif",
+                    boxShadow: description.trim() ? "0 6px 24px rgba(232,179,75,0.4)" : "none",
+                    opacity: submitting ? 0.7 : 1, transition: "all .2s" }}>
+                  {submitting ? "Submitting..." : "✝  Submit Milestone Proof to Pastor"}
+                </button>
+
+                <div style={{ textAlign: "center", fontSize: 12, color: "rgba(255,255,255,0.2)", marginTop: 14 }}>
+                  Your pastor will be notified to review this proof. Funds are only released after their approval.
+                </div>
+              </>
             )}
-
-            {/* Submit */}
-            <button onClick={handleSubmit} disabled={submitting || !description.trim()}
-              style={{ width: "100%", padding: "15px 0", borderRadius: 14, border: "none",
-                background: description.trim() ? "linear-gradient(135deg,#e8b34b,#c8942b)" : "rgba(255,255,255,0.06)",
-                color: description.trim() ? "#000" : "rgba(255,255,255,0.25)",
-                fontWeight: 700, cursor: description.trim() && !submitting ? "pointer" : "default",
-                fontSize: 15, fontFamily: "Georgia, serif",
-                boxShadow: description.trim() ? "0 6px 24px rgba(232,179,75,0.4)" : "none",
-                opacity: submitting ? 0.7 : 1, transition: "all .2s" }}>
-              {submitting ? "Submitting..." : "✝  Submit Milestone Proof to Pastor"}
-            </button>
-
-            <div style={{ textAlign: "center", fontSize: 12, color: "rgba(255,255,255,0.2)", marginTop: 14 }}>
-              Your pastor will be notified to review this proof. Funds are only released after their approval.
-            </div>
           </>
         )}
       </div>

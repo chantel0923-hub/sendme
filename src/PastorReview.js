@@ -9,6 +9,12 @@ export default function PastorReview({ onBack, user, isAdmin }) {
   const [notes, setNotes]       = useState({});   // { [proofId]: string }
   const [error, setError]       = useState("");
   const [filter, setFilter]     = useState("pending");
+  // #98 — inline editor state for defining a milestone's requirements when
+  // none exist yet. Keyed by proof id since each proof card gets its own
+  // editor instance.
+  const [editingDetail, setEditingDetail] = useState(null); // proof id currently being edited
+  const [detailDraft, setDetailDraft]     = useState({});   // { [proofId]: string }
+  const [savingDetail, setSavingDetail]   = useState(null);
 
   useEffect(() => {
     loadProofs();
@@ -26,7 +32,7 @@ export default function PastorReview({ onBack, user, isAdmin }) {
         .select(`
           id, mission_id, milestone_number, description, media_url,
           submitted_at, status, reviewed_at, pastor_notes,
-          missions ( id, title, country, city, church_id, church_name, current_milestone, missionary_role, missionary_email )
+          missions ( id, title, country, city, church_id, church_name, current_milestone, missionary_role, missionary_email, milestone_1_detail, milestone_2_detail, milestone_3_detail )
         `)
         .order("submitted_at", { ascending: false });
 
@@ -114,6 +120,37 @@ export default function PastorReview({ onBack, user, isAdmin }) {
     if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
     if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
     return `${Math.floor(diff / 86400)}d ago`;
+  };
+
+  // #98 — resolve the milestone_N_detail column matching this proof's
+  // specific milestone number (NOT the mission's current_milestone, since a
+  // pastor may be looking at an already-reviewed proof for an earlier one).
+  const getMilestoneDetail = (mission, milestoneNumber) => {
+    if (!mission) return null;
+    return mission[`milestone_${milestoneNumber}_detail`] || null;
+  };
+
+  const saveMilestoneDetail = async (proof) => {
+    const text = (detailDraft[proof.id] || "").trim();
+    if (!text) return;
+    setSavingDetail(proof.id);
+    try {
+      const { error } = await supabase
+        .from("missions")
+        .update({ [`milestone_${proof.milestone_number}_detail`]: text })
+        .eq("id", proof.mission_id);
+      if (error) throw error;
+      // Reflect the change locally without a full reload
+      setProofs(prev => prev.map(p =>
+        p.mission_id === proof.mission_id
+          ? { ...p, missions: { ...p.missions, [`milestone_${proof.milestone_number}_detail`]: text } }
+          : p
+      ));
+      setEditingDetail(null);
+    } catch (e) {
+      setError("Could not save milestone detail. (" + (e.message || "") + ")");
+    }
+    setSavingDetail(null);
   };
 
   const displayed = proofs.filter(p => filter === "all" ? true : p.status === filter);
@@ -216,6 +253,51 @@ export default function PastorReview({ onBack, user, isAdmin }) {
                       <span style={{ fontSize: 11, color: "rgba(255,255,255,0.25)" }}>{timeAgo(proof.submitted_at)}</span>
                     </div>
                   </div>
+
+                  {/* #98 — what this specific milestone requires. If the
+                      pastor hasn't defined it yet, let them do so right
+                      here, since they're the one who actually knows. */}
+                  {(() => {
+                    const detail = getMilestoneDetail(m, proof.milestone_number);
+                    const isEditing = editingDetail === proof.id;
+                    return (
+                      <div style={{ background: "rgba(91,156,246,0.06)", borderRadius: 12, border: "1px solid rgba(91,156,246,0.18)", padding: "12px 16px", marginBottom: 14 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: "#5b9cf6" }}>Milestone {proof.milestone_number} requirements</div>
+                          {!isEditing && (
+                            <button onClick={() => { setEditingDetail(proof.id); setDetailDraft(d => ({ ...d, [proof.id]: detail || "" })); }}
+                              style={{ background: "none", border: "none", color: "rgba(255,255,255,0.3)", fontSize: 11, cursor: "pointer", fontFamily: "Georgia, serif", textDecoration: "underline" }}>
+                              {detail ? "Edit" : "+ Define this milestone"}
+                            </button>
+                          )}
+                        </div>
+                        {isEditing ? (
+                          <div>
+                            <textarea
+                              value={detailDraft[proof.id] || ""}
+                              onChange={e => setDetailDraft(d => ({ ...d, [proof.id]: e.target.value }))}
+                              placeholder="What does the missionary need to accomplish and report on for this milestone?"
+                              style={{ width: "100%", padding: "10px 12px", borderRadius: 8, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", color: "#eef1ff", fontSize: 13, fontFamily: "Georgia, serif", outline: "none", resize: "vertical", minHeight: 60, boxSizing: "border-box", marginBottom: 8 }}
+                            />
+                            <div style={{ display: "flex", gap: 8 }}>
+                              <button onClick={() => saveMilestoneDetail(proof)} disabled={savingDetail === proof.id || !(detailDraft[proof.id] || "").trim()}
+                                style={{ padding: "6px 14px", borderRadius: 8, border: "none", background: "#5b9cf6", color: "#000", fontWeight: 700, cursor: "pointer", fontSize: 12, fontFamily: "Georgia, serif" }}>
+                                {savingDetail === proof.id ? "Saving..." : "Save"}
+                              </button>
+                              <button onClick={() => setEditingDetail(null)}
+                                style={{ padding: "6px 14px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.1)", background: "transparent", color: "rgba(255,255,255,0.4)", cursor: "pointer", fontSize: 12, fontFamily: "Georgia, serif" }}>
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div style={{ fontSize: 13, color: "rgba(255,255,255,0.55)", lineHeight: 1.6 }}>
+                            {detail || "Not defined yet — the missionary won't see specific requirements until you add them."}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
 
                   {/* Description */}
                   <div style={{ background: "rgba(255,255,255,0.03)", borderRadius: 12, border: "1px solid rgba(255,255,255,0.06)", padding: "14px 16px", marginBottom: 14 }}>
