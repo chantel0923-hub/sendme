@@ -39,10 +39,36 @@ export default function PayoutSetup({ onBack, user }) {
   const [saving, setSaving] = useState(false);
   const [done, setDone]     = useState(false);
   const [error, setError]   = useState("");
+  // #105 — was the save that just completed the "link mission to church"
+  // path (writes no new banking) rather than an actual banking save? Used
+  // to show accurate, non-misleading copy on the success screen.
+  const [savedAsLinkOnly, setSavedAsLinkOnly] = useState(false);
+  // #105 — does the currently-selected church already have its OWN banking
+  // on file? Checked live so a missionary/pastor can see this BEFORE
+  // saving, instead of discovering later that nothing was actually set up.
+  const [selectedChurchHasBanking, setSelectedChurchHasBanking] = useState(null); // null = not checked yet
 
   // #68: true only when a missionary (not a pastor on their own church's flow)
   // has chosen to receive funds via a church's own registered banking.
   const receivingViaChurch = mode !== "church" && form.recipient_type === "church";
+
+  useEffect(() => {
+    // #105 — live-check whether the chosen church already has banking saved.
+    // This is the check that was missing: the UI previously let someone
+    // link a mission to a church and call it "done" with zero visibility
+    // into whether that church could actually be paid.
+    if (!receivingViaChurch || !selectedChurchId) { setSelectedChurchHasBanking(null); return; }
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("payout_details")
+        .select("id")
+        .eq("church_id", selectedChurchId)
+        .maybeSingle();
+      if (!cancelled) setSelectedChurchHasBanking(!!data);
+    })();
+    return () => { cancelled = true; };
+  }, [receivingViaChurch, selectedChurchId]);
 
   useEffect(() => {
     const load = async () => {
@@ -118,6 +144,7 @@ export default function PayoutSetup({ onBack, user }) {
     try {
       let dbError;
       if (mode === "church" && myChurch) {
+        setSavedAsLinkOnly(false);
         ({ error: dbError } = await supabase
           .from("payout_details")
           .upsert({
@@ -135,11 +162,19 @@ export default function PayoutSetup({ onBack, user }) {
         // links to a church at application time. No payout_details row is
         // written here; the church's own banking (set up via the "church"
         // mode above) is what actually gets used.
+        //
+        // #105 — this path was previously indistinguishable from an actual
+        // banking save on the success screen, which is how a completed
+        // "link mission to church" got mistaken for "banking is set up."
+        // savedAsLinkOnly flags this so the done screen can say what
+        // actually happened.
         ({ error: dbError } = await supabase
           .from("missions")
           .update({ church_id: selectedChurchId })
           .eq("id", selectedId));
+        setSavedAsLinkOnly(true);
       } else {
+        setSavedAsLinkOnly(false);
         ({ error: dbError } = await supabase
           .from("payout_details")
           .upsert({
@@ -151,9 +186,20 @@ export default function PayoutSetup({ onBack, user }) {
       if (dbError) throw dbError;
       setDone(true);
     } catch (e) {
-      const msg = e?.message || e?.details || "Please try again or contact SendMe support.";
-      setError("Could not save banking details: " + msg);
       console.error("PayoutSetup error:", e);
+      // #104 — same RLS-message clarity treatment as #95: a raw Postgres
+      // RLS error ("new row violates row-level security policy...") isn't
+      // actionable for a pastor/missionary reading it. If this is an RLS
+      // block specifically, say so in plain language instead. The
+      // underlying policy itself is a database-level fix, not something
+      // this client-side change can correct on its own — see handover doc
+      // for the outstanding RLS policy question.
+      const isRlsBlock = e?.message?.includes("row-level security policy") || e?.code === "42501";
+      setError(
+        isRlsBlock
+          ? "Could not save banking details — your account doesn't currently have permission to save this. This looks like a setup issue on SendMe's side, not something wrong with what you entered. Please contact SendMe support via the FAQ page so Admin can look into it."
+          : "Could not save banking details: " + (e?.message || e?.details || "Please try again or contact SendMe support.")
+      );
     }
     setSaving(false);
   };
@@ -163,11 +209,19 @@ export default function PayoutSetup({ onBack, user }) {
       <div style={{ minHeight: "100vh", background: "#060c18", color: "#eef1ff", fontFamily: "Georgia, serif", display: "flex", alignItems: "center", justifyContent: "center", padding: 32 }}>
         <div style={{ textAlign: "center", maxWidth: 480 }}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>🙏</div>
-          <div style={{ fontSize: 24, fontWeight: 700, marginBottom: 12 }}>Banking Details Saved</div>
+          <div style={{ fontSize: 24, fontWeight: 700, marginBottom: 12 }}>
+            {savedAsLinkOnly ? "Mission Linked to Church" : "Banking Details Saved"}
+          </div>
           <div style={{ fontSize: 14, color: "rgba(255,255,255,0.5)", lineHeight: 1.7, marginBottom: 24 }}>
-            Thank you, brother/sister. Your payout details have been securely recorded.
-            When your mission reaches a funding milestone, SendMe will transfer the
-            released funds to this account.
+            {savedAsLinkOnly ? (
+              selectedChurchHasBanking ? (
+                <>Your mission is now linked to this church, which already has banking on file. Funds will go there once a milestone is reached — no further action needed.</>
+              ) : (
+                <>Your mission is now linked to this church. <strong style={{ color: "#e8b34b" }}>Note: no banking details were saved just now</strong> — this only connects your mission to the church. The church's own pastor still needs to log in and complete their own Payout Setup for funds to actually be payable. If you're not sure whether that's been done, please check with your church.</>
+              )
+            ) : (
+              <>Thank you, brother/sister. Your payout details have been securely recorded. When your mission reaches a funding milestone, SendMe will transfer the released funds to this account.</>
+            )}
           </div>
           <button onClick={onBack} style={{ padding: "14px 32px", borderRadius: 14, border: "none", background: "linear-gradient(135deg,#e8b34b,#c8942b)", color: "#000", fontWeight: 700, cursor: "pointer", fontSize: 15, fontFamily: "Georgia, serif" }}>
             Back to Home
@@ -249,8 +303,18 @@ export default function PayoutSetup({ onBack, user }) {
               ))}
             </select>
             <div style={{ background: "rgba(232,179,75,0.07)", borderRadius: 12, border: "1px solid rgba(232,179,75,0.2)", padding: "12px 14px", marginBottom: 14, fontSize: 13, color: "rgba(255,255,255,0.5)", lineHeight: 1.6 }}>
-              Your mission will be linked to this church. Funds will be sent to the church's own registered banking details — you don't need to enter separate bank details. If the church hasn't set up its banking yet, payouts will show as pending until they do.
+              Your mission will be linked to this church. Funds will be sent to the church's own registered banking details — you don't need to enter separate bank details here.
             </div>
+            {selectedChurchId && selectedChurchHasBanking === true && (
+              <div style={{ background: "rgba(62,207,142,0.08)", border: "1px solid rgba(62,207,142,0.25)", borderRadius: 10, padding: "10px 14px", marginBottom: 14, fontSize: 13, color: "#3ecf8e" }}>
+                ✓ This church already has banking details on file — you're good to go.
+              </div>
+            )}
+            {selectedChurchId && selectedChurchHasBanking === false && (
+              <div style={{ background: "rgba(232,91,91,0.08)", border: "1px solid rgba(232,91,91,0.25)", borderRadius: 10, padding: "10px 14px", marginBottom: 14, fontSize: 13, color: "#e85b5b" }}>
+                ⚠ This church has NOT set up its banking details yet. Linking your mission here now is fine, but payouts won't be possible until the church's own pastor completes their Payout Setup.
+              </div>
+            )}
           </>
         ) : (
           <>
