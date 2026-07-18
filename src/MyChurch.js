@@ -2,13 +2,15 @@ import { useState, useEffect } from "react";
 import { supabase } from "./supabase";
 import ChurchRegistration from "./ChurchRegistration";
 
-export default function MyChurch({ onBack, user, userRole }) {
+export default function MyChurch({ onBack, user, userRole, onPayout }) {
   const [loading, setLoading] = useState(true);
   const [church, setChurch]   = useState(null);
   const [form, setForm]       = useState(null);
   const [saving, setSaving]   = useState(false);
   const [saved, setSaved]     = useState(false);
   const [error, setError]     = useState("");
+  // Has this church's own banking been saved yet? null = not checked yet.
+  const [hasBanking, setHasBanking] = useState(null);
 
   // Prefer the saved record's own entity_type (authoritative), fall back to
   // the account's role for the pre-registration screen where no record exists yet.
@@ -40,6 +42,14 @@ export default function MyChurch({ onBack, user, userRole }) {
             show_phone_public:  !!data.show_phone_public,
             can_endorse:        !!data.can_endorse,
           });
+          // Banking status — shown so a pastor doesn't have to guess or
+          // dig through a separate menu to find out whether this is done.
+          const { data: banking } = await supabase
+            .from("payout_details")
+            .select("id")
+            .eq("church_id", data.id)
+            .maybeSingle();
+          setHasBanking(!!banking);
         }
       } catch (e) {
         setError("Could not load your church details. (" + (e.message || "") + ")");
@@ -117,6 +127,34 @@ export default function MyChurch({ onBack, user, userRole }) {
             ⏳ Your {isOrg ? "organization" : "church"} is still pending admin verification.
           </div>
         )}
+
+        {/* Banking Details — previously missing entirely from this screen,
+            which is where a pastor naturally looks first. Links directly
+            into Payout Setup's church-banking mode rather than leaving
+            someone to find the separate "Payouts" menu on their own. */}
+        <div style={{
+          background: hasBanking ? "rgba(62,207,142,0.06)" : "rgba(232,91,91,0.06)",
+          border: `1px solid ${hasBanking ? "rgba(62,207,142,0.25)" : "rgba(232,91,91,0.25)"}`,
+          borderRadius: 14, padding: "16px 18px", marginBottom: 20,
+          display: "flex", justifyContent: "space-between", alignItems: "center", gap: 14, flexWrap: "wrap",
+        }}>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: hasBanking ? "#3ecf8e" : "#e85b5b", marginBottom: 4 }}>
+              {hasBanking ? "✓ Banking Details On File" : "⚠ Banking Details Not Set Up"}
+            </div>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", lineHeight: 1.6 }}>
+              {hasBanking
+                ? "SendMe can send released funds to this account."
+                : "Funds can't be paid out to this " + (isOrg ? "organization" : "church") + " until this is completed."}
+            </div>
+          </div>
+          {onPayout && (
+            <button onClick={onPayout} style={{ padding: "10px 18px", borderRadius: 10, border: "none", background: hasBanking ? "rgba(62,207,142,0.15)" : "linear-gradient(135deg,#e8b34b,#c8942b)", color: hasBanking ? "#3ecf8e" : "#000", fontWeight: 700, cursor: "pointer", fontSize: 13, fontFamily: "Georgia, serif", whiteSpace: "nowrap" }}>
+              {hasBanking ? "Edit Banking Details" : "Set Up Banking Details"}
+            </button>
+          )}
+        </div>
+
         {error && (
           <div style={{ background: "rgba(240,82,82,0.1)", border: "1px solid rgba(240,82,82,0.3)", borderRadius: 10, padding: "10px 14px", marginBottom: 16, fontSize: 13, color: "#f05252" }}>
             ⚠ {error}

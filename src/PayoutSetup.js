@@ -72,10 +72,16 @@ export default function PayoutSetup({ onBack, user }) {
 
   useEffect(() => {
     const load = async () => {
-      const { data: missionData } = await supabase
+      // Scoped to the logged-in missionary/pastor's own missions now that
+      // `user` is actually reaching this component (see App.js fix — this
+      // screen previously loaded every mission in the database into the
+      // dropdown for anyone, since there was no user to filter by at all).
+      let missionQuery = supabase
         .from("missions")
-        .select("id, title, missionary_role, city, country")
+        .select("id, title, missionary_role, city, country, missionary_id")
         .order("created_at", { ascending: false });
+      if (user?.id) missionQuery = missionQuery.eq("missionary_id", user.id);
+      const { data: missionData } = await missionQuery;
       setMissions(missionData || []);
 
       // #68: real list of verified churches, for the missionary "receiving as a church" flow

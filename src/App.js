@@ -1981,13 +1981,13 @@ export default function App() {
 
   if(screen==="donor-browse")    return <DonorBrowse onBack={()=>setScreen("home")} onMission={openMission} user={user}/>;
   if(screen==="faq")              return <FAQScreen onBack={()=>setScreen("home")}/>;
-  if(screen==="payout")           return <PayoutSetup onBack={()=>setScreen("home")}/>;
+  if(screen==="payout")           return <PayoutSetup onBack={()=>setScreen("home")} user={user}/>;
   if(screen==="admin-payouts")    return isAdminUser ? <AdminPayouts onBack={()=>setScreen("home")}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
   if(screen==="pray")             return <PrayerWall missions={liveMissions} onBack={()=>setScreen("home")}/>;
   if(screen==="churches")         return <ChurchesTab onBack={()=>setScreen("home")}/>;
   if(screen==="apply")            return guest ? <GuestBlocked title="Registration Required" message="Applying as a missionary requires a SendMe account so your application can be tracked and your church can endorse you. Please sign in or register to continue." onBack={()=>setScreen("home")} onRegister={()=>{setGuest(false);setScreen("home");}}/> : userRole==="donor" ? <GuestBlocked title="Not Available for Donors" message="Applying as a missionary isn't available on a Donor/Supporter account. If you're called to the mission field, please register a separate missionary account, or contact admin to update your role." onBack={()=>setScreen("home")} primaryLabel="Back to Home" onPrimary={()=>setScreen("home")}/> : <MissionaryApplication onBack={()=>setScreen("home")} user={user}/>;
   if(screen==="church")           return (isPastor||isAdminUser) ? <ChurchRegistration onBack={()=>setScreen("home")} user={user} userRole={userRole}/> : null;
-  if(screen==="my-church")        return (isPastor||isAdminUser) ? <MyChurch onBack={()=>setScreen("home")} user={user} userRole={userRole}/> : null;
+  if(screen==="my-church")        return (isPastor||isAdminUser) ? <MyChurch onBack={()=>setScreen("home")} user={user} userRole={userRole} onPayout={()=>setScreen("payout")}/> : null;
   if(screen==="profile")          return <DonorProfile user={user} onBack={()=>setScreen("home")} userRole={userRole} isAdmin={isAdminUser}/>;
   if(screen==="emergency")        return guest ? <GuestBlocked title="Registration Required" message="Submitting an emergency mission request requires a SendMe account, so admin can verify and follow up with you directly. Please sign in or register to continue." onBack={()=>setScreen("home")} onRegister={()=>{setGuest(false);setScreen("home");}}/> : <EmergencyRequests onBack={()=>setScreen("home")} user={user} userRole={userRole}/>;
   if(screen==="matching")         return <MissionMatching missions={liveMissions} onMission={openMission} onBack={()=>setScreen("home")}/>;
