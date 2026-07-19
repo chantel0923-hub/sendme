@@ -42,14 +42,14 @@ const TEMPLATES: Record<string, (d: any) => string> = {
     `🚨 SendMe — Emergency Request\n\n` +
     `*${d.title}*\n` +
     `📍 ${d.country} | Urgency: ${d.urgency || "unspecified"}\n` +
-    `💰 Goal: $${d.goal || "unset"}\n\n` +
+    `💰 Goal: USD ${d.goal || "unset"}\n\n` +
     `⚠ Review in Admin → Payouts → Emergency`,
   donation_received: (d) =>
     `💝 SendMe — New Donation Received\n\n` +
-    `💰 $${d.amount || 0} — *${d.missionTitle || "a mission"}*\n` +
+    `💰 USD ${d.amount || 0} — *${d.missionTitle || "a mission"}*\n` +
     `👤 ${d.donorName || "Anonymous"}${d.isGuest ? " (guest checkout)" : ""}\n` +
     `✉ ${d.donorEmail || "no email given"}\n\n` +
-    `📊 Now at $${d.totalRaised || 0} of $${d.goal || "?"}\n\n` +
+    `📊 Now at USD ${d.totalRaised || 0} of USD ${d.goal || "?"}\n\n` +
     `View: ${d.missionUrl || "Admin → Payouts"}`,
   banking_missing: (d) =>
     `⚠ SendMe — Banking Details Missing\n\n` +
@@ -59,7 +59,7 @@ const TEMPLATES: Record<string, (d: any) => string> = {
   payout_processed: (d) =>
     `💸 SendMe — Payout Processed\n\n` +
     `📋 *${d.missionTitle}*\n` +
-    `💰 $${d.amount || 0} — milestone ${d.milestone || "?"}\n` +
+    `💰 USD ${d.amount || 0} — milestone ${d.milestone || "?"}\n` +
     `👤 To: ${d.recipientName || "pastor/church"}\n\n` +
     `✅ Marked as paid in Admin → Payouts`,
   support_contact: (d) =>
