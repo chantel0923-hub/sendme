@@ -7,6 +7,12 @@ export default function MilestoneProof({ onBack, user }) {
   const [selected, setSelected]     = useState(null);
   const [description, setDescription] = useState("");
   const [mediaUrl, setMediaUrl]     = useState("");
+  // #97 — optional impact numbers reported alongside the field report. Only
+  // added to the mission's running totals once the pastor approves this
+  // proof (see PastorReview.js), same trust model as fund release.
+  const [soulsReached, setSoulsReached]         = useState("");
+  const [biblesDistributed, setBiblesDistributed] = useState("");
+  const [churchesStarted, setChurchesStarted]   = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess]       = useState(false);
   const [error, setError]           = useState("");
@@ -85,6 +91,9 @@ export default function MilestoneProof({ onBack, user }) {
         milestone_number: selected.current_milestone || 1,
         description: description.trim(),
         media_url: mediaUrl.trim() || null,
+        souls_reached: soulsReached ? Number(soulsReached) : null,
+        bibles_distributed: biblesDistributed ? Number(biblesDistributed) : null,
+        churches_started: churchesStarted ? Number(churchesStarted) : null,
         status: "pending",
         submitted_at: new Date().toISOString(),
       });
@@ -94,6 +103,10 @@ export default function MilestoneProof({ onBack, user }) {
         missionaryName: user?.user_metadata?.full_name,
         missionTitle: selected.title,
         milestoneNumber: selected.current_milestone || 1,
+        // #101 — previously not passed at all, so the email's "Review Proof
+        // Now" button always fell back to the bare homepage instead of
+        // taking the pastor anywhere useful.
+        reviewUrl: `${window.location.origin}/pastor-review`,
       });
       setSuccess(true);
     } catch (e) {
@@ -250,6 +263,28 @@ export default function MilestoneProof({ onBack, user }) {
                   />
                   <div style={{ fontSize: 12, color: "rgba(255,255,255,0.25)", marginBottom: 14, lineHeight: 1.6 }}>
                     Upload your photo/video to Google Photos, YouTube, or Dropbox and paste the link here. This evidence is key to your pastor's review.
+                  </div>
+                </div>
+
+                {/* #97 — impact numbers. Optional, and only added to the
+                    mission's public totals once your pastor approves this
+                    proof — so the numbers on Mission Detail are always
+                    pastor-verified, not self-reported. */}
+                <div style={{ marginBottom: 6 }}>
+                  <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", marginBottom: 8 }}>Impact This Milestone <span style={{ color: "rgba(255,255,255,0.2)" }}>(optional — counted toward the mission's public totals once approved)</span></div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 14 }}>
+                    <div>
+                      <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", marginBottom: 4 }}>🙏 Souls Reached</div>
+                      <input type="number" min="0" value={soulsReached} onChange={e => setSoulsReached(e.target.value)} placeholder="0" style={{ ...inp, marginBottom: 0 }} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", marginBottom: 4 }}>📖 Bibles Given</div>
+                      <input type="number" min="0" value={biblesDistributed} onChange={e => setBiblesDistributed(e.target.value)} placeholder="0" style={{ ...inp, marginBottom: 0 }} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", marginBottom: 4 }}>⛪ Churches Started</div>
+                      <input type="number" min="0" value={churchesStarted} onChange={e => setChurchesStarted(e.target.value)} placeholder="0" style={{ ...inp, marginBottom: 0 }} />
+                    </div>
                   </div>
                 </div>
 
