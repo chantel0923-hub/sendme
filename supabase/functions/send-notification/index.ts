@@ -27,6 +27,19 @@ const CORS_HEADERS = {
 // because Outlook desktop/Windows Mail render via the Word engine, which strips
 // div background colors, border-radius, linear-gradient, and centered max-width
 // containers. Tables + bgcolor are the only reliably cross-client approach for HTML email.
+// #100 — some pastors' stored display names already include "Pastor" (e.g.
+// "Pastor Donnie"), while others just store a plain first name. Templates
+// that hardcode "Dear Pastor {name}" produced "Dear Pastor Pastor Donnie"
+// for the former group. This strips any leading title before re-adding
+// "Pastor" once, consistently, regardless of how the name was originally
+// entered.
+function withPastorTitle(name?: string): string {
+  const clean = (name || "").trim();
+  if (!clean) return "Pastor";
+  const stripped = clean.replace(/^(pastor|pr|rev(?:erend)?|bishop)\.?\s+/i, "");
+  return `Pastor ${stripped}`;
+}
+
 function wrapEmail(title: string, bodyHtml: string, ctaText?: string, ctaUrl?: string) {
   return `
   <!--[if mso]>
@@ -113,7 +126,7 @@ const TEMPLATES: Record<string, (d: any) => { subject: string; html: string }> =
     subject: `New milestone proof awaiting your review — ${d.missionTitle}`,
     html: wrapEmail(
       "Milestone Proof Submitted",
-      `Dear Pastor ${d.pastorName || ""},<br/><br/>
+      `Dear ${withPastorTitle(d.pastorName)},<br/><br/>
       ${d.missionaryName || "Your missionary"} has submitted proof for milestone ${d.milestoneNumber} of
       <strong style="color:#e8b34b;">${d.missionTitle}</strong>. Please review and approve so the next
       milestone's funds can be released.`,
@@ -240,7 +253,7 @@ const TEMPLATES: Record<string, (d: any) => { subject: string; html: string }> =
     subject: `Action needed: Please submit your church banking details — ${d.missionTitle}`,
     html: wrapEmail(
       "Banking Details Required",
-      `Dear Pastor ${d.pastorName || ""},<br/><br/>
+      `Dear ${withPastorTitle(d.pastorName)},<br/><br/>
       A missionary from <strong style="color:#e8b34b;">${d.churchName || "your church"}</strong> has reached
       a funding milestone for the mission <strong style="color:#e8b34b;">${d.missionTitle}</strong> and funds
       are ready to be released.<br/><br/>
