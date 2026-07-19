@@ -299,7 +299,7 @@ const UpdatesFeed = ({ missionId, missionColor, missionName, canPost, guest }) =
   );
 };
 
-const PrayerChain = ({ missionId, missionColor, initialCount=0 }) => {
+const PrayerChain = ({ missionId, missionColor, initialCount=0, onViewAll }) => {
   const [praying, setPraying]   = useState(false);
   const [count, setCount]       = useState(initialCount);
   const [joined, setJoined]     = useState(false);
@@ -307,6 +307,10 @@ const PrayerChain = ({ missionId, missionColor, initialCount=0 }) => {
   const [submitted, setSubmitted] = useState(false);
   const [chainError, setChainError]     = useState("");
   const [requestError, setRequestError] = useState("");
+  // #96 — a small preview of this mission's own submitted text requests, so
+  // "where did my request go?" has a visible answer right on this page,
+  // not just a one-line confirmation that then vanishes from view.
+  const [recentRequests, setRecentRequests] = useState([]);
 
   // #78: the missions.prayers column (initialCount) is never actually
   // incremented anywhere — it's stale demo data. The real number of people
@@ -336,6 +340,16 @@ const PrayerChain = ({ missionId, missionColor, initialCount=0 }) => {
             .limit(1);
           if (existing && existing.length > 0) setJoined(true);
         }
+
+        // #96 — recent text requests for this specific mission
+        const { data: reqData } = await supabase
+          .from("mission_prayers")
+          .select("id, text, created_at")
+          .eq("mission_id", missionId)
+          .eq("type", "request")
+          .order("created_at", { ascending: false })
+          .limit(3);
+        setRecentRequests(reqData || []);
       } catch {}
     };
     loadRealCount();
@@ -379,6 +393,7 @@ const PrayerChain = ({ missionId, missionColor, initialCount=0 }) => {
       const { error } = await supabase.from("mission_prayers").insert({ mission_id:missionId, type:"request", text:request.trim(), donor_id: uid });
       if (error) throw error;
       setSubmitted(true);
+      setRecentRequests(prev => [{ id: `local-${Date.now()}`, text: request.trim(), created_at: new Date().toISOString() }, ...prev].slice(0, 3));
     } catch (e) {
       console.error("submitRequest error:", e);
       setRequestError(friendlyError(e));
@@ -429,6 +444,26 @@ const PrayerChain = ({ missionId, missionColor, initialCount=0 }) => {
         <div style={{ background:"rgba(62,207,142,0.08)",borderRadius:12,border:"1px solid rgba(62,207,142,0.25)",padding:"12px 16px",fontSize:13,color:"#3ecf8e" }}>
           ✓ Your prayer request has been submitted. Thank you for interceding!
         </div>
+      )}
+
+      {/* #96 — visible answer to "where did my request go?" plus a link to
+          the full Prayer Wall, scoped to this mission. */}
+      {recentRequests.length > 0 && (
+        <div style={{ marginTop: 14 }}>
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", marginBottom: 8 }}>Recent requests for this mission</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {recentRequests.map(r => (
+              <div key={r.id} style={{ background: "rgba(255,255,255,0.02)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.06)", padding: "10px 12px", fontSize: 13, color: "rgba(255,255,255,0.6)", lineHeight: 1.5 }}>
+                {r.text}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {onViewAll && (
+        <button onClick={onViewAll} style={{ marginTop: 14, width: "100%", padding: "10px 0", borderRadius: 10, border: `1px solid ${missionColor}44`, background: "transparent", color: missionColor, fontWeight: 700, cursor: "pointer", fontSize: 13, fontFamily: "Georgia, serif" }}>
+          🙏 View All Prayer Requests for This Mission →
+        </button>
       )}
     </div>
   );
@@ -741,7 +776,7 @@ const PayfastResultScreen = ({ status, amount, onContinue }) => (
   </div>
 );
 
-const MissionDetail = ({ mission: m, onBack, onDonate, onLedger, user, userRole, guest, isAdmin, onBrowseMissions }) => {
+const MissionDetail = ({ mission: m, onBack, onDonate, onLedger, user, userRole, guest, isAdmin, onBrowseMissions, onViewPrayerWall }) => {
   const [proofTab,setProofTab]     = useState("photos");
   const [proofItems,setProofItems] = useState([]);
   const [proofLoaded,setProofLoaded] = useState(false);
@@ -865,7 +900,7 @@ const MissionDetail = ({ mission: m, onBack, onDonate, onLedger, user, userRole,
         <BudgetBreakdown budget={m.budget} goal={m.goal} color={m.color} />
         <UpdatesFeed missionId={m.id} missionColor={m.color} missionName={m.protected?"Missionary":m.name}
           canPost={canPostUpdates} guest={guest} />
-        <PrayerChain missionId={m.id} missionColor={m.color} initialCount={m.prayers||0} />
+        <PrayerChain missionId={m.id} missionColor={m.color} initialCount={m.prayers||0} onViewAll={onViewPrayerWall} />
         <div style={{ padding:"24px 0",borderBottom:"1px solid rgba(255,255,255,0.06)" }}>
           <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16 }}>
             <div style={{ fontSize:16,fontWeight:700,color:"#eef1ff" }}>Proof of Work</div>
@@ -936,7 +971,7 @@ const MissionDetail = ({ mission: m, onBack, onDonate, onLedger, user, userRole,
   );
 };
 
-const PrayerWall = ({ missions, onBack }) => {
+const PrayerWall = ({ missions, onBack, filterMissionId }) => {
   const [joined, setJoined]           = useState({});
   const [allRequests, setAllRequests] = useState([]);
   const [loadingPrayer, setLoadingPrayer] = useState(true);
@@ -944,6 +979,10 @@ const PrayerWall = ({ missions, onBack }) => {
   const [totalChainCount, setTotalChainCount] = useState(0);
   // #78: per-mission chain counts, so each request card shows its mission's real count
   const [chainCountByMission, setChainCountByMission] = useState({});
+  // #96 — local override so "clear filter" works without needing to navigate
+  // away and back; starts matching whatever filter we were opened with.
+  const [filterCleared, setFilterCleared] = useState(false);
+  const activeFilterMissionId = filterCleared ? null : filterMissionId;
 
   useEffect(() => {
     const fetchPrayers = async () => {
@@ -1052,6 +1091,17 @@ const PrayerWall = ({ missions, onBack }) => {
       await supabase.from("mission_prayers").insert({ mission_id: r.missionId, type: "chain", donor_id: uid });
     } catch {}
   };
+
+  // #96 — scoped view when opened from a specific mission's "View All" button
+  const displayedRequests = activeFilterMissionId
+    ? allRequests.filter(r => String(r.missionId) === String(activeFilterMissionId))
+    : allRequests;
+  const filteredMissionTitle = activeFilterMissionId
+    ? (allRequests.find(r => String(r.missionId) === String(activeFilterMissionId))?.mission
+       || missions?.find(m => String(m.id) === String(activeFilterMissionId))?.title
+       || "this mission")
+    : null;
+
   return (
     <div style={{ minHeight:"100vh", background:"#060c18", color:"#eef1ff", fontFamily:"Georgia, serif" }}>
       <div style={{ background:"#09111f", borderBottom:"1px solid rgba(255,255,255,0.07)", padding:"16px 24px", display:"flex", alignItems:"center", gap:14, position:"sticky", top:0, zIndex:100 }}>
@@ -1077,18 +1127,26 @@ const PrayerWall = ({ missions, onBack }) => {
             </div>
           ))}
         </div>
+        {activeFilterMissionId && (
+          <div style={{ background:"rgba(91,156,246,0.08)", border:"1px solid rgba(91,156,246,0.25)", borderRadius:12, padding:"12px 16px", marginBottom:20, display:"flex", justifyContent:"space-between", alignItems:"center", gap:12, flexWrap:"wrap" }}>
+            <span style={{ fontSize:13, color:"#5b9cf6" }}>Showing prayer requests for: <strong>{filteredMissionTitle}</strong></span>
+            <button onClick={() => setFilterCleared(true)} style={{ padding:"6px 14px", borderRadius:8, border:"1px solid rgba(91,156,246,0.3)", background:"transparent", color:"#5b9cf6", fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"Georgia, serif" }}>
+              ← View All Missions
+            </button>
+          </div>
+        )}
         {loadingPrayer && (
           <div style={{ textAlign:"center", padding:"40px 0", color:"rgba(255,255,255,0.3)", fontSize:14 }}>
             🙏 Loading prayer requests...
           </div>
         )}
-        {!loadingPrayer && allRequests.length === 0 && (
+        {!loadingPrayer && displayedRequests.length === 0 && (
           <div style={{ textAlign:"center", padding:"40px 0", color:"rgba(255,255,255,0.3)", fontSize:14 }}>
             No prayer requests yet. Missionaries post prayer requests from the Mission Detail screen.
           </div>
         )}
         <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
-          {allRequests.map(r => {
+          {displayedRequests.map(r => {
             const isJoined = joined[r.id];
             const count = r.prayers + (isJoined ? 1 : 0);
             return (
@@ -1409,6 +1467,37 @@ const AdminDropdown = ({ onAdminChurchVerification, onAdminWorkers, onAdminEmerg
 };
 
 // ── HOME SCREEN ───────────────────────────────────────────────────────────────
+// #101/#103 — merged pastor proof screen. A pastor needs both "Submit Proof"
+// (for missions they personally run) and "Approve Proof" (reviewing
+// missionaries under them) reachable from one place, not scattered between
+// a top-nav button and a separate "Payouts" dropdown item. This wraps the
+// existing MilestoneProof and PastorReview components as-is (no internal
+// rewrite, lower risk) with a tab strip on top. Plain missionaries (not
+// pastors) never see this wrapper at all — they go straight to
+// MilestoneProof, unchanged from before.
+const ProofCenter = ({ onBack, user, isAdmin, isPastor, initialTab }) => {
+  const [tab, setTab] = useState(initialTab || "submit");
+  if (!isPastor) return <MilestoneProof onBack={onBack} user={user} />;
+  return (
+    <div style={{ minHeight: "100vh", background: "#060c18" }}>
+      <div style={{ display: "flex", gap: 8, padding: "14px 20px 0", maxWidth: 700, margin: "0 auto" }}>
+        {[["submit", "📋 Submit Proof"], ["approve", "⛪ Approve Proof"]].map(([key, label]) => (
+          <button key={key} onClick={() => setTab(key)}
+            style={{ padding: "10px 18px", borderRadius: "10px 10px 0 0", border: "none", borderBottom: tab === key ? "2px solid #e8b34b" : "2px solid transparent",
+              background: tab === key ? "rgba(232,179,75,0.1)" : "transparent",
+              color: tab === key ? "#e8b34b" : "rgba(255,255,255,0.4)",
+              fontWeight: 700, cursor: "pointer", fontSize: 13, fontFamily: "Georgia, serif" }}>
+            {label}
+          </button>
+        ))}
+      </div>
+      {tab === "submit"
+        ? <MilestoneProof onBack={onBack} user={user} />
+        : <PastorReview onBack={onBack} user={user} isAdmin={isAdmin} />}
+    </div>
+  );
+};
+
 const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, onMyChurch, onChurches, onProfile, onEmergency, onMatching, onPray, onTestimonies, onWorker, onQR, onFaq, onPayout, onAdminPayouts, isAdmin, isPastor, onMilestoneProof, onPastorReview, onMissionaryDashboard, onAdminApprovals, onAdminChurchVerification, guest, onSignIn, onDonate, onAdminWorkers, onAdminEmergency }) => {
   const [region,setRegion]       = useState("All");
   const [missions,setMissions]   = useState([]);
@@ -1876,6 +1965,10 @@ export default function App() {
   const [guest,setGuest]                       = useState(false);
   const [pfReturn,setPfReturn]                 = useState(null);
   const [pendingMissionId,setPendingMissionId] = useState(null);
+  // #96 — when set, Prayer Wall opens pre-filtered to just this mission
+  // (reached via the "View all prayer requests" button on Mission Detail).
+  // The global nav "Pray" button clears this so it always opens unfiltered.
+  const [prayerWallFilterMissionId, setPrayerWallFilterMissionId] = useState(null);
   const [liveMissions,setLiveMissions]         = useState([]);
 
   const loadRole = async (u) => {
@@ -1930,6 +2023,7 @@ export default function App() {
       "/apply":"apply",
       "/register-church":"church",
       "/emergency":"emergency",
+      "/pastor-review":"pastor-review",
     };
     if(ROUTE_SCREENS[path]) setScreen(ROUTE_SCREENS[path]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1983,7 +2077,7 @@ export default function App() {
   if(screen==="faq")              return <FAQScreen onBack={()=>setScreen("home")}/>;
   if(screen==="payout")           return <PayoutSetup onBack={()=>setScreen("home")} user={user}/>;
   if(screen==="admin-payouts")    return isAdminUser ? <AdminPayouts onBack={()=>setScreen("home")}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
-  if(screen==="pray")             return <PrayerWall missions={liveMissions} onBack={()=>setScreen("home")}/>;
+  if(screen==="pray")             return <PrayerWall missions={liveMissions} onBack={()=>setScreen("home")} filterMissionId={prayerWallFilterMissionId}/>;
   if(screen==="churches")         return <ChurchesTab onBack={()=>setScreen("home")}/>;
   if(screen==="apply")            return guest ? <GuestBlocked title="Registration Required" message="Applying as a missionary requires a SendMe account so your application can be tracked and your church can endorse you. Please sign in or register to continue." onBack={()=>setScreen("home")} onRegister={()=>{setGuest(false);setScreen("home");}}/> : userRole==="donor" ? <GuestBlocked title="Not Available for Donors" message="Applying as a missionary isn't available on a Donor/Supporter account. If you're called to the mission field, please register a separate missionary account, or contact admin to update your role." onBack={()=>setScreen("home")} primaryLabel="Back to Home" onPrimary={()=>setScreen("home")}/> : <MissionaryApplication onBack={()=>setScreen("home")} user={user}/>;
   if(screen==="church")           return (isPastor||isAdminUser) ? <ChurchRegistration onBack={()=>setScreen("home")} user={user} userRole={userRole}/> : null;
@@ -1994,15 +2088,15 @@ export default function App() {
   if(screen==="testimonies")      return <TestimonyEngine onBack={()=>setScreen("home")} onMission={openMission}/>;
   if(screen==="worker")           return guest ? <GuestBlocked title="Registration Required" message="Posting or responding to a worker request requires a SendMe account, so churches can coordinate and follow up directly. Please sign in or register to continue." onBack={()=>setScreen("home")} onRegister={()=>{setGuest(false);setScreen("home");}}/> : <SendAWorker onBack={()=>setScreen("home")} user={user}/>;
   if(screen==="qr")               return <QRShare missions={liveMissions} onBack={()=>setScreen("home")}/>;
-  if(screen==="milestone-proof")  return <MilestoneProof onBack={()=>setScreen("home")} user={user}/>;
-  if(screen==="pastor-review")    return (isPastor||isAdminUser) ? <PastorReview onBack={()=>setScreen("home")} user={user} isAdmin={isAdminUser}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
+  if(screen==="milestone-proof")  return <ProofCenter onBack={()=>setScreen("home")} user={user} isAdmin={isAdminUser} isPastor={isPastor} initialTab="submit"/>;
+  if(screen==="pastor-review")    return (isPastor||isAdminUser) ? <ProofCenter onBack={()=>setScreen("home")} user={user} isAdmin={isAdminUser} isPastor={true} initialTab="approve"/> : <FAQScreen onBack={()=>setScreen("home")}/>;
   if(screen==="missionary-dashboard") return <MissionaryDashboard onBack={()=>setScreen("home")} user={user} onSubmitProof={()=>setScreen("milestone-proof")}/>;
   if(screen==="admin-approvals")  return isAdminUser ? <AdminApprovals onBack={()=>setScreen("home")} user={user}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
   if(screen==="admin-church-verification") return isAdminUser ? <AdminChurchVerification onBack={()=>setScreen("home")} user={user}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
   if(screen==="admin-workers")        return isAdminUser ? <AdminWorkerRequests onBack={()=>setScreen("home")}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
   if(screen==="admin-emergency")      return isAdminUser ? <AdminEmergencyRequests onBack={()=>setScreen("home")} adminEmail={user?.email}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
   if(screen==="ledger"&&selectedMission)  return <TransparencyLedger mission={selectedMission} onBack={()=>setScreen("detail")}/>;
-  if(screen==="detail"&&selectedMission)  return <MissionDetail mission={selectedMission} onBack={()=>setScreen("home")} onDonate={openDonate} onLedger={()=>setScreen("ledger")} user={user} userRole={userRole} guest={guest} isAdmin={isAdminUser} onBrowseMissions={()=>setScreen("donor-browse")}/>;
+  if(screen==="detail"&&selectedMission)  return <MissionDetail mission={selectedMission} onBack={()=>setScreen("home")} onDonate={openDonate} onLedger={()=>setScreen("ledger")} user={user} userRole={userRole} guest={guest} isAdmin={isAdminUser} onBrowseMissions={()=>setScreen("donor-browse")} onViewPrayerWall={()=>{ setPrayerWallFilterMissionId(selectedMission.id); setScreen("pray"); }}/>;
   if(screen==="donate"&&selectedMission)  return <DonateScreen mission={selectedMission} onBack={()=>setScreen("detail")} onPayfast={handlePayfastDonate} user={user} onBrowseMissions={()=>setScreen("donor-browse")}/>;
 
   return(
@@ -2012,7 +2106,7 @@ export default function App() {
       onMyChurch={()=>setScreen("my-church")}
       onChurches={()=>setScreen("churches")} onProfile={()=>setScreen("profile")}
       onEmergency={()=>setScreen("emergency")} onMatching={()=>setScreen("matching")}
-      onPray={()=>setScreen("pray")} onTestimonies={()=>setScreen("testimonies")}
+      onPray={()=>{ setPrayerWallFilterMissionId(null); setScreen("pray"); }} onTestimonies={()=>setScreen("testimonies")}
       onWorker={()=>setScreen("worker")} onQR={()=>setScreen("qr")}
       onFaq={()=>setScreen("faq")}
       onPayout={()=>setScreen("payout")}
