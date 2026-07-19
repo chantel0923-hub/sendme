@@ -32,7 +32,8 @@ export default function PastorReview({ onBack, user, isAdmin }) {
         .select(`
           id, mission_id, milestone_number, description, media_url,
           submitted_at, status, reviewed_at, pastor_notes,
-          missions ( id, title, country, city, church_id, church_name, current_milestone, missionary_role, missionary_email, milestone_1_detail, milestone_2_detail, milestone_3_detail )
+          souls_reached, bibles_distributed, churches_started,
+          missions ( id, title, country, city, church_id, church_name, current_milestone, missionary_role, missionary_email, milestone_1_detail, milestone_2_detail, milestone_3_detail, souls, bibles, churches_planted )
         `)
         .order("submitted_at", { ascending: false });
 
@@ -92,6 +93,22 @@ export default function PastorReview({ onBack, user, isAdmin }) {
           .from("missions")
           .update({ current_milestone: nextMilestone })
           .eq("id", proof.missions.id);
+
+        // #97 — add this proof's reported impact numbers to the mission's
+        // public totals. Only happens on approval, so Mission Detail's
+        // Souls/Bibles/Churches counters are always pastor-verified, never
+        // raw self-reported numbers from the missionary alone.
+        const hasImpact = proof.souls_reached || proof.bibles_distributed || proof.churches_started;
+        if (hasImpact) {
+          await supabase
+            .from("missions")
+            .update({
+              souls:           (proof.missions.souls || 0)           + (proof.souls_reached || 0),
+              bibles:          (proof.missions.bibles || 0)          + (proof.bibles_distributed || 0),
+              churches_planted:(proof.missions.churches_planted || 0)+ (proof.churches_started || 0),
+            })
+            .eq("id", proof.missions.id);
+        }
       }
 
       sendNotification(
@@ -304,6 +321,21 @@ export default function PastorReview({ onBack, user, isAdmin }) {
                     <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", marginBottom: 6 }}>Field Report</div>
                     <div style={{ fontSize: 14, color: "rgba(255,255,255,0.7)", lineHeight: 1.75 }}>{proof.description}</div>
                   </div>
+
+                  {/* #97 — reported impact numbers, shown so the pastor knows
+                      what will be added to the mission's public totals if
+                      they approve. */}
+                  {(proof.souls_reached || proof.bibles_distributed || proof.churches_started) && (
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, marginBottom: 14 }}>
+                      {[["🙏", proof.souls_reached, "Souls"], ["📖", proof.bibles_distributed, "Bibles"], ["⛪", proof.churches_started, "Churches"]].filter(([, v]) => v).map(([icon, v, label]) => (
+                        <div key={label} style={{ background: "rgba(232,179,75,0.06)", borderRadius: 10, border: "1px solid rgba(232,179,75,0.18)", padding: "10px 8px", textAlign: "center" }}>
+                          <div style={{ fontSize: 16 }}>{icon}</div>
+                          <div style={{ fontSize: 16, fontWeight: 700, color: "#e8b34b", marginTop: 2 }}>{v}</div>
+                          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)" }}>{label}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
 
                   {/* Media URL */}
                   {proof.media_url && (
