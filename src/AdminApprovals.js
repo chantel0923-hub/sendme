@@ -256,7 +256,7 @@ export default function AdminApprovals({ onBack, user }) {
                       const goalNum = Number(m.goal) || 0;
                       const third = Math.floor(goalNum / 3);
                       const amount = n < 3 ? third : goalNum - third * 2;
-                      const desc = m[`milestone${n}_desc`];
+                      const desc = m[`milestone_${n}_detail`];
                       return (
                         <div key={n} style={{ background: "rgba(232,179,75,0.05)", borderRadius: 10, border: "1px solid rgba(232,179,75,0.15)", padding: "10px 12px", textAlign: "center" }}>
                           <div style={{ fontSize: 15, fontWeight: 700, color: "#e8b34b" }}>${fmt(amount)}</div>

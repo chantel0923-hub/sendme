@@ -767,6 +767,16 @@ export default function MissionaryApplication({ onBack, user }) {
         raised:           0,
         status:           form.churchVerified ? "pending" : "pending_church",
         milestone:        0,
+        // NEW BUG FIX — these three inputs (rendered above at signup) were
+        // being collected in local form state but never actually included
+        // in this insert at all, so every milestone description typed
+        // during application was silently discarded. Using the same
+        // milestone_1_detail/_2_/_3_detail columns already live and working
+        // in PastorReview.js and MilestoneProof.js (#98/#99), rather than
+        // introducing yet another naming scheme.
+        milestone_1_detail: form.milestone1 || null,
+        milestone_2_detail: form.milestone2 || null,
+        milestone_3_detail: form.milestone3 || null,
         souls:            0,
         bibles:           0,
         churches:         0,
