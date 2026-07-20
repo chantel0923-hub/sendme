@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "./supabase";
-import { sendNotification } from "./notifications";
+import { sendNotification, notifyAdmin } from "./notifications";
+import { ADMIN_EMAIL } from "./AdminPayouts";
 
 export default function MilestoneProof({ onBack, user }) {
   const [missions, setMissions]     = useState([]);
@@ -108,6 +109,20 @@ export default function MilestoneProof({ onBack, user }) {
         // taking the pastor anywhere useful.
         reviewUrl: `${window.location.origin}/pastor-review`,
       });
+
+      // Admin previously received NO notification at all when a proof was
+      // submitted — only the pastor did. Fire-and-forget, same pattern as
+      // donation notifications: never blocks or fails the actual submission
+      // above if either of these fail.
+      const adminNotifyData = {
+        missionaryName: user?.user_metadata?.full_name,
+        missionTitle: selected.title,
+        milestoneNumber: selected.current_milestone || 1,
+        pastorName: selected.pastor_name,
+        adminUrl: `${window.location.origin}/pastor-review`,
+      };
+      sendNotification("admin_proof_submitted", ADMIN_EMAIL, adminNotifyData);
+      notifyAdmin("proof_submitted", adminNotifyData);
       setSuccess(true);
     } catch (e) {
       setError("Could not submit proof. Please try again. (" + (e.message || "") + ")");
