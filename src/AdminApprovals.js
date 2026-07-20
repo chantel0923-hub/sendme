@@ -86,6 +86,34 @@ export default function AdminApprovals({ onBack, user }) {
     setActing(null);
   };
 
+  // Mission Journey Step 5 ("Mission Completed") and the entire Testimonies
+  // screen both depend on missions.status === 'complete' — but nothing
+  // anywhere ever set it. TestimonyEngine.js's own header comment already
+  // documented the intended design ("Admin marks a mission complete in
+  // AdminApprovals.js"); this is that missing control, finally built.
+  // Guarded to only apply once all 3 milestones have actually been
+  // pastor-approved (current_milestone increments past 3 only then).
+  const markComplete = async (m) => {
+    setActing(m.id);
+    setError("");
+    try {
+      const { error } = await supabase
+        .from("missions")
+        .update({ status: "complete" })
+        .eq("id", m.id);
+      if (error) throw error;
+      sendNotification("mission_completed", m.missionary_email, {
+        missionaryName: m.missionary_name,
+        missionTitle: m.title,
+        testimonyUrl: `${window.location.origin}/`,
+      });
+      await load();
+    } catch (e) {
+      setError("Could not mark mission complete. (" + (e.message || "") + ")");
+    }
+    setActing(null);
+  };
+
   const reject = async (m) => {
     setActing(m.id);
     setError("");
@@ -320,6 +348,31 @@ export default function AdminApprovals({ onBack, user }) {
                       </div>
                     </div>
                   )}
+                  {/* Mark Mission Complete — only for active missions. Guarded
+                      until all 3 milestones are pastor-approved, since
+                      current_milestone only passes 3 once milestone 3 itself
+                      has been approved (see PastorReview.js). */}
+                  {m.status === "active" && (() => {
+                    const milestonesApproved = Math.min((m.current_milestone || 1) - 1, 3);
+                    const allDone = milestonesApproved >= 3;
+                    return (
+                      <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 16 }}>
+                        {allDone ? (
+                          <button onClick={() => markComplete(m)} disabled={isActing}
+                            style={{ width: "100%", padding: "13px 0", borderRadius: 12, border: "none",
+                              background: isActing ? "rgba(232,179,75,0.15)" : "linear-gradient(135deg,#e8b34b,#c8942b)",
+                              color: isActing ? "#e8b34b" : "#000", fontWeight: 700, cursor: isActing ? "default" : "pointer",
+                              fontSize: 14, fontFamily: "Georgia, serif", boxShadow: isActing ? "none" : "0 4px 18px rgba(232,179,75,0.35)" }}>
+                            {isActing ? "Saving..." : "🏆 Mark Mission Complete"}
+                          </button>
+                        ) : (
+                          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", textAlign: "center" }}>
+                            {milestonesApproved} of 3 milestones approved — mission can be marked complete once all three are done.
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               );
             })}
