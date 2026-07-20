@@ -51,6 +51,12 @@ const TEMPLATES: Record<string, (d: any) => string> = {
     `✉ ${d.donorEmail || "no email given"}\n\n` +
     `📊 Now at USD ${d.totalRaised || 0} of USD ${d.goal || "?"}\n\n` +
     `View: ${d.missionUrl || "Admin → Payouts"}`,
+  proof_submitted: (d) =>
+    `📋 SendMe — Milestone Proof Submitted\n\n` +
+    `*${d.missionTitle}* — Milestone ${d.milestoneNumber}\n` +
+    `👤 ${d.missionaryName || "A missionary"}\n` +
+    `⛪ For review by: ${d.pastorName ? "Pastor " + d.pastorName : "their pastor"}\n\n` +
+    `For your visibility — approval happens on the pastor's side.`,
   banking_missing: (d) =>
     `⚠ SendMe — Banking Details Missing\n\n` +
     `Mission *${d.missionTitle}* has reached a payout milestone but has no banking details on file.\n\n` +
