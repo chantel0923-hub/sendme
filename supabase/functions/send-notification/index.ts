@@ -98,6 +98,19 @@ const TEMPLATES: Record<string, (d: any) => { subject: string; html: string }> =
     ),
   }),
 
+  mission_completed: (d) => ({
+    subject: `"${d.missionTitle}" is complete — thank you for your faithfulness! 🏆`,
+    html: wrapEmail(
+      "Mission Complete",
+      `Dear ${d.missionaryName || "brother/sister"},<br/><br/>
+      Praise God! <strong style="color:#e8b34b;">${d.missionTitle}</strong> has been marked complete by SendMe.
+      Every milestone was reached, verified, and funded — and now your story becomes a permanent testimony
+      for the Body to see what the Lord has done through your faithfulness.<br/><br/>
+      Thank you for saying "Here am I, send me."`,
+      "View Testimonies", d.testimonyUrl || "https://sendme-nine.vercel.app"
+    ),
+  }),
+
   application_approved: (d) => ({
     subject: `Your mission "${d.missionTitle}" has been approved! ✝`,
     html: wrapEmail(
