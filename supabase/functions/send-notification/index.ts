@@ -159,6 +159,19 @@ const TEMPLATES: Record<string, (d: any) => { subject: string; html: string }> =
     ),
   }),
 
+  admin_proof_submitted: (d) => ({
+    subject: `Milestone proof submitted — ${d.missionTitle} 📋`,
+    html: wrapEmail(
+      "Milestone Proof Submitted",
+      `<strong>${d.missionaryName || "A missionary"}</strong> has submitted proof for milestone
+      <strong style="color:#e8b34b;">${d.milestoneNumber}</strong> of <strong>${d.missionTitle}</strong>,
+      for review by ${d.pastorName ? `Pastor ${d.pastorName}` : "their pastor"}.<br/><br/>
+      This is for your visibility only — approval happens on the pastor's side. Nothing is required
+      from you unless the pastor reaches out for help.`,
+      "View in Admin", d.adminUrl || "https://sendme-nine.vercel.app"
+    ),
+  }),
+
   donation_received: (d) => ({
     subject: `A new gift of $${d.amount} for ${d.missionTitle} 🙏`,
     html: wrapEmail(
