@@ -97,6 +97,38 @@ export default function AdminChurchVerification({ onBack, user }) {
     setLoading(false);
   };
 
+  // Trust level = automatic score based on real track record, never
+  // manually set. +1 point for a verified church, +1 point per
+  // pastor-approved milestone (0-3), capped at level 3 ("Trusted Partner").
+  // Recalculated here whenever a church's verified status changes, since
+  // that can bump every mission that church endorses at once.
+  const computeTrustLevel = (approvedMilestones, churchVerified) => {
+    const points = (churchVerified ? 1 : 0) + Math.min(approvedMilestones || 0, 3);
+    return Math.min(points, 3);
+  };
+
+  const recalcTrustForChurchMissions = async (churchId, churchVerified) => {
+    try {
+      const { data: linkedMissions } = await supabase
+        .from("missions")
+        .select("id")
+        .eq("church_id", churchId);
+      for (const lm of linkedMissions || []) {
+        const { count } = await supabase
+          .from("milestone_proofs")
+          .select("id", { count: "exact", head: true })
+          .eq("mission_id", lm.id)
+          .eq("status", "approved");
+        const newLevel = computeTrustLevel(count || 0, churchVerified);
+        await supabase.from("missions").update({ trust_level: newLevel }).eq("id", lm.id);
+      }
+    } catch (e) {
+      console.error("recalcTrustForChurchMissions error:", e);
+      // Non-fatal — church verification itself already succeeded above;
+      // trust badges will just be stale until next recalculation trigger.
+    }
+  };
+
   const verify = async (church) => {
     setActing(church.id);
     setError("");
@@ -115,6 +147,7 @@ export default function AdminChurchVerification({ onBack, user }) {
           pastorName: church.pastor_name,
         });
       }
+      await recalcTrustForChurchMissions(church.id, true);
       await load();
     } catch (e) {
       setError("Could not verify church. (" + (e.message || "") + ")");
@@ -131,6 +164,7 @@ export default function AdminChurchVerification({ onBack, user }) {
         .update({ verified: false })
         .eq("id", church.id);
       if (error) throw error;
+      await recalcTrustForChurchMissions(church.id, false);
       await load();
     } catch (e) {
       setError("Could not update church. (" + (e.message || "") + ")");

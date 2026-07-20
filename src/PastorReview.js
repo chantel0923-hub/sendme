@@ -109,6 +109,32 @@ export default function PastorReview({ onBack, user, isAdmin }) {
             })
             .eq("id", proof.missions.id);
         }
+
+        // Trust level — automatic, recalculated on every approval. Same
+        // points system as AdminChurchVerification.js: +1 for a verified
+        // church, +1 per pastor-approved milestone, capped at level 3.
+        try {
+          const { count: approvedCount } = await supabase
+            .from("milestone_proofs")
+            .select("id", { count: "exact", head: true })
+            .eq("mission_id", proof.missions.id)
+            .eq("status", "approved");
+          let churchVerified = false;
+          if (proof.missions.church_id) {
+            const { data: churchRow } = await supabase
+              .from("churches")
+              .select("verified")
+              .eq("id", proof.missions.church_id)
+              .maybeSingle();
+            churchVerified = !!churchRow?.verified;
+          }
+          const points = (churchVerified ? 1 : 0) + Math.min(approvedCount || 0, 3);
+          const newTrustLevel = Math.min(points, 3);
+          await supabase.from("missions").update({ trust_level: newTrustLevel }).eq("id", proof.missions.id);
+        } catch (trustErr) {
+          console.error("trust level recalc error:", trustErr);
+          // Non-fatal — the approval itself already succeeded above.
+        }
       }
 
       sendNotification(
