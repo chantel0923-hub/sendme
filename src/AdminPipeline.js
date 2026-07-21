@@ -32,6 +32,7 @@ const milestoneAmount = (goal, milestoneNum) => {
 const ACTIONABLE_STAGES = {
   church_verification: { label: "⛪ Awaiting Church Verification", color: "#5b9cf6", action: "Go to Church Verification", nav: "onAdminChurchVerification" },
   application_approval:{ label: "📋 Awaiting Application Approval", color: "#e8b34b", action: "Go to Approvals", nav: "onAdminApprovals" },
+  emergency_approval:  { label: "🚨 Awaiting Emergency Approval", color: "#e85b5b", action: "Go to Emergencies", nav: "onAdminEmergency" },
   banking_missing:     { label: "🏦 Approved — Banking Details Missing", color: "#e85b5b", action: "Go to Payouts", nav: "onAdminPayouts" },
   awaiting_payout:      { label: "💰 Approved — Awaiting Payout", color: "#e8b34b", action: "Go to Payouts", nav: "onAdminPayouts" },
   ready_to_complete:   { label: "🏆 Ready to Mark Complete", color: "#3ecf8e", action: "Go to Approvals", nav: "onAdminApprovals" },
@@ -48,7 +49,7 @@ const WAITING_STAGES = {
 
 const STUCK_THRESHOLD_DAYS = 3;
 
-export default function AdminPipeline({ onBack, onAdminChurchVerification, onAdminApprovals, onAdminPayouts }) {
+export default function AdminPipeline({ onBack, onAdminChurchVerification, onAdminApprovals, onAdminPayouts, onAdminEmergency }) {
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState("");
   const [staged, setStaged]   = useState({}); // { stageKey: [mission, ...] }
@@ -59,17 +60,25 @@ export default function AdminPipeline({ onBack, onAdminChurchVerification, onAdm
     setLoading(true);
     setError("");
     try {
-      const [missionsRes, churchesRes, payoutDetailsRes, proofsRes, recordsRes] = await Promise.all([
+      const [missionsRes, churchesRes, payoutDetailsRes, proofsRes, recordsRes, emergencyRes] = await Promise.all([
         supabase.from("missions").select("*").order("created_at", { ascending: false }),
-        supabase.from("churches").select("id, name, verified, pastor_name"),
+        supabase.from("churches").select("id, name, verified, pastor_name, created_at"),
         supabase.from("payout_details").select("mission_id, church_id"),
         supabase.from("milestone_proofs").select("mission_id, milestone_number, status, submitted_at, reviewed_at").order("submitted_at", { ascending: false }),
         supabase.from("payout_records").select("mission_id, milestone_number, status"),
+        supabase.from("emergency_requests").select("id, title, country, urgency, status, created_at").eq("status", "pending"),
       ]);
       if (missionsRes.error) throw missionsRes.error;
 
       const churchById = {};
       (churchesRes.data || []).forEach(c => { churchById[c.id] = c; });
+
+      // How many missions are currently waiting on each unverified church,
+      // for context on the church's own card.
+      const missionCountByChurch = {};
+      (missionsRes.data || []).forEach(m => {
+        if (m.church_id) missionCountByChurch[m.church_id] = (missionCountByChurch[m.church_id] || 0) + 1;
+      });
 
       const bankingByChurch  = new Set((payoutDetailsRes.data || []).filter(d => d.church_id).map(d => d.church_id));
       const bankingByMission = new Set((payoutDetailsRes.data || []).filter(d => d.mission_id).map(d => d.mission_id));
@@ -114,16 +123,20 @@ export default function AdminPipeline({ onBack, onAdminChurchVerification, onAdm
         if (m.status === "rejected" || m.status === "complete") return; // not actionable, not shown here
 
         if (m.status === "pending_church") {
-          pushTo("church_verification", m, { since: m.created_at });
+          // Normally the church itself is surfaced directly below (so
+          // verifying it once covers every mission waiting on it, instead
+          // of listing the same blocker N times). Only fall back to
+          // showing the mission itself if there's no church_id at all to
+          // represent the wait.
+          if (!m.church_id) pushTo("church_verification", m, { since: m.created_at });
           return;
         }
         if (m.status === "pending") {
           const church = m.church_id ? churchById[m.church_id] : null;
           if (m.church_id && church && !church.verified) {
-            pushTo("church_verification", m, { since: m.created_at });
-          } else {
-            pushTo("application_approval", m, { since: m.created_at });
+            return; // covered by the church's own card below
           }
+          pushTo("application_approval", m, { since: m.created_at });
           return;
         }
         if (m.status !== "active") return;
@@ -170,6 +183,31 @@ export default function AdminPipeline({ onBack, onAdminChurchVerification, onAdm
         }
       });
 
+      // Unverified churches — surfaced directly rather than inferred through
+      // missions, so a brand-new church with zero missions attached yet is
+      // still visible here (previously invisible entirely).
+      (churchesRes.data || []).forEach(c => {
+        if (c.verified) return;
+        const waitingCount = missionCountByChurch[c.id] || 0;
+        pushTo("church_verification", {
+          id: c.id,
+          title: c.name + (waitingCount > 0 ? ` — ${waitingCount} mission${waitingCount === 1 ? "" : "s"} waiting` : ""),
+          city: "", country: "",
+          church_name: c.pastor_name ? `Pastor ${c.pastor_name}` : "",
+        }, { since: c.created_at });
+      });
+
+      // Pending emergency requests — separate approval queue, previously
+      // not represented in the pipeline at all.
+      (emergencyRes.data || []).forEach(r => {
+        pushTo("emergency_approval", {
+          id: r.id,
+          title: r.title,
+          city: "", country: r.country,
+          church_name: r.urgency ? `${r.urgency} urgency` : "",
+        }, { since: r.created_at });
+      });
+
       setStaged(buckets);
     } catch (e) {
       setError("Could not load pipeline. (" + (e.message || "") + ")");
@@ -177,7 +215,7 @@ export default function AdminPipeline({ onBack, onAdminChurchVerification, onAdm
     setLoading(false);
   };
 
-  const navCallbacks = { onAdminChurchVerification, onAdminApprovals, onAdminPayouts };
+  const navCallbacks = { onAdminChurchVerification, onAdminApprovals, onAdminPayouts, onAdminEmergency };
 
   const renderSection = (key, meta, isActionable) => {
     const items = staged[key] || [];
@@ -204,7 +242,7 @@ export default function AdminPipeline({ onBack, onAdminChurchVerification, onAdm
                     )}
                   </div>
                   <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)" }}>
-                    📍 {m.city ? `${m.city}, ` : ""}{m.country || "Unknown"} · {m.church_name || "No church linked"}
+                    {m.country ? `📍 ${m.city ? `${m.city}, ` : ""}${m.country}${m.church_name ? " · " : ""}` : ""}{m.church_name || (m.country ? "No church linked" : "")}
                   </div>
                 </div>
                 {isActionable && meta.nav && navCallbacks[meta.nav] && (
@@ -252,6 +290,7 @@ export default function AdminPipeline({ onBack, onAdminChurchVerification, onAdm
             {/* Actionable — needs Admin to do something */}
             {renderSection("church_verification", ACTIONABLE_STAGES.church_verification, true)}
             {renderSection("application_approval", ACTIONABLE_STAGES.application_approval, true)}
+            {renderSection("emergency_approval", ACTIONABLE_STAGES.emergency_approval, true)}
             {renderSection("banking_missing", ACTIONABLE_STAGES.banking_missing, true)}
             {renderSection("awaiting_payout", ACTIONABLE_STAGES.awaiting_payout, true)}
             {renderSection("ready_to_complete", ACTIONABLE_STAGES.ready_to_complete, true)}
