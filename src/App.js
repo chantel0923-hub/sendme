@@ -5,6 +5,7 @@ import "./App.css";
 import MissionaryApplication from "./MissionaryApplication";
 import ChurchRegistration from "./ChurchRegistration";
 import MyChurch from "./MyChurch";
+import AdminPipeline from "./AdminPipeline";
 import MapboxMap from "./MapboxMap";
 import ChurchesTab from "./ChurchesTab";
 import TransparencyLedger from "./TransparencyLedger";
@@ -1407,7 +1408,7 @@ const PayoutsDropdown = ({ onPayout, onPastorReview }) => {
 // Emergencies, Approvals, Payouts) that used to sit as separate buttons in
 // the main nav, cluttering the bar for the one person who ever sees them.
 // Same collapsible pattern as NavDropdown ("More") and PayoutsDropdown.
-const AdminDropdown = ({ onAdminChurchVerification, onAdminWorkers, onAdminEmergency, onAdminApprovals, onAdminPayouts }) => {
+const AdminDropdown = ({ onAdminChurchVerification, onAdminWorkers, onAdminEmergency, onAdminApprovals, onAdminPayouts, onAdminPipeline }) => {
   const [open,setOpen] = useState(false);
   const ref = useRef(null);
 
@@ -1423,6 +1424,7 @@ const AdminDropdown = ({ onAdminChurchVerification, onAdminWorkers, onAdminEmerg
     { label:"🚨 Emergencies",     color:"#e85b5b", onClick:onAdminEmergency },
     { label:"📋 Approvals",       color:"#e8b34b", onClick:onAdminApprovals },
     { label:"💰 Payouts",         color:"#e85b5b", onClick:onAdminPayouts },
+    { label:"🗺 Mission Pipeline", color:"#3ecf8e", onClick:onAdminPipeline },
   ];
 
   return (
@@ -1498,7 +1500,7 @@ const ProofCenter = ({ onBack, user, isAdmin, isPastor, initialTab }) => {
   );
 };
 
-const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, onMyChurch, onChurches, onProfile, onEmergency, onMatching, onPray, onTestimonies, onWorker, onQR, onFaq, onPayout, onAdminPayouts, isAdmin, isPastor, onMilestoneProof, onPastorReview, onMissionaryDashboard, onAdminApprovals, onAdminChurchVerification, guest, onSignIn, onDonate, onAdminWorkers, onAdminEmergency }) => {
+const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, onMyChurch, onChurches, onProfile, onEmergency, onMatching, onPray, onTestimonies, onWorker, onQR, onFaq, onPayout, onAdminPayouts, isAdmin, isPastor, onMilestoneProof, onPastorReview, onMissionaryDashboard, onAdminApprovals, onAdminChurchVerification, guest, onSignIn, onDonate, onAdminWorkers, onAdminEmergency, onAdminPipeline }) => {
   const [region,setRegion]       = useState("All");
   const [missions,setMissions]   = useState([]);
   const [loading,setLoading]     = useState(true);
@@ -1541,7 +1543,7 @@ const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, o
             onProfile={onProfile} onEmergency={onEmergency} onTestimonies={onTestimonies}
             onWorker={onWorker} onMatching={onMatching} onQR={onQR} onFaq={onFaq}
           />
-          {isAdmin && <AdminDropdown onAdminChurchVerification={onAdminChurchVerification} onAdminWorkers={onAdminWorkers} onAdminEmergency={onAdminEmergency} onAdminApprovals={onAdminApprovals} onAdminPayouts={onAdminPayouts} />}
+          {isAdmin && <AdminDropdown onAdminChurchVerification={onAdminChurchVerification} onAdminWorkers={onAdminWorkers} onAdminEmergency={onAdminEmergency} onAdminApprovals={onAdminApprovals} onAdminPayouts={onAdminPayouts} onAdminPipeline={onAdminPipeline} />}
           {user&&<button onClick={onSignOut} style={{ background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:10,padding:"8px 14px",color:"rgba(255,255,255,0.4)",cursor:"pointer",fontSize:12 }}>Sign Out</button>}
         </div>
       </div>
@@ -2077,6 +2079,7 @@ export default function App() {
   if(screen==="faq")              return <FAQScreen onBack={()=>setScreen("home")}/>;
   if(screen==="payout")           return <PayoutSetup onBack={()=>setScreen("home")} user={user}/>;
   if(screen==="admin-payouts")    return isAdminUser ? <AdminPayouts onBack={()=>setScreen("home")}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
+  if(screen==="admin-pipeline")   return isAdminUser ? <AdminPipeline onBack={()=>setScreen("home")} onAdminChurchVerification={()=>setScreen("admin-church-verification")} onAdminApprovals={()=>setScreen("admin-approvals")} onAdminPayouts={()=>setScreen("admin-payouts")}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
   if(screen==="pray")             return <PrayerWall missions={liveMissions} onBack={()=>setScreen("home")} filterMissionId={prayerWallFilterMissionId}/>;
   if(screen==="churches")         return <ChurchesTab onBack={()=>setScreen("home")}/>;
   if(screen==="apply")            return guest ? <GuestBlocked title="Registration Required" message="Applying as a missionary requires a SendMe account so your application can be tracked and your church can endorse you. Please sign in or register to continue." onBack={()=>setScreen("home")} onRegister={()=>{setGuest(false);setScreen("home");}}/> : userRole==="donor" ? <GuestBlocked title="Not Available for Donors" message="Applying as a missionary isn't available on a Donor/Supporter account. If you're called to the mission field, please register a separate missionary account, or contact admin to update your role." onBack={()=>setScreen("home")} primaryLabel="Back to Home" onPrimary={()=>setScreen("home")}/> : <MissionaryApplication onBack={()=>setScreen("home")} user={user}/>;
@@ -2111,6 +2114,7 @@ export default function App() {
       onFaq={()=>setScreen("faq")}
       onPayout={()=>setScreen("payout")}
       onAdminPayouts={()=>setScreen("admin-payouts")}
+      onAdminPipeline={()=>setScreen("admin-pipeline")}
       onAdminApprovals={()=>setScreen("admin-approvals")}
       onAdminChurchVerification={()=>setScreen("admin-church-verification")}
       onMilestoneProof={()=>setScreen("milestone-proof")}
