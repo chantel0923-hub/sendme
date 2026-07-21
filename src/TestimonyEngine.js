@@ -110,6 +110,11 @@ export default function TestimonyEngine({ onBack, onMission, user }) {
   const [testimonies, setTestimonies] = useState([]);
   const [loading, setLoading]         = useState(true);
   const [selected, setSelected]       = useState(null);
+  // Milestone breakdown with evidence links for the detail view, requested
+  // by Br Donald so readers can click through to the actual proof photos
+  // behind each milestone, not just read the summary story.
+  const [milestoneProofs, setMilestoneProofs] = useState([]);
+  const [loadingMilestones, setLoadingMilestones] = useState(false);
   // Testimony submission form
   const [showSubmit, setShowSubmit]   = useState(false);
   const [submitFor, setSubmitFor]     = useState(null);  // mission id
@@ -137,6 +142,25 @@ export default function TestimonyEngine({ onBack, onMission, user }) {
     };
     load();
   }, []);
+
+  useEffect(() => {
+    if (!selected) { setMilestoneProofs([]); return; }
+    let cancelled = false;
+    setLoadingMilestones(true);
+    (async () => {
+      const { data } = await supabase
+        .from("milestone_proofs")
+        .select("id, milestone_number, description, media_url, status")
+        .eq("mission_id", selected.id)
+        .eq("status", "approved")
+        .order("milestone_number", { ascending: true });
+      if (!cancelled) {
+        setMilestoneProofs(data || []);
+        setLoadingMilestones(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [selected]);
 
   const shareTestimony = (t) => {
     const text = encodeURIComponent(
@@ -223,6 +247,34 @@ export default function TestimonyEngine({ onBack, onMission, user }) {
             <div style={{ background:"rgba(255,255,255,0.03)", borderRadius:14, border:"1px solid rgba(255,255,255,0.07)", padding:20, marginBottom:16, textAlign:"center" }}>
               <div style={{ fontSize:13, color:"rgba(255,255,255,0.3)", marginBottom:8 }}>No testimony story submitted yet.</div>
               {user && <div style={{ fontSize:12, color:"#e8b34b" }}>Are you the missionary or pastor? Add the full story below.</div>}
+            </div>
+          )}
+
+          {/* Milestones — with links to the actual evidence submitted for
+              each one, so readers can click through to photos/videos
+              instead of just reading the summary story above. */}
+          {!loadingMilestones && milestoneProofs.length > 0 && (
+            <div style={{ background:"#0c1628", borderRadius:16, border:"1px solid rgba(255,255,255,0.08)", padding:20, marginBottom:16 }}>
+              <div style={{ fontSize:14, fontWeight:700, color:"#eef1ff", marginBottom:14 }}>Milestones</div>
+              <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+                {milestoneProofs.map(p => (
+                  <div key={p.id} style={{ background:"rgba(255,255,255,0.03)", borderRadius:12, border:"1px solid rgba(255,255,255,0.06)", padding:"14px 16px" }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+                      <span style={{ fontSize:12, fontWeight:700, color:t.color }}>Milestone {p.milestone_number}</span>
+                      <span style={{ fontSize:11, padding:"2px 10px", borderRadius:999, background:"rgba(62,207,142,0.1)", color:"#3ecf8e", border:"1px solid rgba(62,207,142,0.25)" }}>✓ Verified</span>
+                    </div>
+                    <div style={{ fontSize:13, color:"rgba(255,255,255,0.6)", lineHeight:1.7, marginBottom: p.media_url ? 10 : 0 }}>
+                      {p.description}
+                    </div>
+                    {p.media_url && (
+                      <a href={p.media_url} target="_blank" rel="noopener noreferrer"
+                        style={{ display:"inline-flex", alignItems:"center", gap:6, fontSize:12, color:t.color, textDecoration:"none", fontWeight:600 }}>
+                        📎 View Evidence ↗
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
