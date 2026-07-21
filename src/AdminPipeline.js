@@ -59,11 +59,12 @@ export default function AdminPipeline({ onBack, onAdminChurchVerification, onAdm
     setLoading(true);
     setError("");
     try {
-      const [missionsRes, churchesRes, payoutDetailsRes, proofsRes] = await Promise.all([
+      const [missionsRes, churchesRes, payoutDetailsRes, proofsRes, recordsRes] = await Promise.all([
         supabase.from("missions").select("*").order("created_at", { ascending: false }),
         supabase.from("churches").select("id, name, verified, pastor_name"),
         supabase.from("payout_details").select("mission_id, church_id"),
         supabase.from("milestone_proofs").select("mission_id, milestone_number, status, submitted_at, reviewed_at").order("submitted_at", { ascending: false }),
+        supabase.from("payout_records").select("mission_id, milestone_number, status"),
       ]);
       if (missionsRes.error) throw missionsRes.error;
 
@@ -73,6 +74,17 @@ export default function AdminPipeline({ onBack, onAdminChurchVerification, onAdm
       const bankingByChurch  = new Set((payoutDetailsRes.data || []).filter(d => d.church_id).map(d => d.church_id));
       const bankingByMission = new Set((payoutDetailsRes.data || []).filter(d => d.mission_id).map(d => d.mission_id));
 
+      // #new-bug — this was the actual gap: previously nothing here ever
+      // checked payout_records, so an approved milestone stayed in "Awaiting
+      // Payout" forever, even after Admin marked it paid on the Payouts
+      // screen. Build a lookup of which (mission, milestone) pairs are
+      // already paid, same table AdminPayouts.js itself uses for this.
+      const paidSet = new Set(
+        (recordsRes.data || [])
+          .filter(r => r.status === "paid")
+          .map(r => `${r.mission_id}:${r.milestone_number}`)
+      );
+
       // Latest proof per (mission_id, milestone_number) — proofsRes is
       // already ordered newest-first, so the first match wins.
       const latestProofFor = {};
@@ -80,6 +92,17 @@ export default function AdminPipeline({ onBack, onAdminChurchVerification, onAdm
         const key = `${p.mission_id}:${p.milestone_number}`;
         if (!latestProofFor[key]) latestProofFor[key] = p;
       });
+
+      // All approved proofs that do NOT yet have a matching paid record —
+      // grouped by mission, oldest first, so we always surface the
+      // longest-outstanding unpaid milestone.
+      const unpaidApprovedByMission = {};
+      (proofsRes.data || [])
+        .filter(p => p.status === "approved" && !paidSet.has(`${p.mission_id}:${p.milestone_number}`))
+        .sort((a, b) => new Date(a.reviewed_at || 0) - new Date(b.reviewed_at || 0))
+        .forEach(p => {
+          if (!unpaidApprovedByMission[p.mission_id]) unpaidApprovedByMission[p.mission_id] = p;
+        });
 
       const buckets = {};
       const pushTo = (key, mission, extra) => {
@@ -108,6 +131,21 @@ export default function AdminPipeline({ onBack, onAdminChurchVerification, onAdm
         const currentMilestone = m.current_milestone || 1;
         const milestonesApproved = Math.min(currentMilestone - 1, 3);
 
+        // Check for any approved-but-unpaid milestone FIRST, regardless of
+        // current_milestone — this is the actual highest-priority admin
+        // action, and current_milestone alone isn't a reliable signal of
+        // payout status (it advances on approval, not on payment).
+        const unpaid = unpaidApprovedByMission[m.id];
+        if (unpaid) {
+          const hasBanking = (m.church_id && bankingByChurch.has(m.church_id)) || bankingByMission.has(m.id);
+          if (!hasBanking) {
+            pushTo("banking_missing", m, { since: unpaid.reviewed_at });
+          } else {
+            pushTo("awaiting_payout", m, { since: unpaid.reviewed_at });
+          }
+          return;
+        }
+
         if (milestonesApproved >= 3) {
           pushTo("ready_to_complete", m, { since: m.updated_at || m.created_at });
           return;
@@ -118,15 +156,6 @@ export default function AdminPipeline({ onBack, onAdminChurchVerification, onAdm
 
         if (latestProof && latestProof.status === "pending") {
           pushTo("pastor_review", m, { since: latestProof.submitted_at });
-          return;
-        }
-        if (latestProof && latestProof.status === "approved") {
-          const hasBanking = (m.church_id && bankingByChurch.has(m.church_id)) || bankingByMission.has(m.id);
-          if (!hasBanking) {
-            pushTo("banking_missing", m, { since: latestProof.reviewed_at });
-          } else {
-            pushTo("awaiting_payout", m, { since: latestProof.reviewed_at });
-          }
           return;
         }
 
