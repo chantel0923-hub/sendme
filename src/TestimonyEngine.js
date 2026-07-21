@@ -122,7 +122,7 @@ export default function TestimonyEngine({ onBack, onMission, user }) {
       setLoading(true);
       try {
         const [{ data: mData, error: mErr }, { data: eData }] = await Promise.all([
-          supabase.from("missions").select("*").eq("status","complete").order("updated_at",{ ascending:false }),
+          supabase.from("missions").select("*").eq("status","complete").order("created_at",{ ascending:false }),
           supabase.from("testimony_extras").select("*"),
         ]);
         if (mErr) throw mErr;
