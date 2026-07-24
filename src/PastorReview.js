@@ -89,20 +89,25 @@ export default function PastorReview({ onBack, user, isAdmin }) {
       // If approved, advance the mission's current_milestone
       if (decision === "approved" && proof.missions?.id) {
         const nextMilestone = (proof.missions.current_milestone || 1) + 1;
-        const { error: milestoneAdvanceError } = await supabase
+        const { data: milestoneUpdateRows, error: milestoneAdvanceError } = await supabase
           .from("missions")
           .update({ current_milestone: nextMilestone })
-          .eq("id", proof.missions.id);
-        // This update was previously unchecked — Supabase's JS client does
-        // NOT throw on a blocked/failed update, it just returns { error }.
-        // A silently-failed update here is exactly what caused a mission to
-        // stay stuck showing "Milestone 1" forever even after that proof was
-        // approved. Surface it clearly instead of pretending success.
-        if (milestoneAdvanceError) {
-          console.error("milestone advance error:", milestoneAdvanceError);
+          .eq("id", proof.missions.id)
+          .select("id, current_milestone");
+        // CRITICAL — a plain { error } check is NOT enough here. If Row
+        // Level Security blocks this specific row for the current user,
+        // Postgres/PostgREST returns 204 SUCCESS with zero rows affected —
+        // there is no error object at all in that case. Chaining .select()
+        // forces Postgres to report which rows actually changed, so an
+        // empty result array can be detected and treated as the real
+        // failure it is, instead of silently doing nothing while looking
+        // like it worked.
+        const milestoneReallyAdvanced = !milestoneAdvanceError && milestoneUpdateRows && milestoneUpdateRows.length > 0;
+        if (milestoneAdvanceError || !milestoneReallyAdvanced) {
+          console.error("milestone advance error or 0 rows affected:", milestoneAdvanceError, milestoneUpdateRows);
           setError(
             "The proof was approved, but the mission's milestone number could NOT be advanced (" +
-            (milestoneAdvanceError.message || "unknown error") +
+            (milestoneAdvanceError ? (milestoneAdvanceError.message || "unknown error") : "the update matched 0 rows — likely a permissions issue") +
             "). The missionary may see the wrong milestone until this is fixed — please contact SendMe support."
           );
         }
