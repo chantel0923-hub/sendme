@@ -89,10 +89,23 @@ export default function PastorReview({ onBack, user, isAdmin }) {
       // If approved, advance the mission's current_milestone
       if (decision === "approved" && proof.missions?.id) {
         const nextMilestone = (proof.missions.current_milestone || 1) + 1;
-        await supabase
+        const { error: milestoneAdvanceError } = await supabase
           .from("missions")
           .update({ current_milestone: nextMilestone })
           .eq("id", proof.missions.id);
+        // This update was previously unchecked — Supabase's JS client does
+        // NOT throw on a blocked/failed update, it just returns { error }.
+        // A silently-failed update here is exactly what caused a mission to
+        // stay stuck showing "Milestone 1" forever even after that proof was
+        // approved. Surface it clearly instead of pretending success.
+        if (milestoneAdvanceError) {
+          console.error("milestone advance error:", milestoneAdvanceError);
+          setError(
+            "The proof was approved, but the mission's milestone number could NOT be advanced (" +
+            (milestoneAdvanceError.message || "unknown error") +
+            "). The missionary may see the wrong milestone until this is fixed — please contact SendMe support."
+          );
+        }
 
         // #97 — add this proof's reported impact numbers to the mission's
         // public totals. Only happens on approval, so Mission Detail's
@@ -100,7 +113,7 @@ export default function PastorReview({ onBack, user, isAdmin }) {
         // raw self-reported numbers from the missionary alone.
         const hasImpact = proof.souls_reached || proof.bibles_distributed || proof.churches_started;
         if (hasImpact) {
-          await supabase
+          const { error: impactError } = await supabase
             .from("missions")
             .update({
               souls:           (proof.missions.souls || 0)           + (proof.souls_reached || 0),
@@ -108,6 +121,7 @@ export default function PastorReview({ onBack, user, isAdmin }) {
               churches_planted:(proof.missions.churches_planted || 0)+ (proof.churches_started || 0),
             })
             .eq("id", proof.missions.id);
+          if (impactError) console.error("impact numbers update error:", impactError);
         }
 
         // Trust level — automatic, recalculated on every approval. Same
