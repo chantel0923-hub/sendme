@@ -226,9 +226,14 @@ const StepBar = ({ current }) => (
   </div>
 );
 
-const Step1 = ({ form, set }) => (
+const Step1 = ({ form, set, prefilledFromPrevious }) => (
   <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
     <div style={sectionTitle}>Personal Information</div>
+    {prefilledFromPrevious && (
+      <div style={{ background:"rgba(91,156,246,0.08)", border:"1px solid rgba(91,156,246,0.25)", borderRadius:10, padding:"10px 14px", marginBottom:12, fontSize:12, color:"#5b9cf6" }}>
+        We've filled this in from your previous application — feel free to update anything that's changed.
+      </div>
+    )}
     <FInput label="Full Name *" placeholder="Your full name" value={form.fullName} onChange={e=>set("fullName",e.target.value)}/>
     <FInput label="Email Address *" type="email" placeholder="your@email.com" value={form.email} onChange={e=>set("email",e.target.value)}/>
     <FInput label="Phone Number" type="tel" placeholder="+27 82 000 0000" value={form.phone} onChange={e=>set("phone",e.target.value)}/>
@@ -244,9 +249,14 @@ const Step1 = ({ form, set }) => (
   </div>
 );
 
-const Step2 = ({ form, set }) => (
+const Step2 = ({ form, set, prefilledFromPrevious }) => (
   <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
     <div style={sectionTitle}>Your Calling & Testimony</div>
+    {prefilledFromPrevious && (
+      <div style={{ background:"rgba(91,156,246,0.08)", border:"1px solid rgba(91,156,246,0.25)", borderRadius:10, padding:"10px 14px", marginBottom:12, fontSize:12, color:"#5b9cf6" }}>
+        We've filled this in from your previous application — feel free to update anything that's changed.
+      </div>
+    )}
     <FSelect label="How long have you been a Message believer? *" value={form.yearsBeliever} onChange={e=>set("yearsBeliever",e.target.value)}>
       <option value="" style={{background:"#0c1628"}}>Select years...</option>
       {Array.from({length:50},(_,i)=>i+1).map(y=>(
@@ -689,6 +699,10 @@ export default function MissionaryApplication({ onBack, user }) {
   const [submitted, setSubmitted]   = useState(false);
   const [churches, setChurches]     = useState([]);
   const [churchesLoading, setChurchesLoading] = useState(true);
+  // Was this form pre-filled from the applicant's own most recent prior
+  // application? Drives a small notice on the Personal/Calling steps so
+  // it's clear the data came from somewhere, not just appeared blank-filled.
+  const [prefilledFromPrevious, setPrefilledFromPrevious] = useState(false);
 
   const [form, setForm] = useState({
     fullName: user?.user_metadata?.full_name||"", email: user?.email||"",
@@ -721,6 +735,40 @@ export default function MissionaryApplication({ onBack, user }) {
     loadChurches();
   }, []);
 
+  // Pre-fill Personal & Calling steps from the applicant's own most recent
+  // prior application, if one exists — this is genuinely person-level
+  // information (who you are, your testimony, years as a believer), not
+  // mission-level, so re-typing it for every new application submitted was
+  // pure friction. Church and Mission steps are left blank, since those
+  // are always specific to the new application.
+  useEffect(() => {
+    if (!user?.id) return;
+    (async () => {
+      const { data } = await supabase
+        .from("missions")
+        .select("full_name:missionary_name, role:missionary_role, phone:applicant_phone, birth_country:applicant_birth_country, current_country:applicant_current_country, address:applicant_home_address, years_as_believer, calling_testimony, personal_testimony, previous_experience")
+        .eq("missionary_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (data) {
+        setForm(f => ({
+          ...f,
+          role:          data.role || f.role,
+          phone:         data.phone || f.phone,
+          birthCountry:  data.birth_country || f.birthCountry,
+          currentCountry: data.current_country || f.currentCountry,
+          address:       data.address || f.address,
+          yearsBeliever: data.years_as_believer || f.yearsBeliever,
+          calling:       data.calling_testimony || f.calling,
+          testimony:     data.personal_testimony || f.testimony,
+          experience:    data.previous_experience || f.experience,
+        }));
+        setPrefilledFromPrevious(true);
+      }
+    })();
+  }, [user?.id]);
+
   const nextStep = () => {
     const err = validate(step, form);
     if (err) { setError(err); return; }
@@ -743,6 +791,14 @@ export default function MissionaryApplication({ onBack, user }) {
         missionary_name:  form.shadowMode ? null : form.fullName,
         missionary_email: form.email,
         missionary_role:  form.role,
+        // NEW BUG FIX — same silent-drop pattern found a third time in this
+        // same form. These four Personal-step fields were collected and
+        // shown to the applicant as filled in, but never once reached the
+        // database.
+        applicant_phone:            form.shadowMode ? null : (form.phone || null),
+        applicant_birth_country:    form.birthCountry || null,
+        applicant_current_country:  form.currentCountry || null,
+        applicant_home_address:     form.shadowMode ? null : (form.address || null),
         church_name:      form.churchName,
         church_id:        form.churchId || null,
         church_verified:  form.churchVerified,
@@ -777,6 +833,15 @@ export default function MissionaryApplication({ onBack, user }) {
         milestone_1_detail: form.milestone1 || null,
         milestone_2_detail: form.milestone2 || null,
         milestone_3_detail: form.milestone3 || null,
+        // NEW BUG FIX — these four fields are required on the "Your
+        // Calling & Testimony" step, but were never once included in this
+        // insert. Every applicant's calling story, personal testimony,
+        // years as a believer, and previous experience was silently
+        // discarded on submit, for every application, not just repeat ones.
+        years_as_believer:  form.yearsBeliever || null,
+        calling_testimony:  form.calling || null,
+        personal_testimony: form.testimony || null,
+        previous_experience: form.experience || null,
         souls:            0,
         bibles:           0,
         churches:         0,
@@ -830,8 +895,8 @@ export default function MissionaryApplication({ onBack, user }) {
           </div>
         )}
         <div style={{ background:"#0c1628",borderRadius:20,border:"1px solid rgba(255,255,255,0.08)",padding:"28px 24px",marginBottom:20 }}>
-          {step===1 && <Step1 form={form} set={set}/>}
-          {step===2 && <Step2 form={form} set={set}/>}
+          {step===1 && <Step1 form={form} set={set} prefilledFromPrevious={prefilledFromPrevious}/>}
+          {step===2 && <Step2 form={form} set={set} prefilledFromPrevious={prefilledFromPrevious}/>}
           {step===3 && <Step3 form={form} set={set} churches={churches} churchesLoading={churchesLoading}/>}
           {step===4 && <Step4 form={form} set={set}/>}
           {step===5 && <Step5 form={form} set={set} submitted={submitted} submitting={submitting} onSubmit={handleSubmit}/>}
