@@ -26,13 +26,24 @@ if (!document.getElementById(_styleId)) {
   document.head.appendChild(_s);
 }
 
+// Illustrative markers for historically under-reached mission regions —
+// commonly referred to in missiology as the "10/40 Window" plus a few
+// well-known clusters outside it. This is a static, editorial list, NOT
+// derived from any live mission, donor, or risk-level data — it's the same
+// six-point set that shipped originally, expanded to be more complete and
+// given an actual on-hover explanation, since previously there was no way
+// for a viewer to know what these circles even meant.
 const UNREACHED_REGIONS = [
-  { name: "North Africa",         lat: 25.0,  lng: 17.0  },
-  { name: "Arabian Peninsula",    lat: 23.0,  lng: 45.0  },
-  { name: "Central Asia",         lat: 40.0,  lng: 63.0  },
-  { name: "Himalayan Belt",       lat: 28.0,  lng: 84.0  },
-  { name: "W. Africa Interior",   lat: 13.0,  lng: 2.0   },
-  { name: "Southeast Asia",       lat: 20.0,  lng: 100.0 },
+  { name: "North Africa",       lat: 25.0, lng: 17.0,  note: "Historically low Gospel access across much of the region." },
+  { name: "Arabian Peninsula",  lat: 23.0, lng: 45.0,  note: "Among the least-reached regions in the world." },
+  { name: "Central Asia",       lat: 40.0, lng: 63.0,  note: "Limited established local church presence." },
+  { name: "Himalayan Belt",     lat: 28.0, lng: 84.0,  note: "Remote, historically under-reached mountain communities." },
+  { name: "W. Africa Interior", lat: 13.0, lng: 2.0,   note: "Sahel region with limited Gospel witness." },
+  { name: "Southeast Asia",     lat: 20.0, lng: 100.0, note: "Significant unreached people groups across the region." },
+  { name: "Horn of Africa",     lat: 8.0,  lng: 45.0,  note: "Among the least-evangelized regions globally." },
+  { name: "East Asia",          lat: 35.0, lng: 105.0, note: "Vast population with limited access to the Gospel in many areas." },
+  { name: "Levant & Fertile Crescent", lat: 33.0, lng: 40.0, note: "Historic Christian presence, now a minority in much of the region." },
+  { name: "Indonesian Archipelago", lat: -2.0, lng: 118.0, note: "Thousands of islands, many with little to no established church." },
 ];
 
 export default function MapboxMap({ missions, churches = [], onMissionClick }) {
@@ -74,7 +85,7 @@ export default function MapboxMap({ missions, churches = [], onMissionClick }) {
           features: UNREACHED_REGIONS.map(r => ({
             type: "Feature",
             geometry: { type: "Point", coordinates: [r.lng, r.lat] },
-            properties: { name: r.name },
+            properties: { name: r.name, note: r.note },
           })),
         },
       });
@@ -108,6 +119,30 @@ export default function MapboxMap({ missions, churches = [], onMissionClick }) {
           "text-halo-color": "#000000",
           "text-halo-width": 2.5,
         },
+      });
+
+      // Hover explanation for unreached-region markers — previously these
+      // had no interactivity at all, so there was no way for a viewer to
+      // learn what the red circles actually represented.
+      map.current.on("mouseenter", "unreached-glow", (e) => {
+        map.current.getCanvas().style.cursor = "default";
+        const props = e.features[0].properties;
+        const coords = e.features[0].geometry.coordinates.slice();
+        popup.current
+          .setLngLat(coords)
+          .setHTML(`
+            <div style="font-family:Georgia,serif;background:#0c1628;border:1px solid rgba(232,91,91,0.3);border-radius:12px;padding:12px 14px;min-width:180px;max-width:240px;box-shadow:0 8px 32px rgba(0,0,0,0.5);">
+              <div style="font-size:11px;color:#e85b5b;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">Unreached Region</div>
+              <div style="font-size:14px;font-weight:700;color:#eef1ff;margin-bottom:6px">${props.name}</div>
+              <div style="font-size:12px;color:rgba(255,255,255,0.55);line-height:1.5">${props.note || ""}</div>
+              <div style="font-size:10px;color:rgba(255,255,255,0.25);margin-top:8px;font-style:italic">Illustrative region, not tied to specific mission data.</div>
+            </div>
+          `)
+          .addTo(map.current);
+      });
+      map.current.on("mouseleave", "unreached-glow", () => {
+        map.current.getCanvas().style.cursor = "";
+        popup.current.remove();
       });
 
       map.current.addSource("missions", {
