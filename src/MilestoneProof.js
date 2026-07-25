@@ -188,26 +188,53 @@ export default function MilestoneProof({ onBack, user }) {
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {missions.map(m => (
-                <div key={m.id} onClick={() => setSelected(m)}
-                  style={{ background: selected?.id === m.id ? "rgba(232,179,75,0.1)" : "rgba(255,255,255,0.03)", borderRadius: 14, border: `1px solid ${selected?.id === m.id ? "rgba(232,179,75,0.5)" : "rgba(255,255,255,0.08)"}`, padding: "16px 18px", cursor: "pointer", transition: "all .15s" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div>
-                      <div style={{ fontSize: 15, fontWeight: 700, color: "#eef1ff" }}>{m.title}</div>
-                      <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginTop: 3 }}>📍 {m.city ? `${m.city}, ` : ""}{m.country}</div>
-                    </div>
-                    <div style={{ textAlign: "right" }}>
-                      <div style={{ fontSize: 11, color: "#e8b34b", fontWeight: 700 }}>Milestone</div>
-                      <div style={{ fontSize: 22, fontWeight: 700, color: "#e8b34b" }}>{m.current_milestone || 1}</div>
+              {missions.map(m => {
+                // SendMe missions are a fixed 3-milestone structure
+                // everywhere else in the app (Admin Approvals, Mark
+                // Complete, etc). current_milestone advances to 4 once
+                // Milestone 3 is approved — that's the signal for Admin to
+                // mark the mission complete, NOT an invitation to submit a
+                // 4th milestone. This was previously unbounded, so a
+                // missionary could keep submitting proofs indefinitely.
+                const allMilestonesDone = (m.current_milestone || 1) > 3;
+                return (
+                  <div key={m.id} onClick={() => { if (!allMilestonesDone) setSelected(m); }}
+                    style={{ background: selected?.id === m.id ? "rgba(232,179,75,0.1)" : "rgba(255,255,255,0.03)", borderRadius: 14, border: `1px solid ${selected?.id === m.id ? "rgba(232,179,75,0.5)" : "rgba(255,255,255,0.08)"}`, padding: "16px 18px", cursor: allMilestonesDone ? "default" : "pointer", transition: "all .15s", opacity: allMilestonesDone ? 0.7 : 1 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: "#eef1ff" }}>{m.title}</div>
+                        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginTop: 3 }}>📍 {m.city ? `${m.city}, ` : ""}{m.country}</div>
+                      </div>
+                      {allMilestonesDone ? (
+                        <div style={{ textAlign: "right" }}>
+                          <div style={{ fontSize: 11, color: "#3ecf8e", fontWeight: 700 }}>✓ All 3 Done</div>
+                          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", marginTop: 2 }}>Awaiting completion</div>
+                        </div>
+                      ) : (
+                        <div style={{ textAlign: "right" }}>
+                          <div style={{ fontSize: 11, color: "#e8b34b", fontWeight: 700 }}>Milestone</div>
+                          <div style={{ fontSize: 22, fontWeight: 700, color: "#e8b34b" }}>{m.current_milestone || 1}</div>
+                        </div>
+                      )}
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
 
-        {selected && (
+        {selected && (selected.current_milestone || 1) > 3 && (
+          <div style={{ background: "rgba(62,207,142,0.08)", borderRadius: 16, border: "1px solid rgba(62,207,142,0.25)", padding: "20px 24px", textAlign: "center" }}>
+            <div style={{ fontSize: 32, marginBottom: 10 }}>🏆</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: "#3ecf8e", marginBottom: 6 }}>All 3 Milestones Complete!</div>
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", lineHeight: 1.7 }}>
+              Every milestone for this mission has been submitted and approved. SendMe Admin will mark this mission complete and it will appear as a testimony. There's nothing more to submit here.
+            </div>
+          </div>
+        )}
+
+        {selected && (selected.current_milestone || 1) <= 3 && (
           <>
             {/* Current milestone badge */}
             <div style={{ background: "rgba(91,156,246,0.08)", borderRadius: 12, border: "1px solid rgba(91,156,246,0.2)", padding: "12px 16px", marginBottom: 14, display: "flex", gap: 12, alignItems: "center" }}>

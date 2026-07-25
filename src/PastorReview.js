@@ -88,7 +88,12 @@ export default function PastorReview({ onBack, user, isAdmin }) {
 
       // If approved, advance the mission's current_milestone
       if (decision === "approved" && proof.missions?.id) {
-        const nextMilestone = (proof.missions.current_milestone || 1) + 1;
+        // Capped at 4 ("all 3 milestones done") as a safety net — missions
+        // only ever have 3 real milestones. MilestoneProof.js now blocks
+        // submitting past Milestone 3, but this guards against any stray
+        // Milestone 4+ proof already sitting in the queue from before that
+        // cap existed, so approving it can't push the count past 4.
+        const nextMilestone = Math.min((proof.missions.current_milestone || 1) + 1, 4);
         const { data: milestoneUpdateRows, error: milestoneAdvanceError } = await supabase
           .from("missions")
           .update({ current_milestone: nextMilestone })
