@@ -195,6 +195,22 @@ export default function MissionaryDashboard({ onBack, user, onSubmitProof }) {
                         This application was not approved, so there's no proof to submit here. Contact SendMe support via the FAQ page if you believe this was a mistake.
                       </div>
                     </div>
+                  ) : m.status === "complete" ? (
+                    // Previously missing entirely — "complete" fell through to the
+                    // generic `status !== "active"` branch below, which shows
+                    // "hasn't been approved yet, proof submission opens once
+                    // active." That's the wrong message for a finished mission and
+                    // directly contradicted the "complete" badge, the 100% funding
+                    // bar, and the already-approved proofs listed underneath it.
+                    <div style={{ padding: "16px 22px", display: "flex", alignItems: "center", gap: 14, background: "rgba(62,207,142,0.06)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                      <div style={{ fontSize: 26 }}>🏆</div>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: "#3ecf8e" }}>Mission Complete</div>
+                        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginTop: 2 }}>
+                          This mission has been marked complete by SendMe Admin. Thank you for your faithfulness in the field.
+                        </div>
+                      </div>
+                    </div>
                   ) : m.status !== "active" ? (
                     <div style={{ padding: "16px 22px", background: "rgba(232,179,75,0.06)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
                       <div style={{ fontSize: 13, fontWeight: 700, color: "#e8b34b" }}>⏳ Awaiting Approval</div>
