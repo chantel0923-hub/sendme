@@ -26,25 +26,29 @@ if (!document.getElementById(_styleId)) {
   document.head.appendChild(_s);
 }
 
-// Illustrative markers for historically under-reached mission regions —
-// commonly referred to in missiology as the "10/40 Window" plus a few
-// well-known clusters outside it. This is a static, editorial list, NOT
-// derived from any live mission, donor, or risk-level data — it's the same
-// six-point set that shipped originally, expanded to be more complete and
-// given an actual on-hover explanation, since previously there was no way
-// for a viewer to know what these circles even meant.
-const UNREACHED_REGIONS = [
-  { name: "North Africa",       lat: 25.0, lng: 17.0,  note: "Historically low Gospel access across much of the region." },
-  { name: "Arabian Peninsula",  lat: 23.0, lng: 45.0,  note: "Among the least-reached regions in the world." },
-  { name: "Central Asia",       lat: 40.0, lng: 63.0,  note: "Limited established local church presence." },
-  { name: "Himalayan Belt",     lat: 28.0, lng: 84.0,  note: "Remote, historically under-reached mountain communities." },
-  { name: "W. Africa Interior", lat: 13.0, lng: 2.0,   note: "Sahel region with limited Gospel witness." },
-  { name: "Southeast Asia",     lat: 20.0, lng: 100.0, note: "Significant unreached people groups across the region." },
-  { name: "Horn of Africa",     lat: 8.0,  lng: 45.0,  note: "Among the least-evangelized regions globally." },
-  { name: "East Asia",          lat: 35.0, lng: 105.0, note: "Vast population with limited access to the Gospel in many areas." },
-  { name: "Levant & Fertile Crescent", lat: 33.0, lng: 40.0, note: "Historic Christian presence, now a minority in much of the region." },
-  { name: "Indonesian Archipelago", lat: -2.0, lng: 118.0, note: "Thousands of islands, many with little to no established church." },
-];
+// High-Risk Mission Fields — previously this was a static, editorial list of
+// 10 illustrative "unreached region" points (the old UNREACHED_REGIONS array,
+// unrelated to any real mission data). Replaced with a real, data-driven
+// layer: every mission where the missionary selected "🔴 High Risk" for
+// Field Access/Conditions during application (Step 4 of MissionaryApplication.js,
+// saved to missions.risk_level, read here as m.riskLevel per App.js's mapRow()
+// — NOT risk_level, that's the raw DB column name, App.js already renames it).
+// Built at the same mount-time closure as the "missions" source below (this
+// effect only runs once — see the missions.current guard — so like the
+// mission pins themselves, this won't live-update if `missions` changes
+// after first mount without a remount).
+const buildHighRiskFeatures = (missions) =>
+  (missions || [])
+    .filter(m => Number(m.riskLevel) === 4 && m.lat && m.lng) // skip ungeocoded (0,0) fallback missions
+    .map(m => ({
+      type: "Feature",
+      geometry: { type: "Point", coordinates: [m.lng, m.lat] },
+      properties: {
+        name:    m.protected ? "Protected Mission" : (m.name || m.title || "Untitled Mission"),
+        area:    m.area || "",
+        country: m.country || "",
+      },
+    }));
 
 export default function MapboxMap({ missions, churches = [], onMissionClick }) {
   const mapContainer = useRef(null);
@@ -78,22 +82,18 @@ export default function MapboxMap({ missions, churches = [], onMissionClick }) {
 
     map.current.on("load", () => {
 
-      map.current.addSource("unreached", {
+      map.current.addSource("high-risk-fields", {
         type: "geojson",
         data: {
           type: "FeatureCollection",
-          features: UNREACHED_REGIONS.map(r => ({
-            type: "Feature",
-            geometry: { type: "Point", coordinates: [r.lng, r.lat] },
-            properties: { name: r.name, note: r.note },
-          })),
+          features: buildHighRiskFeatures(missions),
         },
       });
 
       map.current.addLayer({
-        id: "unreached-glow",
+        id: "high-risk-glow",
         type: "circle",
-        source: "unreached",
+        source: "high-risk-fields",
         paint: {
           "circle-radius": ["interpolate", ["linear"], ["zoom"], 1, 28, 4, 70],
           "circle-color": "#e85b5b",
@@ -104,43 +104,28 @@ export default function MapboxMap({ missions, churches = [], onMissionClick }) {
         },
       });
 
-      map.current.addLayer({
-        id: "unreached-labels",
-        type: "symbol",
-        source: "unreached",
-        layout: {
-          "text-field": ["get", "name"],
-          "text-size": 12,
-          "text-anchor": "center",
-        },
-        paint: {
-          "text-color": "#ffffff",
-          "text-opacity": 0.9,
-          "text-halo-color": "#000000",
-          "text-halo-width": 2.5,
-        },
-      });
-
-      // Hover explanation for unreached-region markers — previously these
-      // had no interactivity at all, so there was no way for a viewer to
-      // learn what the red circles actually represented.
-      map.current.on("mouseenter", "unreached-glow", (e) => {
+      // No persistent labels here (unlike the old static regions) — with
+      // real per-mission data this could get crowded fast, and would put
+      // extra always-visible text over a shadow-mode/protected mission's
+      // exact map position. Hover popup only, same pattern as mission pins.
+      map.current.on("mouseenter", "high-risk-glow", (e) => {
         map.current.getCanvas().style.cursor = "default";
         const props = e.features[0].properties;
         const coords = e.features[0].geometry.coordinates.slice();
+        const location = [props.area, props.country].filter(Boolean).join(", ");
         popup.current
           .setLngLat(coords)
           .setHTML(`
             <div style="font-family:Georgia,serif;background:#0c1628;border:1px solid rgba(232,91,91,0.3);border-radius:12px;padding:12px 14px;min-width:180px;max-width:240px;box-shadow:0 8px 32px rgba(0,0,0,0.5);">
-              <div style="font-size:11px;color:#e85b5b;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">Unreached Region</div>
-              <div style="font-size:14px;font-weight:700;color:#eef1ff;margin-bottom:6px">${props.name}</div>
-              <div style="font-size:12px;color:rgba(255,255,255,0.55);line-height:1.5">${props.note || ""}</div>
-              <div style="font-size:10px;color:rgba(255,255,255,0.25);margin-top:8px;font-style:italic">Illustrative region, not tied to specific mission data.</div>
+              <div style="font-size:11px;color:#e85b5b;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">High-Risk Mission Field</div>
+              <div style="font-size:14px;font-weight:700;color:#eef1ff;margin-bottom:4px">${props.name}</div>
+              ${location ? `<div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:6px">${location}</div>` : ""}
+              <div style="font-size:12px;color:rgba(255,255,255,0.55);line-height:1.5">Flagged by the missionary during application — security, political, or persecution risk in this field.</div>
             </div>
           `)
           .addTo(map.current);
       });
-      map.current.on("mouseleave", "unreached-glow", () => {
+      map.current.on("mouseleave", "high-risk-glow", () => {
         map.current.getCanvas().style.cursor = "";
         popup.current.remove();
       });
@@ -164,6 +149,7 @@ export default function MapboxMap({ missions, churches = [], onMissionClick }) {
               status:    m.status,
               raised:    m.raised,
               goal:      m.goal,
+              riskLevel: m.riskLevel,
             },
           })),
         },
@@ -188,8 +174,11 @@ export default function MapboxMap({ missions, churches = [], onMissionClick }) {
         paint: {
           "circle-radius": 14,
           "circle-color": ["get", "color"],
+          // High-risk missions (riskLevel 4) get a red ring instead of the
+          // default white one, so a flagged mission's own pin is visibly
+          // distinct even before hovering the glow layer beneath it.
           "circle-stroke-width": 2.5,
-          "circle-stroke-color": "#ffffff",
+          "circle-stroke-color": ["case", ["==", ["get", "riskLevel"], 4], "#e85b5b", "#ffffff"],
           "circle-opacity": 1,
         },
       });
@@ -222,7 +211,7 @@ export default function MapboxMap({ missions, churches = [], onMissionClick }) {
           .setHTML(`
             <div style="font-family:Georgia,serif;background:#0c1628;border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:14px 16px;min-width:200px;box-shadow:0 8px 32px rgba(0,0,0,0.5);">
               <div style="font-size:11px;color:${props.color};letter-spacing:2px;text-transform:uppercase;margin-bottom:4px">${props.role}</div>
-              <div style="font-size:14px;font-weight:700;color:#eef1ff;margin-bottom:3px">${props.name}</div>
+              <div style="font-size:14px;font-weight:700;color:#eef1ff;margin-bottom:3px">${props.name}${props.riskLevel === 4 ? ' <span style="color:#e85b5b;font-size:11px;">🔴 High Risk</span>' : ""}</div>
               <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:10px">${props.protected ? "Location Protected" : props.city + ", " + props.country}</div>
               <div style="font-size:12px;color:rgba(255,255,255,0.6);margin-bottom:6px">${props.title}</div>
               <div style="background:rgba(255,255,255,0.07);border-radius:999px;height:5px;overflow:hidden;margin-bottom:6px">
@@ -294,7 +283,7 @@ export default function MapboxMap({ missions, churches = [], onMissionClick }) {
         backdropFilter:"blur(8px)", display:"flex", flexDirection:"column", gap:7 }}>
         {[["✝","#e8b34b","Active Mission"],["✝","#3ecf8e","Completed Mission"],
           ["🔒","#b06cf5","Protected Mission"],["⛪","#5b9cf6","Verified Church"],
-          ["●","#e85b5b","Unreached Region"]].map(([icon,color,label]) => (
+          ["●","#e85b5b","High-Risk Mission Field"]].map(([icon,color,label]) => (
           <div key={label} style={{ display:"flex", alignItems:"center", gap:8 }}>
             <span style={{ fontSize:13, color, width:18, textAlign:"center" }}>{icon}</span>
             <span style={{ fontSize:11, color:"rgba(255,255,255,0.5)" }}>{label}</span>
