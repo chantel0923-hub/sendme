@@ -3,6 +3,7 @@ import { supabase } from "./supabase";
 
 const fmt = (n) => String(Math.round(n||0)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 const pct = (r, g) => Math.min(100, Math.round((r / (g || 1)) * 100));
+const truncate = (s, n) => (!s ? "" : s.length > n ? s.slice(0, n).trim() + "…" : s);
 
 const statusColor = { pending: "#e8b34b", approved: "#3ecf8e", rejected: "#e85b5b" };
 const statusIcon  = { pending: "⏳", approved: "✅", rejected: "❌" };
@@ -17,11 +18,83 @@ const timeAgo = (dateStr) => {
   return `${Math.floor(diff / 86400)}d ago`;
 };
 
+// A mission "needs proof" (is truly actionable by the missionary right now)
+// only when: it's active, it hasn't finished all 3 milestones yet, and its
+// current milestone doesn't already have a proof sitting in pastor review.
+// Used both for the summary strip counts and to decide default collapse state.
+const missionBucket = (m, proofs) => {
+  const currentMilestone = m.current_milestone || m.milestone || 1;
+  if (m.status === "rejected") return "rejected";
+  if (m.status === "complete") return "complete";
+  if (m.status !== "active") return "awaitingApproval";
+  if (currentMilestone > 3) return "allDone";
+  if (proofs.some(p => p.milestone_number === currentMilestone && p.status === "pending")) return "awaitingPastor";
+  return "needsProof";
+};
+
+const BUCKET_META = {
+  needsProof:       { icon: "📋", color: "#5b9cf6", label: n => `${n} need${n===1?"s":""} your proof` },
+  awaitingPastor:   { icon: "⏳", color: "#e8b34b", label: n => `${n} awaiting pastor review` },
+  awaitingApproval: { icon: "🕊", color: "#e8b34b", label: n => `${n} awaiting approval` },
+  allDone:          { icon: "🏆", color: "#3ecf8e", label: n => `${n} milestones done, awaiting admin` },
+  complete:         { icon: "🏆", color: "#3ecf8e", label: n => `${n} complete` },
+  rejected:         { icon: "❌", color: "#e85b5b", label: n => `${n} not approved` },
+};
+const BUCKET_ORDER = ["needsProof", "awaitingPastor", "allDone", "awaitingApproval", "complete", "rejected"];
+
+// A mission card collapses to just its header by default once it's finished
+// (complete or rejected) — nothing more for the missionary to act on there.
+// Everything else (active, awaiting approval) stays expanded by default,
+// since that's where attention is actually needed. Still fully toggleable
+// either way via the chevron, for a missionary who wants to tidy the page.
+const defaultCollapsedFor = (bucket) => bucket === "complete" || bucket === "rejected";
+
+// Individual proof entries always start collapsed to a one-line summary —
+// the full write-ups can run to several paragraphs each, and a missionary
+// juggling several missions shouldn't have to scroll past a wall of old
+// milestone text just to see what's outstanding.
+const ProofEntry = ({ p, expanded, onToggle }) => {
+  const sc = statusColor[p.status] || "#e8b34b";
+  return (
+    <div style={{ background: "rgba(255,255,255,0.03)", borderRadius: 12, border: `1px solid ${sc}33`, overflow: "hidden" }}>
+      <div onClick={onToggle} style={{ padding: "12px 14px", cursor: "pointer", display: "flex", alignItems: "flex-start", gap: 10 }}>
+        <span style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", marginTop: 2, flexShrink: 0, transition: "transform .15s", transform: expanded ? "rotate(90deg)" : "none" }}>▸</span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, marginBottom: expanded ? 6 : 0 }}>
+            <span style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", fontWeight: 700, whiteSpace: "nowrap" }}>Milestone {p.milestone_number}</span>
+            <span style={{ padding: "2px 10px", borderRadius: 999, fontSize: 11, background: `${sc}18`, color: sc, border: `1px solid ${sc}44`, fontWeight: 700, whiteSpace: "nowrap", flexShrink: 0 }}>
+              {statusIcon[p.status]} {(p.status || "pending").charAt(0).toUpperCase() + (p.status || "pending").slice(1)}
+            </span>
+          </div>
+          {!expanded && (
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", lineHeight: 1.5 }}>
+              {truncate(p.description, 90)}
+            </div>
+          )}
+        </div>
+      </div>
+      {expanded && (
+        <div style={{ padding: "0 14px 14px 34px" }}>
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", lineHeight: 1.6 }}>{p.description}</div>
+          {p.pastor_notes && (
+            <div style={{ marginTop: 8, fontSize: 12, color: "rgba(255,255,255,0.35)", borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 8 }}>
+              <span style={{ color: "rgba(255,255,255,0.25)" }}>Pastor's notes: </span>{p.pastor_notes}
+            </div>
+          )}
+          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.2)", marginTop: 6 }}>Submitted {timeAgo(p.submitted_at)}</div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export default function MissionaryDashboard({ onBack, user, onSubmitProof }) {
   const [missions, setMissions]     = useState([]);
   const [proofsByMission, setProofsByMission] = useState({});
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState("");
+  const [collapsedOverride, setCollapsedOverride] = useState({}); // mission id -> explicit bool, overrides the status-based default
+  const [expandedProofIds, setExpandedProofIds]   = useState({}); // proof id -> bool
 
   useEffect(() => {
     loadMyMissions();
@@ -97,6 +170,13 @@ export default function MissionaryDashboard({ onBack, user, onSubmitProof }) {
     setLoading(false);
   };
 
+  const toggleMission = (id, currentlyCollapsed) => {
+    setCollapsedOverride(prev => ({ ...prev, [id]: !currentlyCollapsed }));
+  };
+  const toggleProof = (id) => {
+    setExpandedProofIds(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
   if (!user) {
     return (
       <div style={{ minHeight: "100vh", background: "#060c18", color: "#eef1ff", fontFamily: "Georgia, serif", display: "flex", alignItems: "center", justifyContent: "center", padding: 32 }}>
@@ -108,6 +188,16 @@ export default function MissionaryDashboard({ onBack, user, onSubmitProof }) {
       </div>
     );
   }
+
+  // Summary strip counts — computed from the same bucket logic that drives
+  // each card's default collapse/expand state, so the numbers up top always
+  // agree with what's actually shown below.
+  const stats = missions.reduce((acc, m) => {
+    const proofs = proofsByMission[m.id] || [];
+    const bucket = missionBucket(m, proofs);
+    acc[bucket] = (acc[bucket] || 0) + 1;
+    return acc;
+  }, {});
 
   return (
     <div style={{ minHeight: "100vh", background: "#060c18", color: "#eef1ff", fontFamily: "Georgia, serif" }}>
@@ -124,12 +214,29 @@ export default function MissionaryDashboard({ onBack, user, onSubmitProof }) {
       <div style={{ maxWidth: 700, margin: "0 auto", padding: "28px 20px 60px" }}>
 
         {/* Welcome */}
-        <div style={{ background: "rgba(232,179,75,0.08)", borderRadius: 16, border: "1px solid rgba(232,179,75,0.2)", padding: "18px 22px", marginBottom: 24 }}>
+        <div style={{ background: "rgba(232,179,75,0.08)", borderRadius: 16, border: "1px solid rgba(232,179,75,0.2)", padding: "18px 22px", marginBottom: missions.length > 0 ? 16 : 24 }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: "#e8b34b", marginBottom: 6 }}>✝ Welcome, {user.user_metadata?.full_name || user.email?.split("@")[0]}</div>
           <div style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", lineHeight: 1.8 }}>
             Here you can see your mission's progress, your current milestone, and the status of every proof you've submitted to your pastor.
           </div>
         </div>
+
+        {/* Summary strip — only worth showing once there's more than one
+            mission to summarize; with a single mission the card below it
+            already says everything this would say. */}
+        {missions.length > 1 && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 24 }}>
+            {BUCKET_ORDER.filter(b => stats[b] > 0).map(b => {
+              const meta = BUCKET_META[b];
+              return (
+                <div key={b} style={{ display: "flex", alignItems: "center", gap: 7, padding: "7px 14px", borderRadius: 999, background: `${meta.color}14`, border: `1px solid ${meta.color}33` }}>
+                  <span style={{ fontSize: 13 }}>{meta.icon}</span>
+                  <span style={{ fontSize: 12, color: meta.color, fontWeight: 700 }}>{meta.label(stats[b])}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         {error && (
           <div style={{ background: "rgba(240,82,82,0.1)", border: "1px solid rgba(240,82,82,0.3)", borderRadius: 10, padding: "10px 14px", marginBottom: 20, fontSize: 13, color: "#f05252" }}>
@@ -156,28 +263,37 @@ export default function MissionaryDashboard({ onBack, user, onSubmitProof }) {
               const currentMilestone = m.current_milestone || m.milestone || 1;
               const raised = m.raised || 0;
               const goal = m.goal || m.collection_target || 1;
+              const bucket = missionBucket(m, proofs);
+              const defaultCollapsed = defaultCollapsedFor(bucket);
+              const isCollapsed = collapsedOverride[m.id] !== undefined ? collapsedOverride[m.id] : defaultCollapsed;
+
               return (
                 <div key={m.id} style={{ background: "#0c1628", borderRadius: 20, border: "1px solid rgba(255,255,255,0.08)", overflow: "hidden" }}>
 
-                  {/* Mission header */}
-                  <div style={{ padding: "20px 22px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                  {/* Mission header — always visible, click to collapse/expand everything below it */}
+                  <div onClick={() => toggleMission(m.id, isCollapsed)} style={{ padding: "20px 22px", borderBottom: isCollapsed ? "none" : "1px solid rgba(255,255,255,0.06)", cursor: "pointer" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, marginBottom: 10 }}>
-                      <div>
-                        <div style={{ fontSize: 11, color: "#e8b34b", letterSpacing: 2, marginBottom: 4 }}>
-                          {(m.missionary_role || "MISSIONARY").toUpperCase()}
+                      <div style={{ display: "flex", gap: 10, alignItems: "flex-start", minWidth: 0 }}>
+                        <span style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", marginTop: 4, flexShrink: 0, transition: "transform .15s", transform: isCollapsed ? "none" : "rotate(90deg)" }}>▸</span>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: 11, color: "#e8b34b", letterSpacing: 2, marginBottom: 4 }}>
+                            {(m.missionary_role || "MISSIONARY").toUpperCase()}
+                          </div>
+                          <div style={{ fontSize: 18, fontWeight: 700, color: "#eef1ff" }}>{m.title || "Untitled Mission"}</div>
+                          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginTop: 3 }}>📍 {m.city ? `${m.city}, ` : ""}{m.country || "Unknown"}</div>
                         </div>
-                        <div style={{ fontSize: 18, fontWeight: 700, color: "#eef1ff" }}>{m.title || "Untitled Mission"}</div>
-                        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginTop: 3 }}>📍 {m.city ? `${m.city}, ` : ""}{m.country || "Unknown"}</div>
                       </div>
-                      <span style={{ padding: "4px 12px", borderRadius: 999, fontSize: 11, fontWeight: 700, whiteSpace: "nowrap",
-                        background: m.status === "active" ? "rgba(62,207,142,0.12)" : "rgba(255,255,255,0.06)",
-                        color: m.status === "active" ? "#3ecf8e" : "rgba(255,255,255,0.4)",
-                        border: `1px solid ${m.status === "active" ? "rgba(62,207,142,0.3)" : "rgba(255,255,255,0.1)"}` }}>
+                      <span style={{ padding: "4px 12px", borderRadius: 999, fontSize: 11, fontWeight: 700, whiteSpace: "nowrap", flexShrink: 0,
+                        background: (m.status === "active" || m.status === "complete") ? "rgba(62,207,142,0.12)" : "rgba(255,255,255,0.06)",
+                        color: (m.status === "active" || m.status === "complete") ? "#3ecf8e" : "rgba(255,255,255,0.4)",
+                        border: `1px solid ${(m.status === "active" || m.status === "complete") ? "rgba(62,207,142,0.3)" : "rgba(255,255,255,0.1)"}` }}>
                         {(m.status || "pending").replace("_", " ")}
                       </span>
                     </div>
 
-                    {/* Funding progress */}
+                    {/* Funding progress — kept visible even when collapsed, since
+                        it's the one glance-able fact worth seeing without opening
+                        the card back up. */}
                     <div style={{ background: "rgba(255,255,255,0.06)", borderRadius: 999, height: 6, overflow: "hidden", marginBottom: 8 }}>
                       <div style={{ width: `${pct(raised, goal)}%`, height: "100%", borderRadius: 999, background: "linear-gradient(90deg,#e8b34b,#c8942b)" }} />
                     </div>
@@ -187,96 +303,77 @@ export default function MissionaryDashboard({ onBack, user, onSubmitProof }) {
                     </div>
                   </div>
 
-                  {/* Milestone status */}
-                  {m.status === "rejected" ? (
-                    <div style={{ padding: "16px 22px", background: "rgba(232,91,91,0.06)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: "#e85b5b" }}>❌ Application Not Approved</div>
-                      <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginTop: 4 }}>
-                        This application was not approved, so there's no proof to submit here. Contact SendMe support via the FAQ page if you believe this was a mistake.
-                      </div>
-                    </div>
-                  ) : m.status === "complete" ? (
-                    // Previously missing entirely — "complete" fell through to the
-                    // generic `status !== "active"` branch below, which shows
-                    // "hasn't been approved yet, proof submission opens once
-                    // active." That's the wrong message for a finished mission and
-                    // directly contradicted the "complete" badge, the 100% funding
-                    // bar, and the already-approved proofs listed underneath it.
-                    <div style={{ padding: "16px 22px", display: "flex", alignItems: "center", gap: 14, background: "rgba(62,207,142,0.06)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-                      <div style={{ fontSize: 26 }}>🏆</div>
-                      <div>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: "#3ecf8e" }}>Mission Complete</div>
-                        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginTop: 2 }}>
-                          This mission has been marked complete by SendMe Admin. Thank you for your faithfulness in the field.
+                  {!isCollapsed && (
+                    <>
+                      {/* Milestone status */}
+                      {m.status === "rejected" ? (
+                        <div style={{ padding: "16px 22px", background: "rgba(232,91,91,0.06)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: "#e85b5b" }}>❌ Application Not Approved</div>
+                          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginTop: 4 }}>
+                            This application was not approved, so there's no proof to submit here. Contact SendMe support via the FAQ page if you believe this was a mistake.
+                          </div>
                         </div>
-                      </div>
-                    </div>
-                  ) : m.status !== "active" ? (
-                    <div style={{ padding: "16px 22px", background: "rgba(232,179,75,0.06)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: "#e8b34b" }}>⏳ Awaiting Approval</div>
-                      <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginTop: 4 }}>
-                        This mission hasn't been approved yet — proof submission opens once it's active.
-                      </div>
-                    </div>
-                  ) : currentMilestone > 3 ? (
-                    <div style={{ padding: "16px 22px", display: "flex", alignItems: "center", gap: 14, background: "rgba(62,207,142,0.06)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-                      <div style={{ fontSize: 26 }}>🏆</div>
-                      <div>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: "#3ecf8e" }}>All 3 Milestones Complete</div>
-                        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginTop: 2 }}>
-                          Nothing more to submit — SendMe Admin will mark this mission complete.
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div style={{ padding: "16px 22px", display: "flex", alignItems: "center", gap: 14, background: "rgba(91,156,246,0.05)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-                      <div style={{ fontSize: 26 }}>📋</div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: "#5b9cf6" }}>Current Milestone: {currentMilestone}</div>
-                        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginTop: 2 }}>
-                          {proofs.some(p => p.milestone_number === currentMilestone && p.status === "pending")
-                            ? "Your proof is waiting for pastor review."
-                            : "Submit proof of your work to release the next milestone's funds."}
-                        </div>
-                      </div>
-                      {onSubmitProof && (
-                        <button onClick={onSubmitProof} style={{ padding: "10px 18px", borderRadius: 10, border: "none", background: "linear-gradient(135deg,#e8b34b,#c8942b)", color: "#000", fontWeight: 700, cursor: "pointer", fontSize: 13, fontFamily: "Georgia, serif", whiteSpace: "nowrap" }}>
-                          Submit Proof
-                        </button>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Submitted proofs history */}
-                  <div style={{ padding: "16px 22px" }}>
-                    <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginBottom: proofs.length > 0 ? 12 : 0 }}>
-                      {proofs.length === 0 ? "No proofs submitted yet for this mission." : `Your Submitted Proofs (${proofs.length})`}
-                    </div>
-                    {proofs.length > 0 && (
-                      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                        {proofs.map(p => {
-                          const sc = statusColor[p.status] || "#e8b34b";
-                          return (
-                            <div key={p.id} style={{ background: "rgba(255,255,255,0.03)", borderRadius: 12, border: `1px solid ${sc}33`, padding: "12px 14px" }}>
-                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, marginBottom: 6 }}>
-                                <span style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", fontWeight: 700 }}>Milestone {p.milestone_number}</span>
-                                <span style={{ padding: "2px 10px", borderRadius: 999, fontSize: 11, background: `${sc}18`, color: sc, border: `1px solid ${sc}44`, fontWeight: 700, whiteSpace: "nowrap" }}>
-                                  {statusIcon[p.status]} {(p.status || "pending").charAt(0).toUpperCase() + (p.status || "pending").slice(1)}
-                                </span>
-                              </div>
-                              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", lineHeight: 1.6 }}>{p.description}</div>
-                              {p.pastor_notes && (
-                                <div style={{ marginTop: 8, fontSize: 12, color: "rgba(255,255,255,0.35)", borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 8 }}>
-                                  <span style={{ color: "rgba(255,255,255,0.25)" }}>Pastor's notes: </span>{p.pastor_notes}
-                                </div>
-                              )}
-                              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.2)", marginTop: 6 }}>Submitted {timeAgo(p.submitted_at)}</div>
+                      ) : m.status === "complete" ? (
+                        <div style={{ padding: "16px 22px", display: "flex", alignItems: "center", gap: 14, background: "rgba(62,207,142,0.06)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                          <div style={{ fontSize: 26 }}>🏆</div>
+                          <div>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: "#3ecf8e" }}>Mission Complete</div>
+                            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginTop: 2 }}>
+                              This mission has been marked complete by SendMe Admin. Thank you for your faithfulness in the field.
                             </div>
-                          );
-                        })}
+                          </div>
+                        </div>
+                      ) : m.status !== "active" ? (
+                        <div style={{ padding: "16px 22px", background: "rgba(232,179,75,0.06)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: "#e8b34b" }}>⏳ Awaiting Approval</div>
+                          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginTop: 4 }}>
+                            This mission hasn't been approved yet — proof submission opens once it's active.
+                          </div>
+                        </div>
+                      ) : currentMilestone > 3 ? (
+                        <div style={{ padding: "16px 22px", display: "flex", alignItems: "center", gap: 14, background: "rgba(62,207,142,0.06)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                          <div style={{ fontSize: 26 }}>🏆</div>
+                          <div>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: "#3ecf8e" }}>All 3 Milestones Complete</div>
+                            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginTop: 2 }}>
+                              Nothing more to submit — SendMe Admin will mark this mission complete.
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{ padding: "16px 22px", display: "flex", alignItems: "center", gap: 14, background: "rgba(91,156,246,0.05)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                          <div style={{ fontSize: 26 }}>📋</div>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: "#5b9cf6" }}>Current Milestone: {currentMilestone}</div>
+                            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginTop: 2 }}>
+                              {proofs.some(p => p.milestone_number === currentMilestone && p.status === "pending")
+                                ? "Your proof is waiting for pastor review."
+                                : "Submit proof of your work to release the next milestone's funds."}
+                            </div>
+                          </div>
+                          {onSubmitProof && (
+                            <button onClick={(e) => { e.stopPropagation(); onSubmitProof(); }} style={{ padding: "10px 18px", borderRadius: 10, border: "none", background: "linear-gradient(135deg,#e8b34b,#c8942b)", color: "#000", fontWeight: 700, cursor: "pointer", fontSize: 13, fontFamily: "Georgia, serif", whiteSpace: "nowrap" }}>
+                              Submit Proof
+                            </button>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Submitted proofs history */}
+                      <div style={{ padding: "16px 22px" }} onClick={(e) => e.stopPropagation()}>
+                        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginBottom: proofs.length > 0 ? 12 : 0 }}>
+                          {proofs.length === 0 ? "No proofs submitted yet for this mission." : `Your Submitted Proofs (${proofs.length})`}
+                        </div>
+                        {proofs.length > 0 && (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                            {proofs.map(p => (
+                              <ProofEntry key={p.id} p={p} expanded={!!expandedProofIds[p.id]} onToggle={() => toggleProof(p.id)} />
+                            ))}
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
+                    </>
+                  )}
                 </div>
               );
             })}
