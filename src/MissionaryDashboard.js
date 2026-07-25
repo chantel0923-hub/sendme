@@ -188,22 +188,48 @@ export default function MissionaryDashboard({ onBack, user, onSubmitProof }) {
                   </div>
 
                   {/* Milestone status */}
-                  <div style={{ padding: "16px 22px", display: "flex", alignItems: "center", gap: 14, background: "rgba(91,156,246,0.05)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-                    <div style={{ fontSize: 26 }}>📋</div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: "#5b9cf6" }}>Current Milestone: {currentMilestone}</div>
-                      <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginTop: 2 }}>
-                        {proofs.some(p => p.milestone_number === currentMilestone && p.status === "pending")
-                          ? "Your proof is waiting for pastor review."
-                          : "Submit proof of your work to release the next milestone's funds."}
+                  {m.status === "rejected" ? (
+                    <div style={{ padding: "16px 22px", background: "rgba(232,91,91,0.06)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "#e85b5b" }}>❌ Application Not Approved</div>
+                      <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginTop: 4 }}>
+                        This application was not approved, so there's no proof to submit here. Contact SendMe support via the FAQ page if you believe this was a mistake.
                       </div>
                     </div>
-                    {onSubmitProof && (
-                      <button onClick={onSubmitProof} style={{ padding: "10px 18px", borderRadius: 10, border: "none", background: "linear-gradient(135deg,#e8b34b,#c8942b)", color: "#000", fontWeight: 700, cursor: "pointer", fontSize: 13, fontFamily: "Georgia, serif", whiteSpace: "nowrap" }}>
-                        Submit Proof
-                      </button>
-                    )}
-                  </div>
+                  ) : m.status !== "active" ? (
+                    <div style={{ padding: "16px 22px", background: "rgba(232,179,75,0.06)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "#e8b34b" }}>⏳ Awaiting Approval</div>
+                      <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginTop: 4 }}>
+                        This mission hasn't been approved yet — proof submission opens once it's active.
+                      </div>
+                    </div>
+                  ) : currentMilestone > 3 ? (
+                    <div style={{ padding: "16px 22px", display: "flex", alignItems: "center", gap: 14, background: "rgba(62,207,142,0.06)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                      <div style={{ fontSize: 26 }}>🏆</div>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: "#3ecf8e" }}>All 3 Milestones Complete</div>
+                        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginTop: 2 }}>
+                          Nothing more to submit — SendMe Admin will mark this mission complete.
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ padding: "16px 22px", display: "flex", alignItems: "center", gap: 14, background: "rgba(91,156,246,0.05)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                      <div style={{ fontSize: 26 }}>📋</div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: "#5b9cf6" }}>Current Milestone: {currentMilestone}</div>
+                        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginTop: 2 }}>
+                          {proofs.some(p => p.milestone_number === currentMilestone && p.status === "pending")
+                            ? "Your proof is waiting for pastor review."
+                            : "Submit proof of your work to release the next milestone's funds."}
+                        </div>
+                      </div>
+                      {onSubmitProof && (
+                        <button onClick={onSubmitProof} style={{ padding: "10px 18px", borderRadius: 10, border: "none", background: "linear-gradient(135deg,#e8b34b,#c8942b)", color: "#000", fontWeight: 700, cursor: "pointer", fontSize: 13, fontFamily: "Georgia, serif", whiteSpace: "nowrap" }}>
+                          Submit Proof
+                        </button>
+                      )}
+                    </div>
+                  )}
 
                   {/* Submitted proofs history */}
                   <div style={{ padding: "16px 22px" }}>
