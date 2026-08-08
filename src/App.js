@@ -1508,7 +1508,14 @@ const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, o
     const fetchMissions = async () => {
       setLoading(true);
       try {
-        const {data,error} = await supabase.from("missions").select("*").eq("status","active").order("created_at",{ascending:false});
+        // Bug fix: was .eq("status","active") — a completed mission vanished
+        // from Home entirely the moment it was marked complete, even though
+        // the "Completed" badge styling a few lines down was already built
+        // to handle it. Donors/pastors browsing Home never saw it again
+        // after that point; only the missionary (own dashboard) and admin
+        // could still see it. Testimonies remains the only other place a
+        // finished mission surfaces publicly.
+        const {data,error} = await supabase.from("missions").select("*").in("status",["active","complete"]).order("created_at",{ascending:false});
         if(error) throw error;
         setMissions(data ? data.map((row,i)=>mapRow(row,i)) : []);
       } catch{ setMissions([]); }
@@ -1673,7 +1680,8 @@ const DonorBrowse = ({ onBack, onMission, user }) => {
       setLoading(true);
       try {
         const { data, error } = await supabase
-          .from("missions").select("*").eq("status","active")
+          // Same fix as HomeScreen — a completed mission was invisible here too.
+          .from("missions").select("*").in("status",["active","complete"])
           .order("created_at",{ ascending:false });
         if (error) throw error;
         setMissions(data ? data.map((r,i) => mapRow(r,i)) : []);
@@ -2055,7 +2063,10 @@ export default function App() {
   useEffect(()=>{
     const fetchLiveMissions = async () => {
       try{
-        const { data, error } = await supabase.from("missions").select("*").eq("status","active").order("created_at",{ascending:false});
+        // Same fix — this shared feed powers Mission Matching, Prayer Wall,
+        // and QR Share's mission lists, so a completed mission was silently
+        // dropped from all three of those too, not just Home.
+        const { data, error } = await supabase.from("missions").select("*").in("status",["active","complete"]).order("created_at",{ascending:false});
         if(error) throw error;
         setLiveMissions(data ? data.map((row,i)=>mapRow(row,i)) : []);
       } catch { setLiveMissions([]); }
