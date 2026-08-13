@@ -240,8 +240,13 @@ export default function FAQScreen({ onBack }) {
         </p>
       </div>
 
-      {/* Video Tutorials */}
-      {(FEATURED_VIDEOS.missionaryHowTo || FEATURED_VIDEOS.churchHowTo || FEATURED_VIDEOS.donorHowTo) && (
+      {/* Video Tutorials — rebuilt for the real 9-video tutorial set.
+          Previously this only ever showed 3 generic videos
+          (missionaryHowTo/churchHowTo/donorHowTo), which never matched
+          what actually got recorded. Grouped by role so it stays scannable
+          even with 9 videos instead of 3. Each still only renders if its
+          ID is actually set in sendmeVideos.js, same guard pattern as before. */}
+      {Object.values(FEATURED_VIDEOS).some(id => id && id !== FEATURED_VIDEOS.missionVision) && (
         <div style={{ margin: '0 16px 20px' }}>
           <h2 style={{
             margin: '0 0 12px',
@@ -254,15 +259,35 @@ export default function FAQScreen({ onBack }) {
           }}>
             ▶ Video Tutorials
           </h2>
-          {FEATURED_VIDEOS.missionaryHowTo && (
-            <YouTubeEmbed videoId={FEATURED_VIDEOS.missionaryHowTo} title="How to Apply as a Missionary" caption="For Missionaries — How to Apply" />
+
+          {FEATURED_VIDEOS.registerAccount && (
+            <YouTubeEmbed videoId={FEATURED_VIDEOS.registerAccount} title="How to Create a SendMe Account" caption="Getting Started — Create Your Account" />
           )}
-          {FEATURED_VIDEOS.churchHowTo && (
-            <YouTubeEmbed videoId={FEATURED_VIDEOS.churchHowTo} title="How Your Church Can Partner with SendMe" caption="For Churches — How to Partner" />
+          {FEATURED_VIDEOS.missionaryApply && (
+            <YouTubeEmbed videoId={FEATURED_VIDEOS.missionaryApply} title="Applying as a Missionary" caption="For Missionaries — How to Apply" />
           )}
-          {FEATURED_VIDEOS.donorHowTo && (
-            <YouTubeEmbed videoId={FEATURED_VIDEOS.donorHowTo} title="How to Give and Pray on SendMe" caption="For Donors — How to Give & Pray" />
+          {FEATURED_VIDEOS.proofCycle && (
+            <YouTubeEmbed videoId={FEATURED_VIDEOS.proofCycle} title="Submitting & Approving Milestone Proof" caption="For Missionaries & Pastors — Milestone Proof" />
           )}
+          {FEATURED_VIDEOS.churchRegister && (
+            <YouTubeEmbed videoId={FEATURED_VIDEOS.churchRegister} title="Registering Your Church (Pastors Only)" caption="For Pastors — Register Your Church" />
+          )}
+          {FEATURED_VIDEOS.churchDirectory && (
+            <YouTubeEmbed videoId={FEATURED_VIDEOS.churchDirectory} title="Finding a Message Believing Church" caption="Church Directory — Find a Church" />
+          )}
+          {FEATURED_VIDEOS.sendWorker && (
+            <YouTubeEmbed videoId={FEATURED_VIDEOS.sendWorker} title="Requesting a Worker for Your Church" caption="For Churches — Send a Worker" />
+          )}
+          {FEATURED_VIDEOS.donate && (
+            <YouTubeEmbed videoId={FEATURED_VIDEOS.donate} title="How to Donate to a Mission" caption="For Donors — How to Give" />
+          )}
+          {FEATURED_VIDEOS.emergencyRequest && (
+            <YouTubeEmbed videoId={FEATURED_VIDEOS.emergencyRequest} title="Submitting an Emergency Request" caption="Emergency Requests — How to Submit" />
+          )}
+          {FEATURED_VIDEOS.testimonies && (
+            <YouTubeEmbed videoId={FEATURED_VIDEOS.testimonies} title="Verified Mission Testimonies" caption="Testimonies — Fruit That Remains" />
+          )}
+
           <div style={{ textAlign: 'center', marginTop: 8 }}>
             <a href={SENDME_CHANNEL_URL} target="_blank" rel="noopener noreferrer"
               style={{ fontSize: 12, color: '#e8b34b', textDecoration: 'underline', fontFamily: 'Georgia, serif' }}>
