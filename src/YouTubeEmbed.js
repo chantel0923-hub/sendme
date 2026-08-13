@@ -1,8 +1,16 @@
 // YouTubeEmbed.js — Reusable YouTube video embed, themed for SendMe
 import React from "react";
 
-export default function YouTubeEmbed({ videoId, title = "SendMe Video", caption }) {
+export default function YouTubeEmbed({ videoId, title = "SendMe Video", caption, autoplay = false }) {
   if (!videoId) return null;
+
+  // Muted autoplay is the only kind browsers reliably allow without a user
+  // gesture first — an unmuted autoplay param is silently ignored by most
+  // browsers anyway, so this is the only version of "plays right away"
+  // that actually works consistently.
+  const src = autoplay
+    ? `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1`
+    : `https://www.youtube.com/embed/${videoId}`;
 
   return (
     <div style={{ marginBottom: 16 }}>
@@ -16,7 +24,7 @@ export default function YouTubeEmbed({ videoId, title = "SendMe Video", caption 
         boxShadow: "0 6px 24px rgba(0,0,0,0.4)",
       }}>
         <iframe
-          src={`https://www.youtube.com/embed/${videoId}`}
+          src={src}
           title={title}
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
           allowFullScreen

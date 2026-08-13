@@ -5,6 +5,7 @@ import "./App.css";
 import MissionaryApplication from "./MissionaryApplication";
 import ChurchRegistration from "./ChurchRegistration";
 import MyChurch from "./MyChurch";
+import WelcomeScreen from "./WelcomeScreen";
 import AdminPipeline from "./AdminPipeline";
 import MapboxMap from "./MapboxMap";
 import ChurchesTab from "./ChurchesTab";
@@ -1508,13 +1509,6 @@ const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, o
     const fetchMissions = async () => {
       setLoading(true);
       try {
-        // Reverted — completed missions belong in Testimonies only, not the
-        // general "Active Missions" browsing list. The actual bug was an
-        // RLS gap on the missions table blocking pastors/donors from
-        // reading complete-status rows at all (fixed via a new SELECT
-        // policy), not this query. Broadening this to include "complete"
-        // was a mistake — it mixed "Done" cards into a section literally
-        // titled Active Missions and broke the Active Missions count.
         const {data,error} = await supabase.from("missions").select("*").eq("status","active").order("created_at",{ascending:false});
         if(error) throw error;
         setMissions(data ? data.map((row,i)=>mapRow(row,i)) : []);
@@ -1680,7 +1674,6 @@ const DonorBrowse = ({ onBack, onMission, user }) => {
       setLoading(true);
       try {
         const { data, error } = await supabase
-          // Reverted — same reasoning as HomeScreen above.
           .from("missions").select("*").eq("status","active")
           .order("created_at",{ ascending:false });
         if (error) throw error;
@@ -1980,16 +1973,30 @@ export default function App() {
   // The global nav "Pray" button clears this so it always opens unfiltered.
   const [prayerWallFilterMissionId, setPrayerWallFilterMissionId] = useState(null);
   const [liveMissions,setLiveMissions]         = useState([]);
+  // First-login welcome screen — null means "not loaded yet" (never
+  // auto-redirect on this), false means "hasn't seen it, redirect once",
+  // true means "already seen it, never redirect."
+  const [hasSeenWelcome,setHasSeenWelcome]     = useState(null);
+  const welcomeCheckedRef = useRef(false);
 
   const loadRole = async (u) => {
-    if (!u) { setUserRole(null); return; }
+    if (!u) { setUserRole(null); setHasSeenWelcome(null); return; }
     try {
-      const { data } = await supabase.from("profiles").select("role, is_admin").eq("id", u.id).single();
+      const { data } = await supabase.from("profiles").select("role, is_admin, has_seen_welcome").eq("id", u.id).single();
       setUserRole(data?.role || u.user_metadata?.role || null);
       // Attach is_admin flag directly to user object so isAdminUser check works
       if (data?.is_admin) u.isAdmin = true;
+      // Explicit === true check: a null/missing value (e.g. an existing
+      // account from before this column existed) is treated as "not yet
+      // seen" and will trigger the welcome screen once. If that's not
+      // wanted for existing accounts, backfill them to true via SQL first
+      // — see the accompanying migration note.
+      setHasSeenWelcome(data?.has_seen_welcome === true);
     } catch {
       setUserRole(u.user_metadata?.role || null);
+      // Fail-safe: if the profile row/column can't be read for any reason,
+      // don't force a welcome-screen redirect loop — treat as already seen.
+      setHasSeenWelcome(true);
     }
   };
 
@@ -2005,6 +2012,19 @@ export default function App() {
     return ()=>subscription.unsubscribe();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[]);
+
+  // First-login welcome screen — redirect exactly once per app load, and
+  // only once we actually know (not still loading) that this account
+  // hasn't seen it. Guarded to only fire from the default "home" landing
+  // so it never overrides a deep link (e.g. /mission/:id, /apply) that
+  // set `screen` before this resolved.
+  useEffect(()=>{
+    if (welcomeCheckedRef.current) return;
+    if (guest || !user || hasSeenWelcome === null) return;
+    welcomeCheckedRef.current = true;
+    if (hasSeenWelcome === false && screen === "home") setScreen("welcome");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[user, guest, hasSeenWelcome]);
 
   useEffect(()=>{
     const params = new URLSearchParams(window.location.search);
@@ -2063,10 +2083,6 @@ export default function App() {
   useEffect(()=>{
     const fetchLiveMissions = async () => {
       try{
-        // Reverted — same reasoning as HomeScreen above. Mission Matching,
-        // Prayer Wall, and QR Share should only ever offer active missions
-        // to select/pray for/share; a finished mission's story belongs in
-        // Testimonies, not back in these action-oriented lists.
         const { data, error } = await supabase.from("missions").select("*").eq("status","active").order("created_at",{ascending:false});
         if(error) throw error;
         setLiveMissions(data ? data.map((row,i)=>mapRow(row,i)) : []);
@@ -2088,6 +2104,7 @@ export default function App() {
   if(showSplash) return <MissionVisionSplash onDone={()=>{ localStorage.setItem("sendme_splash_seen","1"); setShowSplash(false); }}/>;
 
   if(screen==="donor-browse")    return <DonorBrowse onBack={()=>setScreen("home")} onMission={openMission} user={user}/>;
+  if(screen==="welcome")          return <WelcomeScreen user={user} onContinue={()=>{ setHasSeenWelcome(true); setScreen("home"); }}/>;
   if(screen==="faq")              return <FAQScreen onBack={()=>setScreen("home")}/>;
   if(screen==="payout")           return <PayoutSetup onBack={()=>setScreen("home")} user={user}/>;
   if(screen==="admin-payouts")    return isAdminUser ? <AdminPayouts onBack={()=>setScreen("home")}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
