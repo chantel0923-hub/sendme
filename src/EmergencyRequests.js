@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { startPayfastEmergencyDonation } from "./payfast";
 import { supabase } from "./supabase";
 import { notifyAdmin } from "./notifications";
+import { FEATURED_VIDEOS } from "./sendmeVideos";
+import WatchHowLink from "./WatchHowLink";
 
 const fmt = (n) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 
@@ -265,6 +267,7 @@ export default function EmergencyRequests({ onBack, user, userRole }) {
             ) : (
               <>
                 <div style={{ fontSize:15, fontWeight:700, color:"#eef1ff", marginBottom:16 }}>Submit Emergency Request</div>
+                <WatchHowLink videoId={FEATURED_VIDEOS.emergencyRequest} label="Watch how to submit an emergency request" />
                 <input placeholder="Emergency title *" value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))} style={inp}/>
                 <textarea placeholder="Describe the emergency in detail *" value={form.description} onChange={e=>setForm(f=>({...f,description:e.target.value}))} style={{...inp,resize:"vertical",minHeight:90}}/>
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>

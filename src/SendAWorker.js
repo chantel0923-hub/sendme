@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { supabase } from "./supabase";
 import { notifyAdmin } from "./notifications";
+import { FEATURED_VIDEOS } from "./sendmeVideos";
+import WatchHowLink from "./WatchHowLink";
 
 const REQUEST_TYPES = {
   missionary_team: { label:"Missionary Team",  color:"#e8b34b" },
@@ -208,6 +210,7 @@ export default function SendAWorker({ onBack, user }) {
         {showForm && (
           <div style={{ background:"#0c1628", borderRadius:16, border:"1px solid rgba(232,179,75,0.25)", padding:20, marginBottom:24 }}>
             <div style={{ fontSize:15, fontWeight:700, color:"#eef1ff", marginBottom:16 }}>Post a Worker Request</div>
+            <WatchHowLink videoId={FEATURED_VIDEOS.sendWorker} label="Watch how to request a worker" />
             <input placeholder="Request title *" value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))} style={inp}/>
             <input placeholder="Your church name *" value={form.church} onChange={e=>setForm(f=>({...f,church:e.target.value}))} style={inp}/>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
