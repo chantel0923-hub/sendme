@@ -117,6 +117,24 @@ const faqs = [
 
 export default function FAQScreen({ onBack }) {
   const [openIndex, setOpenIndex] = useState(null);
+
+  // Ordered list for the tutorial grid — separate from FEATURED_VIDEOS'
+  // raw ids so each one carries a real display title for its thumbnail
+  // card and the player caption.
+  const TUTORIAL_VIDEOS = {
+    registerAccount:  { id: FEATURED_VIDEOS.registerAccount,  title: "How to Create a SendMe Account" },
+    missionaryApply:  { id: FEATURED_VIDEOS.missionaryApply,  title: "Applying as a Missionary" },
+    proofCycle:       { id: FEATURED_VIDEOS.proofCycle,       title: "Submitting & Approving Milestone Proof" },
+    churchRegister:   { id: FEATURED_VIDEOS.churchRegister,   title: "Registering Your Church (Pastors Only)" },
+    churchDirectory:  { id: FEATURED_VIDEOS.churchDirectory,  title: "Finding a Message Believing Church" },
+    sendWorker:       { id: FEATURED_VIDEOS.sendWorker,       title: "Requesting a Worker for Your Church" },
+    donate:           { id: FEATURED_VIDEOS.donate,           title: "How to Donate to a Mission" },
+    emergencyRequest: { id: FEATURED_VIDEOS.emergencyRequest, title: "Submitting an Emergency Request" },
+    testimonies:      { id: FEATURED_VIDEOS.testimonies,      title: "Verified Mission Testimonies" },
+  };
+  const firstAvailableKey = Object.entries(TUTORIAL_VIDEOS).find(([, v]) => v.id)?.[0] || null;
+  const [selectedKey, setSelectedKey] = useState(firstAvailableKey);
+  const selectedTutorial = selectedKey ? TUTORIAL_VIDEOS[selectedKey] : null;
   const [showContactForm, setShowContactForm] = useState(false);
   const [contactForm, setContactForm] = useState({ name: '', email: '', message: '' });
   const [contactSubmitting, setContactSubmitting] = useState(false);
@@ -240,13 +258,13 @@ export default function FAQScreen({ onBack }) {
         </p>
       </div>
 
-      {/* Video Tutorials — rebuilt for the real 9-video tutorial set.
-          Previously this only ever showed 3 generic videos
-          (missionaryHowTo/churchHowTo/donorHowTo), which never matched
-          what actually got recorded. Grouped by role so it stays scannable
-          even with 9 videos instead of 3. Each still only renders if its
-          ID is actually set in sendmeVideos.js, same guard pattern as before. */}
-      {Object.values(FEATURED_VIDEOS).some(id => id && id !== FEATURED_VIDEOS.missionVision) && (
+      {/* Video Tutorials — rebuilt as a player + thumbnail grid instead of
+          9 full-size embeds stacked one after another. Each thumbnail uses
+          YouTube's own image for that video (img.youtube.com), so every
+          card is visually distinct without needing custom thumbnail
+          uploads. Only the selected video's iframe is ever mounted, so
+          this also avoids loading 9 embeds at once. */}
+      {Object.values(TUTORIAL_VIDEOS).some(v => v.id) && (
         <div style={{ margin: '0 16px 20px' }}>
           <h2 style={{
             margin: '0 0 12px',
@@ -260,35 +278,50 @@ export default function FAQScreen({ onBack }) {
             ▶ Video Tutorials
           </h2>
 
-          {FEATURED_VIDEOS.registerAccount && (
-            <YouTubeEmbed videoId={FEATURED_VIDEOS.registerAccount} title="How to Create a SendMe Account" caption="Getting Started — Create Your Account" />
-          )}
-          {FEATURED_VIDEOS.missionaryApply && (
-            <YouTubeEmbed videoId={FEATURED_VIDEOS.missionaryApply} title="Applying as a Missionary" caption="For Missionaries — How to Apply" />
-          )}
-          {FEATURED_VIDEOS.proofCycle && (
-            <YouTubeEmbed videoId={FEATURED_VIDEOS.proofCycle} title="Submitting & Approving Milestone Proof" caption="For Missionaries & Pastors — Milestone Proof" />
-          )}
-          {FEATURED_VIDEOS.churchRegister && (
-            <YouTubeEmbed videoId={FEATURED_VIDEOS.churchRegister} title="Registering Your Church (Pastors Only)" caption="For Pastors — Register Your Church" />
-          )}
-          {FEATURED_VIDEOS.churchDirectory && (
-            <YouTubeEmbed videoId={FEATURED_VIDEOS.churchDirectory} title="Finding a Message Believing Church" caption="Church Directory — Find a Church" />
-          )}
-          {FEATURED_VIDEOS.sendWorker && (
-            <YouTubeEmbed videoId={FEATURED_VIDEOS.sendWorker} title="Requesting a Worker for Your Church" caption="For Churches — Send a Worker" />
-          )}
-          {FEATURED_VIDEOS.donate && (
-            <YouTubeEmbed videoId={FEATURED_VIDEOS.donate} title="How to Donate to a Mission" caption="For Donors — How to Give" />
-          )}
-          {FEATURED_VIDEOS.emergencyRequest && (
-            <YouTubeEmbed videoId={FEATURED_VIDEOS.emergencyRequest} title="Submitting an Emergency Request" caption="Emergency Requests — How to Submit" />
-          )}
-          {FEATURED_VIDEOS.testimonies && (
-            <YouTubeEmbed videoId={FEATURED_VIDEOS.testimonies} title="Verified Mission Testimonies" caption="Testimonies — Fruit That Remains" />
+          {selectedTutorial && (
+            <div style={{ marginBottom: 14 }}>
+              <YouTubeEmbed videoId={selectedTutorial.id} title={selectedTutorial.title} caption={selectedTutorial.title} />
+            </div>
           )}
 
-          <div style={{ textAlign: 'center', marginTop: 8 }}>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
+            gap: 10,
+          }}>
+            {Object.entries(TUTORIAL_VIDEOS).filter(([, v]) => v.id).map(([key, v]) => (
+              <div
+                key={key}
+                onClick={() => setSelectedKey(key)}
+                style={{
+                  cursor: 'pointer',
+                  borderRadius: 10,
+                  overflow: 'hidden',
+                  border: selectedKey === key ? '2px solid #e8b34b' : '1px solid rgba(255,255,255,0.1)',
+                  background: 'rgba(255,255,255,0.02)',
+                }}
+              >
+                <div style={{ position: 'relative', width: '100%', paddingBottom: '56.25%', background: '#000' }}>
+                  <img
+                    src={`https://img.youtube.com/vi/${v.id}/hqdefault.jpg`}
+                    alt={v.title}
+                    style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+                  />
+                  <div style={{
+                    position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)',
+                    width: 34, height: 34, borderRadius: '50%',
+                    background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    color: selectedKey === key ? '#e8b34b' : '#fff', fontSize: 13,
+                  }}>▶</div>
+                </div>
+                <div style={{ padding: '8px 10px', fontSize: 11, color: 'rgba(255,255,255,0.6)', lineHeight: 1.4, fontFamily: 'Georgia, serif' }}>
+                  {v.title}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ textAlign: 'center', marginTop: 14 }}>
             <a href={SENDME_CHANNEL_URL} target="_blank" rel="noopener noreferrer"
               style={{ fontSize: 12, color: '#e8b34b', textDecoration: 'underline', fontFamily: 'Georgia, serif' }}>
               Visit our YouTube channel for more

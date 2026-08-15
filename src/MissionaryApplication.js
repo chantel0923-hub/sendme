@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { supabase } from "./supabase";
 import { notifyAdmin } from "./notifications";
+import { FEATURED_VIDEOS } from "./sendmeVideos";
+import WatchHowLink from "./WatchHowLink";
 
 const inp = {
   width: "100%", padding: "13px 16px", borderRadius: 12, boxSizing: "border-box",
@@ -229,6 +231,7 @@ const StepBar = ({ current }) => (
 const Step1 = ({ form, set, prefilledFromPrevious }) => (
   <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
     <div style={sectionTitle}>Personal Information</div>
+    <WatchHowLink videoId={FEATURED_VIDEOS.missionaryApply} label="Watch how to apply, step by step" />
     {prefilledFromPrevious && (
       <div style={{ background:"rgba(91,156,246,0.08)", border:"1px solid rgba(91,156,246,0.25)", borderRadius:10, padding:"10px 14px", marginBottom:12, fontSize:12, color:"#5b9cf6" }}>
         We've filled this in from your previous application — feel free to update anything that's changed.

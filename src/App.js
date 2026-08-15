@@ -20,6 +20,7 @@ import PayoutSetup from './PayoutSetup';
 import AdminPayouts, { ADMIN_EMAIL } from './AdminPayouts';
 import YouTubeEmbed from './YouTubeEmbed';
 import { FEATURED_VIDEOS, SENDME_CHANNEL_URL } from './sendmeVideos';
+import WatchHowLink from './WatchHowLink';
 import { startPayfastDonation } from './payfast';
 import MilestoneProof from './MilestoneProof';
 import PastorReview from './PastorReview';
@@ -641,6 +642,7 @@ const DonateScreen = ({ mission: m, onBack, onPayfast, user, onBrowseMissions })
             <span style={{ fontSize:12,color:"rgba(255,255,255,0.3)" }}>{m.raised>=m.goal?"🎉 Goal reached!":`$${fmt(m.goal-m.raised)} still needed`}</span>
           </div>
         </div>
+        <WatchHowLink videoId={FEATURED_VIDEOS.donate} label="Watch how giving works" />
         <div style={{ background:"rgba(232,179,75,0.06)",borderRadius:14,border:"1px solid rgba(232,179,75,0.2)",padding:"14px 18px",display:"flex",gap:10 }}>
           <span style={{ fontSize:18,flexShrink:0 }}>🔐</span>
           <div style={{ fontSize:13,color:"rgba(255,255,255,0.5)",lineHeight:1.7 }}>Your donation is held in <strong style={{ color:"#e8b34b" }}>secure escrow</strong> and only released when milestone proof is verified.</div>

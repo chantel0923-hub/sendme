@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { supabase } from "./supabase";
 import { notifyAdmin } from "./notifications";
+import { FEATURED_VIDEOS } from "./sendmeVideos";
+import WatchHowLink from "./WatchHowLink";
 
 const inp = {
   width:"100%", padding:"13px 16px", borderRadius:12, boxSizing:"border-box",
@@ -160,6 +162,7 @@ const StepBar = ({ current, totalSteps }) => (
 const Step1 = ({ form, set, isOrg }) => (
   <div>
     <div style={sectionTitle}>{isOrg ? "Organization Information" : "Church Information"}</div>
+    <WatchHowLink videoId={FEATURED_VIDEOS.churchRegister} label="Watch how to register your church" />
     <FInput label={isOrg ? "Organization Name *" : "Church Name *"} placeholder={isOrg ? "e.g. Global Harvest Missions" : "e.g. Eagle Ministry Tabernacle"} value={form.churchName} onChange={e=>set("churchName",e.target.value)}/>
     <FInput label="Street Address" placeholder="e.g. 12 Main Street, Northmead" value={form.street} onChange={e=>set("street",e.target.value)}/>
     <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
