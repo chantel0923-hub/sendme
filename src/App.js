@@ -1317,7 +1317,7 @@ const NavDropdown = ({ user, userRole, guest, onProfile, onEmergency, onTestimon
         <span style={{ fontSize:10, display:"inline-block", transform:open?"rotate(180deg)":"none", transition:"transform .15s" }}>▾</span>
       </button>
       {open && (
-        <div style={{
+        <div className="sendme-dropdown-panel" style={{
           position:"absolute", top:"calc(100% + 8px)", right:0, minWidth:200,
           background:"#0c1628", border:"1px solid rgba(232,179,75,0.2)",
           borderRadius:14, boxShadow:"0 12px 40px rgba(0,0,0,0.6)",
@@ -1376,7 +1376,7 @@ const PayoutsDropdown = ({ onPayout, onPastorReview }) => {
         <span style={{ fontSize:10, display:"inline-block", transform:open?"rotate(180deg)":"none", transition:"transform .15s" }}>▾</span>
       </button>
       {open && (
-        <div style={{
+        <div className="sendme-dropdown-panel" style={{
           position:"absolute", top:"calc(100% + 8px)", right:0, minWidth:190,
           background:"#0c1628", border:"1px solid rgba(232,179,75,0.2)",
           borderRadius:14, boxShadow:"0 12px 40px rgba(0,0,0,0.6)",
@@ -1441,7 +1441,7 @@ const AdminDropdown = ({ onAdminChurchVerification, onAdminWorkers, onAdminEmerg
         <span style={{ fontSize:10, display:"inline-block", transform:open?"rotate(180deg)":"none", transition:"transform .15s" }}>▾</span>
       </button>
       {open && (
-        <div style={{
+        <div className="sendme-dropdown-panel" style={{
           position:"absolute", top:"calc(100% + 8px)", right:0, minWidth:200,
           background:"#0c1628", border:"1px solid rgba(232,91,91,0.2)",
           borderRadius:14, boxShadow:"0 12px 40px rgba(0,0,0,0.6)",
@@ -1532,6 +1532,25 @@ if (typeof document !== "undefined" && !document.getElementById(_navStyleId)) {
       .sendme-home-nav-buttons button,
       .sendme-home-nav-buttons > div {
         font-size: 12px !important;
+      }
+      /* The three nav dropdowns (More / Payouts / Admin) all anchor their
+         open panel with right:0 relative to their own trigger button — on
+         desktop that's always safely far from the screen edge, but on
+         mobile the button itself can land anywhere once the nav wraps
+         (different roles show different buttons before it), so right:0
+         can push a 200px-wide panel mostly off-screen to the left. Fixed
+         by making the open panel a centered, bottom-anchored sheet on
+         mobile instead of trying to anchor to wherever the button is. */
+      .sendme-dropdown-panel {
+        position: fixed !important;
+        left: 50% !important;
+        right: auto !important;
+        top: auto !important;
+        bottom: 90px !important;
+        transform: translateX(-50%);
+        width: min(300px, 92vw) !important;
+        max-height: 65vh;
+        overflow-y: auto;
       }
     }
   `;
