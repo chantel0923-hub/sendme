@@ -28,6 +28,7 @@ import AdminChurchVerification from './AdminChurchVerification';
 import AdminWorkerRequests from './AdminWorkerRequests';
 import AdminEmergencyRequests from './AdminEmergencyRequests';
 import NotificationOptIn from './NotificationOptIn';
+import AddToHomeScreenPrompt from './AddToHomeScreenPrompt';
 
 const COLORS = ["#e8b34b","#4caf7d","#5b9cf6","#e85b5b","#b06cf5","#f5a44a","#3ecf8e","#f06292"];
 const getColor = (id) => COLORS[id % COLORS.length];
@@ -1605,6 +1606,7 @@ const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, o
         </div>
       </div>
       <div style={{ maxWidth:900,margin:"0 auto",padding:"24px 20px" }}>
+        <AddToHomeScreenPrompt/>
         {user && <NotificationOptIn user={user}/>}
         <div style={{ marginBottom:24 }}>
           {loading?<LoadingMap/>:<MapboxMap missions={missions} onMissionClick={onMission}/>}
