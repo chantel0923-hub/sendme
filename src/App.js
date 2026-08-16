@@ -5,7 +5,6 @@ import "./App.css";
 import MissionaryApplication from "./MissionaryApplication";
 import ChurchRegistration from "./ChurchRegistration";
 import MyChurch from "./MyChurch";
-import WelcomeScreen from "./WelcomeScreen";
 import AdminPipeline from "./AdminPipeline";
 import MapboxMap from "./MapboxMap";
 import ChurchesTab from "./ChurchesTab";
@@ -20,7 +19,6 @@ import PayoutSetup from './PayoutSetup';
 import AdminPayouts, { ADMIN_EMAIL } from './AdminPayouts';
 import YouTubeEmbed from './YouTubeEmbed';
 import { FEATURED_VIDEOS, SENDME_CHANNEL_URL } from './sendmeVideos';
-import WatchHowLink from './WatchHowLink';
 import { startPayfastDonation } from './payfast';
 import MilestoneProof from './MilestoneProof';
 import PastorReview from './PastorReview';
@@ -642,7 +640,6 @@ const DonateScreen = ({ mission: m, onBack, onPayfast, user, onBrowseMissions })
             <span style={{ fontSize:12,color:"rgba(255,255,255,0.3)" }}>{m.raised>=m.goal?"🎉 Goal reached!":`$${fmt(m.goal-m.raised)} still needed`}</span>
           </div>
         </div>
-        <WatchHowLink videoId={FEATURED_VIDEOS.donate} label="Watch how giving works" />
         <div style={{ background:"rgba(232,179,75,0.06)",borderRadius:14,border:"1px solid rgba(232,179,75,0.2)",padding:"14px 18px",display:"flex",gap:10 }}>
           <span style={{ fontSize:18,flexShrink:0 }}>🔐</span>
           <div style={{ fontSize:13,color:"rgba(255,255,255,0.5)",lineHeight:1.7 }}>Your donation is held in <strong style={{ color:"#e8b34b" }}>secure escrow</strong> and only released when milestone proof is verified.</div>
@@ -1503,6 +1500,44 @@ const ProofCenter = ({ onBack, user, isAdmin, isPastor, initialTab }) => {
   );
 };
 
+// Responsive nav bar for HomeScreen — injected once, same pattern already
+// used in MapboxMap.js for popup style overrides. Plain inline React style
+// objects can't express a media query, so this is the one place in the
+// header that needs real CSS. Fixes the mobile bug where the button row
+// squeezed itself beside the fixed-width logo instead of wrapping cleanly
+// underneath it — desktop layout (>820px) is untouched, matching what's
+// already working well there.
+const _navStyleId = "sendme-home-nav-responsive";
+if (typeof document !== "undefined" && !document.getElementById(_navStyleId)) {
+  const _navStyle = document.createElement("style");
+  _navStyle.id = _navStyleId;
+  _navStyle.innerHTML = `
+    .sendme-home-header {
+      flex-direction: row;
+      align-items: center;
+    }
+    .sendme-home-nav-buttons {
+      justify-content: flex-end;
+    }
+    @media (max-width: 820px) {
+      .sendme-home-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+      }
+      .sendme-home-nav-buttons {
+        justify-content: flex-start;
+        width: 100%;
+      }
+      .sendme-home-nav-buttons button,
+      .sendme-home-nav-buttons > div {
+        font-size: 12px !important;
+      }
+    }
+  `;
+  document.head.appendChild(_navStyle);
+}
+
 const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, onMyChurch, onChurches, onProfile, onEmergency, onMatching, onPray, onTestimonies, onWorker, onQR, onFaq, onPayout, onAdminPayouts, isAdmin, isPastor, onMilestoneProof, onPastorReview, onMissionaryDashboard, onAdminApprovals, onAdminChurchVerification, guest, onSignIn, onDonate, onAdminWorkers, onAdminEmergency, onAdminPipeline }) => {
   const [region,setRegion]       = useState("All");
   const [missions,setMissions]   = useState([]);
@@ -1525,12 +1560,12 @@ const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, o
   const countryCount = new Set(missions.map(m=>m.country)).size;
   return (
     <div style={{ minHeight:"100vh",background:"#060c18",fontFamily:"Georgia, serif",color:"#eef1ff" }}>
-      <div style={{ background:"#09111f",borderBottom:"1px solid rgba(255,255,255,0.07)",padding:"16px 24px",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,zIndex:100 }}>
+      <div className="sendme-home-header" style={{ background:"#09111f",borderBottom:"1px solid rgba(255,255,255,0.07)",padding:"16px 24px",display:"flex",justifyContent:"space-between",position:"sticky",top:0,zIndex:100 }}>
         <div>
           <div style={{ fontSize:28,fontWeight:800,color:"#fff" }}>Send<span style={{ color:"#e8b34b" }}>Me</span></div>
           <div style={{ fontSize:10,color:"rgba(255,255,255,0.3)",letterSpacing:4 }}>GLOBAL MISSION FUND</div>
         </div>
-        <div style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" }}>
+        <div className="sendme-home-nav-buttons" style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" }}>
           {user&&<span style={{ fontSize:12,color:"rgba(255,255,255,0.4)" }}>✝ {user.email?.split("@")[0]}</span>}
           <button onClick={onDonate} style={{ background:"linear-gradient(135deg,#4caf7d,#3a8f63)",border:"none",borderRadius:10,padding:"8px 16px",color:"#fff",cursor:"pointer",fontSize:13,fontWeight:700 }}>💛 Donate</button>
           <button onClick={onPray} style={{ background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"8px 16px",color:"rgba(255,255,255,0.6)",cursor:"pointer",fontSize:13 }}>Pray</button>
@@ -1975,30 +2010,16 @@ export default function App() {
   // The global nav "Pray" button clears this so it always opens unfiltered.
   const [prayerWallFilterMissionId, setPrayerWallFilterMissionId] = useState(null);
   const [liveMissions,setLiveMissions]         = useState([]);
-  // First-login welcome screen — null means "not loaded yet" (never
-  // auto-redirect on this), false means "hasn't seen it, redirect once",
-  // true means "already seen it, never redirect."
-  const [hasSeenWelcome,setHasSeenWelcome]     = useState(null);
-  const welcomeCheckedRef = useRef(false);
 
   const loadRole = async (u) => {
-    if (!u) { setUserRole(null); setHasSeenWelcome(null); return; }
+    if (!u) { setUserRole(null); return; }
     try {
-      const { data } = await supabase.from("profiles").select("role, is_admin, has_seen_welcome").eq("id", u.id).single();
+      const { data } = await supabase.from("profiles").select("role, is_admin").eq("id", u.id).single();
       setUserRole(data?.role || u.user_metadata?.role || null);
       // Attach is_admin flag directly to user object so isAdminUser check works
       if (data?.is_admin) u.isAdmin = true;
-      // Explicit === true check: a null/missing value (e.g. an existing
-      // account from before this column existed) is treated as "not yet
-      // seen" and will trigger the welcome screen once. If that's not
-      // wanted for existing accounts, backfill them to true via SQL first
-      // — see the accompanying migration note.
-      setHasSeenWelcome(data?.has_seen_welcome === true);
     } catch {
       setUserRole(u.user_metadata?.role || null);
-      // Fail-safe: if the profile row/column can't be read for any reason,
-      // don't force a welcome-screen redirect loop — treat as already seen.
-      setHasSeenWelcome(true);
     }
   };
 
@@ -2014,19 +2035,6 @@ export default function App() {
     return ()=>subscription.unsubscribe();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[]);
-
-  // First-login welcome screen — redirect exactly once per app load, and
-  // only once we actually know (not still loading) that this account
-  // hasn't seen it. Guarded to only fire from the default "home" landing
-  // so it never overrides a deep link (e.g. /mission/:id, /apply) that
-  // set `screen` before this resolved.
-  useEffect(()=>{
-    if (welcomeCheckedRef.current) return;
-    if (guest || !user || hasSeenWelcome === null) return;
-    welcomeCheckedRef.current = true;
-    if (hasSeenWelcome === false && screen === "home") setScreen("welcome");
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[user, guest, hasSeenWelcome]);
 
   useEffect(()=>{
     const params = new URLSearchParams(window.location.search);
@@ -2106,7 +2114,6 @@ export default function App() {
   if(showSplash) return <MissionVisionSplash onDone={()=>{ localStorage.setItem("sendme_splash_seen","1"); setShowSplash(false); }}/>;
 
   if(screen==="donor-browse")    return <DonorBrowse onBack={()=>setScreen("home")} onMission={openMission} user={user}/>;
-  if(screen==="welcome")          return <WelcomeScreen user={user} onContinue={()=>{ setHasSeenWelcome(true); setScreen("home"); }}/>;
   if(screen==="faq")              return <FAQScreen onBack={()=>setScreen("home")}/>;
   if(screen==="payout")           return <PayoutSetup onBack={()=>setScreen("home")} user={user}/>;
   if(screen==="admin-payouts")    return isAdminUser ? <AdminPayouts onBack={()=>setScreen("home")}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
