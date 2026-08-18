@@ -16,7 +16,8 @@
 // permanently lose exactly the person we're trying to retain.
 import { useState, useEffect } from "react";
 
-const DISMISS_KEY = "sendme_a2hs_dismissed_session";
+const DISMISS_KEY   = "sendme_a2hs_dismissed_session";
+const INSTALLED_KEY = "sendme_a2hs_installed"; // persists across tabs/sessions on this device
 
 function detectPlatform() {
   const ua = window.navigator.userAgent || "";
@@ -39,19 +40,41 @@ export default function AddToHomeScreenPrompt() {
   const { isIOS, isAndroid } = detectPlatform();
 
   useEffect(() => {
-    if (isStandalone()) return; // already installed — never nag someone who's already in
+    // Previously only checked display-mode, which only reflects the CURRENT
+    // window/tab — someone who installed via the browser's own menu (not
+    // our button) and is now back in a regular Chrome tab would still see
+    // this every time, even though the app is genuinely already installed
+    // on their device. localStorage persists across tabs/sessions, so this
+    // is the real fix for "it keeps asking after I already installed it."
+    if (localStorage.getItem(INSTALLED_KEY)) return;
+    if (isStandalone()) {
+      localStorage.setItem(INSTALLED_KEY, "1"); // we're IN the installed app right now — remember it
+      return;
+    }
     if (sessionStorage.getItem(DISMISS_KEY)) return;
-    // Only relevant on phones — "add to home screen" doesn't mean much on desktop
-    if (!isIOS && !isAndroid) return;
+    if (!isIOS && !isAndroid) return; // desktop — "home screen" doesn't apply
 
     setVisible(true);
 
-    const handler = (e) => {
+    const installHandler = (e) => {
       e.preventDefault();
       setDeferredPrompt(e);
     };
-    window.addEventListener("beforeinstallprompt", handler);
-    return () => window.removeEventListener("beforeinstallprompt", handler);
+    // Fires the moment installation actually completes — whether triggered
+    // by our "Install Now" button OR the manual "Add to Home screen" /
+    // "Install app" menu path. This is the one reliable signal that works
+    // no matter how someone chose to install.
+    const appInstalledHandler = () => {
+      localStorage.setItem(INSTALLED_KEY, "1");
+      setVisible(false);
+    };
+
+    window.addEventListener("beforeinstallprompt", installHandler);
+    window.addEventListener("appinstalled", appInstalledHandler);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", installHandler);
+      window.removeEventListener("appinstalled", appInstalledHandler);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -67,7 +90,13 @@ export default function AddToHomeScreenPrompt() {
     const { outcome } = await deferredPrompt.userChoice;
     setInstalling(false);
     setDeferredPrompt(null);
-    if (outcome === "accepted") setVisible(false);
+    // Belt-and-braces alongside the appinstalled listener above — some
+    // browsers fire userChoice slightly before/without a separate
+    // appinstalled event in edge cases, so set it here too.
+    if (outcome === "accepted") {
+      localStorage.setItem(INSTALLED_KEY, "1");
+      setVisible(false);
+    }
   };
 
   if (!visible) return null;
