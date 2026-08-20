@@ -64,6 +64,14 @@ export default function MapboxMap({ missions, churches = [], onMissionClick }) {
       center: [20, 10],
       zoom: 2.2,
       attributionControl: false,
+      // Fixes the map trapping page scroll on mobile — previously a single
+      // finger swiping down to scroll the page instead panned/zoomed the
+      // map, since Mapbox GL captures touch gestures by default. With this
+      // on, a one-finger swipe scrolls the page normally; the map only
+      // pans/zooms with two fingers (or scroll+Ctrl on desktop), with a
+      // small "use two fingers to move the map" hint shown on the first
+      // single-finger attempt.
+      cooperativeGestures: true,
     });
 
     map.current.addControl(
