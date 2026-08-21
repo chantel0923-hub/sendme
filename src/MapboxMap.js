@@ -66,30 +66,6 @@ export default function MapboxMap({ missions, churches = [], onMissionClick }) {
       attributionControl: false,
     });
 
-    // Fixes the map trapping page scroll on mobile — previously a single
-    // finger swiping down to scroll the page instead panned/zoomed the
-    // map. Originally tried Mapbox's built-in `cooperativeGestures` option
-    // for this, but it had no effect — almost certainly because it needs a
-    // newer Mapbox GL JS version than this project has installed, and gets
-    // silently ignored rather than erroring. This is the same behavior
-    // implemented manually instead, using the low-level dragPan API that's
-    // existed since the earliest Mapbox GL JS versions: single-finger
-    // touch disables map panning (so the page scrolls normally instead),
-    // two-finger touch re-enables it for actually interacting with the map.
-    map.current.dragPan.disable();
-    map.current.on("touchstart", (e) => {
-      if (e.originalEvent.touches.length >= 2) {
-        map.current.dragPan.enable();
-      } else {
-        map.current.dragPan.disable();
-      }
-    });
-    map.current.on("touchend", (e) => {
-      if (e.originalEvent.touches.length < 2) {
-        map.current.dragPan.disable();
-      }
-    });
-
     map.current.addControl(
       new mapboxgl.NavigationControl({ showCompass: false }), "top-right"
     );
