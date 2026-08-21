@@ -2,11 +2,44 @@
 // every screen (mounted globally in index.js, not inside App.js's own
 // screen-switching), so someone stuck on any form or flow always has a
 // one-tap way to reach real support.
+//
+// Since this is mounted as a sibling of <App/> rather than inside it, it
+// doesn't get the `user` object as a prop — instead it checks the current
+// Supabase session directly (same shared client App.js itself uses), so
+// the pre-filled message can include the person's registered name without
+// needing any changes to App.js's own structure.
+import { useState, useEffect } from "react";
+import { supabase } from "./supabase";
+
 const SUPPORT_NUMBER = "27726240395"; // international format, no +, no spaces
-const DEFAULT_MESSAGE = "Hi! I need help with the SendMe app 🙏";
 
 export default function WhatsAppSupportButton() {
-  const href = `https://wa.me/${SUPPORT_NUMBER}?text=${encodeURIComponent(DEFAULT_MESSAGE)}`;
+  const [fullName, setFullName] = useState(null);
+
+  useEffect(() => {
+    const loadUser = async () => {
+      try {
+        const { data } = await supabase.auth.getUser();
+        setFullName(data?.user?.user_metadata?.full_name || null);
+      } catch {
+        setFullName(null);
+      }
+    };
+    loadUser();
+
+    // Keep it current if someone signs in/out while this stays mounted —
+    // it never unmounts between screens since it lives outside App.js.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setFullName(session?.user?.user_metadata?.full_name || null);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const message = fullName
+    ? `Hi, my name is ${fullName}. I need help with the SendMe app 🙏`
+    : "Hi! I need help with the SendMe app 🙏";
+
+  const href = `https://wa.me/${SUPPORT_NUMBER}?text=${encodeURIComponent(message)}`;
 
   return (
     <a
