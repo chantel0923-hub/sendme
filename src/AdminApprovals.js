@@ -275,6 +275,12 @@ export default function AdminApprovals({ onBack, user }) {
                     </div>
                   </div>
 
+                  {m.requires_full_funding && (
+                    <div style={{ background:"rgba(232,179,75,0.08)", border:"1px solid rgba(232,179,75,0.25)", borderRadius:10, padding:"8px 12px", marginBottom:14, fontSize:12, color:"#e8b34b" }}>
+                      ⚠️ This missionary indicated the full amount is needed upfront before travel/work can begin — Milestone 1 payout will require the full goal raised, not just a third.
+                    </div>
+                  )}
+
                   {/* Milestone payout breakdown — same 3-way split AdminPayouts.js
                       uses once this mission starts receiving proofs, shown here
                       up front so admin can review the actual payout schedule

@@ -111,12 +111,20 @@ export default function AdminPayouts({ onBack }) {
     if (newStatus === "paid") {
       const mission = missions.find(m => m.id === missionId);
       const raised = mission?.raised || 0;
-      let cumulativeRequired = 0;
-      for (let i = 1; i <= milestoneNum; i++) cumulativeRequired += milestoneAmount(mission?.goal, i);
+      let cumulativeRequired;
+      if (mission?.requires_full_funding) {
+        // This mission can't start in pieces (flights, visas, upfront setup)
+        // — the FULL goal must be in before even Milestone 1 can be paid,
+        // regardless of which milestone number this is.
+        cumulativeRequired = mission?.goal || 0;
+      } else {
+        cumulativeRequired = 0;
+        for (let i = 1; i <= milestoneNum; i++) cumulativeRequired += milestoneAmount(mission?.goal, i);
+      }
       if (raised < cumulativeRequired) {
         window.alert(
           `⚠ Not enough has been raised yet for this payout.\n\n` +
-          `"${missionTitle}" has raised $${fmt(raised)} so far, but paying out through milestone ${milestoneNum} requires at least $${fmt(cumulativeRequired)} to have come in.\n\n` +
+          `"${missionTitle}" has raised $${fmt(raised)} so far, but ${mission?.requires_full_funding ? "this mission requires the full amount" : `paying out through milestone ${milestoneNum} requires at least`} $${fmt(cumulativeRequired)} to have come in.\n\n` +
           `Wait until more donations land before marking this as paid.`
         );
         return;
@@ -195,6 +203,7 @@ export default function AdminPayouts({ onBack }) {
       country:      m.country || m.city || "",
       milestoneNum: proof.milestone_number,
       amount:       milestoneAmount(m.goal, proof.milestone_number),
+      requiresFullFunding: !!m.requires_full_funding,
       isPaid,
       paidAt:       record?.paid_at,
       details,
@@ -220,6 +229,7 @@ export default function AdminPayouts({ onBack }) {
       legacyRows.push({
         missionId:    m.id,
         missionTitle: m.title || "Untitled Mission",
+        requiresFullFunding: !!m.requires_full_funding,
         missionaryEmail: m.missionary_email || null,
         churchName:   m.church_name || "",
         churchId:     m.church_id || null,
@@ -561,6 +571,9 @@ export default function AdminPayouts({ onBack }) {
                           )}
                         </div>
                         <div style={{ fontSize:15, fontWeight:700, color:"#eef1ff" }}>{r.missionTitle}</div>
+                        {r.requiresFullFunding && (
+                          <div style={{ fontSize:11, color:"#e8b34b", marginTop:3 }}>⚠️ Requires full funding before Milestone 1 can be paid</div>
+                        )}
                         {r.churchName && (
                           <div style={{ fontSize:12, color:"rgba(255,255,255,0.45)", marginTop:3 }}>⛪ {r.churchName}</div>
                         )}
@@ -739,6 +752,9 @@ export default function AdminPayouts({ onBack }) {
                     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:12, flexWrap:"wrap" }}>
                       <div style={{ flex:1, minWidth:220 }}>
                         <div style={{ fontSize:14, fontWeight:700, color:"#eef1ff" }}>{r.missionTitle}</div>
+                        {r.requiresFullFunding && (
+                          <div style={{ fontSize:11, color:"#e8b34b", marginTop:3 }}>⚠️ Requires full funding before Milestone 1 can be paid</div>
+                        )}
                         {r.churchName && (
                           <div style={{ fontSize:12, color:"rgba(255,255,255,0.45)", marginTop:2 }}>
                             ⛪ {r.churchName}

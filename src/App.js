@@ -49,6 +49,7 @@ const mapRow = (row, i) => ({
   // platform surcharge. Falls back to goal*1.1 for older records created
   // before collection_target existed on this row.
   fundingTarget: row.collection_target || Math.round((row.goal||1000)*1.1),
+  requiresFullFunding: !!row.requires_full_funding,
   color:(row.color && row.color !== "null") ? row.color : getColor(i),
   status:row.status||"active", milestone:row.milestone||0,
   souls:row.souls||0, bibles:row.bibles||0, churches:row.churches_planted||0,

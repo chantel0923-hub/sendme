@@ -561,6 +561,28 @@ const Step4 = ({ form, set }) => (
         </div>
       )}
     </div>
+
+    {/* Some missions genuinely can't start in pieces — a flight, visa, or
+        initial setup that has to be paid for as one lump sum before the
+        missionary can even travel. This flag tells the admin payout screen
+        to require the FULL goal raised before Milestone 1 can be paid,
+        instead of the normal one-third-at-a-time release. */}
+    <div onClick={()=>set("requiresFullFunding",!form.requiresFullFunding)}
+      style={{ display:"flex",gap:14,alignItems:"flex-start",padding:"14px 16px",borderRadius:12,cursor:"pointer",marginBottom:14,
+        background:form.requiresFullFunding?"rgba(232,179,75,0.08)":"rgba(255,255,255,0.02)",
+        border:`1px solid ${form.requiresFullFunding?"rgba(232,179,75,0.35)":"rgba(255,255,255,0.07)"}`,
+        transition:"all .2s" }}>
+      <div style={{ width:22,height:22,borderRadius:6,flexShrink:0,marginTop:1,
+        background:form.requiresFullFunding?"linear-gradient(135deg,#e8b34b,#c8942b)":"rgba(255,255,255,0.05)",
+        border:form.requiresFullFunding?"none":"1px solid rgba(255,255,255,0.15)",
+        display:"flex",alignItems:"center",justifyContent:"center",
+        fontSize:13,color:"#000",fontWeight:700,transition:"all .2s" }}>
+        {form.requiresFullFunding?"✓":""}
+      </div>
+      <span style={{ fontSize:13,color:form.requiresFullFunding?"#eef1ff":"rgba(255,255,255,0.45)",lineHeight:1.65,transition:"color .2s" }}>
+        This mission needs the <strong>full amount upfront</strong> before I can begin (e.g. flights, visas, or initial setup that can't be paid in stages). If unchecked, funds are released in three milestone payments as work progresses.
+      </span>
+    </div>
     <FInput label="Milestone 1 — First goal" placeholder="e.g. First open-air crusade" value={form.milestone1} onChange={e=>set("milestone1",e.target.value)}/>
     <FInput label="Milestone 2 — Mid-mission goal" placeholder="e.g. Plant first congregation" value={form.milestone2} onChange={e=>set("milestone2",e.target.value)}/>
     <FInput label="Milestone 3 — Final goal" placeholder="e.g. Local leadership trained" value={form.milestone3} onChange={e=>set("milestone3",e.target.value)}/>
@@ -605,6 +627,7 @@ const Step5 = ({ form, set, submitted, submitting, onSubmit }) => {
     ["Funding goal",   form.fundingGoal?`$${Number(form.fundingGoal).toLocaleString()} USD`:null],
     ["Platform surcharge (10%)", form.fundingGoal?`$${Math.round(Number(form.fundingGoal)*0.1).toLocaleString()}`:null],
     ["Total donors asked for", form.fundingGoal?`$${Math.round(Number(form.fundingGoal)*1.1).toLocaleString()}`:null],
+    ["Funding release", form.requiresFullFunding ? "⚠️ Full amount required before starting" : "3 milestone payments as work progresses"],
     ["Shadow mode",    form.shadowMode?"Requested":"No"],
   ];
 
@@ -720,6 +743,7 @@ export default function MissionaryApplication({ onBack, user }) {
     missionDescription:"", fundingGoal:"", localAmount:"", localCurrency:"USD",
     startDate:"", duration:"",
     milestone1:"", milestone2:"", milestone3:"", surchargeAcknowledged:false,
+    requiresFullFunding:false,
   });
 
   const set = (key, val) => setForm(f => ({...f,[key]:val}));
@@ -821,6 +845,7 @@ export default function MissionaryApplication({ onBack, user }) {
         collection_target: collectionTarget,
         platform_surcharge: platformSurcharge,
         surcharge_acknowledged: form.surchargeAcknowledged,
+        requires_full_funding: form.requiresFullFunding,
         start_date:       form.startDate || null,
         duration_months:  form.duration ? Number(form.duration) : null,
         raised:           0,
