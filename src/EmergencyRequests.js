@@ -36,7 +36,7 @@ export default function EmergencyRequests({ onBack, user, userRole }) {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading]   = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm]         = useState({ title:"", description:"", country:"", region:"", urgency:"urgent", goal:"", church_id:"", contact_email:"", contact_phone:"" });
+  const [form, setForm]         = useState({ title:"", description:"", country:"", region:"", urgency:"urgent", goal:"", church_id:"", contact_email:"", contact_phone:"", surchargeAcknowledged:false });
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted]   = useState(false);
   const [churches, setChurches]     = useState([]);
@@ -63,11 +63,16 @@ export default function EmergencyRequests({ onBack, user, userRole }) {
   }, []);
 
   const handleSubmit = async () => {
-    if (!form.title || !form.description || !form.country) return;
+    if (!form.title || !form.description || !form.country || !form.surchargeAcknowledged) return;
     setSubmitting(true);
     try {
+      const goal = Number(form.goal) || 1000;
+      const platformSurcharge = Math.round(goal * 0.1);
+      const collectionTarget = goal + platformSurcharge;
       await supabase.from("emergency_requests").insert({
-        ...form, goal:Number(form.goal)||1000, raised:0,
+        ...form, goal, raised:0,
+        collection_target: collectionTarget,
+        platform_surcharge: platformSurcharge,
         church_id: form.church_id || null,
         contact_email: form.contact_email,
         contact_phone: form.contact_phone,
@@ -80,7 +85,7 @@ export default function EmergencyRequests({ onBack, user, userRole }) {
         title: form.title,
         country: form.country,
         urgency: form.urgency,
-        goal: Number(form.goal) || 1000,
+        goal,
       };
       notifyAdmin("emergency_submitted", notifyData);
       // Admin email — separate channel from the WhatsApp notifyAdmin() call
@@ -291,9 +296,46 @@ export default function EmergencyRequests({ onBack, user, userRole }) {
                   <option value="urgent"   style={{background:"#0c1628"}}>Urgent — needed within days</option>
                   <option value="needed"   style={{background:"#0c1628"}}>Needed — within weeks</option>
                 </select>
-                <button onClick={handleSubmit} disabled={submitting||!form.title||!form.description||!form.country}
-                  style={{ width:"100%", padding:"13px 0", borderRadius:12, border:"none", background:form.title&&form.description&&form.country?"linear-gradient(135deg,#e85b5b,#c44040)":"rgba(255,255,255,0.06)", color:form.title&&form.description&&form.country?"#fff":"rgba(255,255,255,0.25)", fontWeight:700, cursor:form.title&&form.description&&form.country?"pointer":"default", fontSize:15, fontFamily:"Georgia, serif" }}>
-                  {submitting?"Submitting...":"Submit Emergency Request"}
+
+                {/* Platform surcharge disclosure — mirrors the same 10%
+                    surcharge disclosed to missionaries during application
+                    (MissionaryApplication.js). Uses the entered goal, or the
+                    same 1000 fallback handleSubmit uses if left blank. */}
+                <div style={{ background:"rgba(91,156,246,0.07)", borderRadius:14, border:"1px solid rgba(91,156,246,0.25)", padding:"16px 18px", marginBottom:14 }}>
+                  <div style={{ fontSize:13, color:"rgba(255,255,255,0.55)", lineHeight:1.7, marginBottom:12 }}>
+                    SendMe operates across multiple countries and currencies. To keep this platform completely free for missionaries, churches, and donors worldwide, a <strong style={{color:"#5b9cf6"}}>10% platform surcharge</strong> is applied on top of the funding needed. This covers international payment processing, currency conversion, platform maintenance, and operational costs.
+                  </div>
+                  <div style={{ display:"flex", justifyContent:"space-between", fontSize:13, marginBottom:6 }}>
+                    <span style={{ color:"rgba(255,255,255,0.4)" }}>Funding needed</span>
+                    <span style={{ color:"#eef1ff" }}>${fmt(Number(form.goal)||1000)}</span>
+                  </div>
+                  <div style={{ display:"flex", justifyContent:"space-between", fontSize:13, marginBottom:6 }}>
+                    <span style={{ color:"rgba(255,255,255,0.4)" }}>Platform surcharge (10%)</span>
+                    <span style={{ color:"#5b9cf6" }}>${fmt(Math.round((Number(form.goal)||1000)*0.1))}</span>
+                  </div>
+                  <div style={{ display:"flex", justifyContent:"space-between", fontSize:14, fontWeight:700, paddingTop:8, borderTop:"1px solid rgba(255,255,255,0.08)" }}>
+                    <span style={{ color:"rgba(255,255,255,0.6)" }}>Total donors asked for</span>
+                    <span style={{ color:"#e8b34b" }}>${fmt(Math.round((Number(form.goal)||1000)*1.1))}</span>
+                  </div>
+                </div>
+
+                <div onClick={()=>setForm(f=>({...f,surchargeAcknowledged:!f.surchargeAcknowledged}))}
+                  style={{ display:"flex", gap:10, alignItems:"flex-start", cursor:"pointer", padding:"12px 14px", borderRadius:10,
+                    background:form.surchargeAcknowledged?"rgba(91,156,246,0.08)":"rgba(255,255,255,0.02)",
+                    border:`1px solid ${form.surchargeAcknowledged?"rgba(91,156,246,0.35)":"rgba(255,255,255,0.07)"}`, marginBottom:14 }}>
+                  <div style={{ width:20, height:20, borderRadius:6, flexShrink:0, marginTop:1, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13,
+                    background:form.surchargeAcknowledged?"linear-gradient(135deg,#5b9cf6,#3a7bd5)":"rgba(255,255,255,0.05)",
+                    border:form.surchargeAcknowledged?"none":"1px solid rgba(255,255,255,0.15)" }}>
+                    {form.surchargeAcknowledged?"✓":""}
+                  </div>
+                  <span style={{ fontSize:13, color:form.surchargeAcknowledged?"#eef1ff":"rgba(255,255,255,0.45)", lineHeight:1.65, transition:"color .2s" }}>
+                    I understand that SendMe will collect 10% above the stated funding needed from donors to cover platform and international payment processing costs. The full requested amount will be released for this emergency, regardless of currency or country.
+                  </span>
+                </div>
+
+                <button onClick={handleSubmit} disabled={submitting||!form.title||!form.description||!form.country||!form.surchargeAcknowledged}
+                  style={{ width:"100%", padding:"13px 0", borderRadius:12, border:"none", background:form.title&&form.description&&form.country&&form.surchargeAcknowledged?"linear-gradient(135deg,#e85b5b,#c44040)":"rgba(255,255,255,0.06)", color:form.title&&form.description&&form.country&&form.surchargeAcknowledged?"#fff":"rgba(255,255,255,0.25)", fontWeight:700, cursor:form.title&&form.description&&form.country&&form.surchargeAcknowledged?"pointer":"default", fontSize:15, fontFamily:"Georgia, serif" }}>
+                  {submitting?"Submitting...":!form.surchargeAcknowledged?"Please acknowledge the surcharge above":"Submit Emergency Request"}
                 </button>
               </>
             )}

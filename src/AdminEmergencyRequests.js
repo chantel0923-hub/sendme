@@ -13,6 +13,8 @@ const timeAgo = (d) => {
   return `${Math.floor(diff/86400)}d ago`;
 };
 
+const fmt = (n) => String(Math.round(n||0)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+
 const URGENCY = {
   critical: { label:"🔴 Critical", color:"#e85b5b" },
   urgent:   { label:"🟠 Urgent",   color:"#f5a44a" },
@@ -149,7 +151,12 @@ export default function AdminEmergencyRequests({ onBack, adminEmail }) {
                 <div style={{ fontSize:12, color:"rgba(255,255,255,0.35)", marginBottom:4 }}>Submitted by: {r.submittedBy}</div>
                 {r.contact_email && <div style={{ fontSize:12, color:"rgba(232,179,75,0.7)", marginBottom:4 }}>✉ {r.contact_email}{r.contact_phone ? " · " + r.contact_phone : ""}</div>}
                 {r.church_id && <div style={{ fontSize:12, color:"#3ecf8e", marginBottom:4 }}>⛪ Linked to verified church</div>}
-                <div style={{ fontSize:13, fontWeight:700, color:u.color, marginTop:8 }}>Goal: ${(r.goal||0).toLocaleString ? r.goal : r.goal}</div>
+                <div style={{ fontSize:13, fontWeight:700, color:u.color, marginTop:8 }}>Goal: ${fmt(r.goal)}</div>
+                {r.platform_surcharge != null && (
+                  <div style={{ fontSize:12, color:"#5b9cf6", marginTop:2 }}>
+                    + ${fmt(r.platform_surcharge)} platform surcharge (10%) — ${fmt(r.collection_target)} total asked from donors
+                  </div>
+                )}
 
                 {r.status === "rejected" && r.rejection_reason && (
                   <div style={{ background:"rgba(232,91,91,0.08)", border:"1px solid rgba(232,91,91,0.2)", borderRadius:10, padding:"10px 14px", marginTop:10, fontSize:12, color:"rgba(255,255,255,0.6)" }}>
