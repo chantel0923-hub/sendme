@@ -101,6 +101,27 @@ export default function AdminPayouts({ onBack }) {
 
   const markPaid = async (missionId, milestoneNum, amount, isPaid, missionTitle, missionaryEmail, recipientName) => {
     const newStatus = isPaid ? "pending" : "paid";
+    // Hard block — do not allow marking a milestone paid unless enough has
+    // actually been raised to cover it. Checks the CUMULATIVE amount owed
+    // through this milestone (milestone 2 needs milestones 1+2 covered,
+    // etc.), not just this single milestone's slice — a mission could be
+    // approved for milestone 2 while still short on milestone 1's funds if
+    // giving has been slow. Only checked when moving TO paid; reversing a
+    // mistaken "paid" click is always allowed.
+    if (newStatus === "paid") {
+      const mission = missions.find(m => m.id === missionId);
+      const raised = mission?.raised || 0;
+      let cumulativeRequired = 0;
+      for (let i = 1; i <= milestoneNum; i++) cumulativeRequired += milestoneAmount(mission?.goal, i);
+      if (raised < cumulativeRequired) {
+        window.alert(
+          `⚠ Not enough has been raised yet for this payout.\n\n` +
+          `"${missionTitle}" has raised $${fmt(raised)} so far, but paying out through milestone ${milestoneNum} requires at least $${fmt(cumulativeRequired)} to have come in.\n\n` +
+          `Wait until more donations land before marking this as paid.`
+        );
+        return;
+      }
+    }
     // #92 — clarify this button is a records-only toggle. It has never
     // triggered a real funds transfer (no PayFast/bank API call happens
     // here) — confirm before flipping to "paid" so nobody assumes clicking
@@ -219,6 +240,21 @@ export default function AdminPayouts({ onBack }) {
 
   const markEmPaid = async (em) => {
     const newStatus = em.paid ? "unpaid" : "paid";
+    // Hard block — same funding-sufficiency check as missions. The amount
+    // owed is the raw goal (not raised, and not the surcharge-inclusive
+    // collection_target) — see the payout box on each card.
+    if (newStatus === "paid") {
+      const raised = em.raised || 0;
+      const owed = em.goal || 0;
+      if (raised < owed) {
+        window.alert(
+          `⚠ Not enough has been raised yet for this payout.\n\n` +
+          `"${em.title}" has raised $${fmt(raised)} so far, but the requested amount is $${fmt(owed)}.\n\n` +
+          `Wait until more donations land before marking this as paid.`
+        );
+        return;
+      }
+    }
     // #92 — same clarification as markPaid above: records-only toggle,
     // no real transfer happens here.
     if (newStatus === "paid") {
