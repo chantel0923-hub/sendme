@@ -645,10 +645,27 @@ export default function AdminPayouts({ onBack }) {
                       </div>
                       <div style={{ textAlign:"right", flexShrink:0 }}>
                         <div style={{ fontSize:18, fontWeight:700, color:urgColor }}>${fmt(em.raised||0)}</div>
-                        <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)" }}>of ${fmt(em.goal||0)} goal</div>
+                        <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)" }}>raised (of ${fmt(em.collection_target||em.goal||0)} asked)</div>
                         {isPaid && <div style={{ fontSize:11, color:"#3ecf8e", marginTop:4 }}>✓ Paid out</div>}
                       </div>
                     </div>
+
+                    {/* Explicit payout amount — deliberately separate from the
+                        "raised" figure above. Raised can now exceed the raw
+                        goal (up to the 10%-inclusive collection_target, since
+                        donations aren't cut off at the raw goal anymore).
+                        The amount actually owed to the pastor/missionary is
+                        always the original goal — the surcharge on top of it
+                        stays with SendMe as the operating buffer. */}
+                    <div style={{ background:"rgba(232,179,75,0.06)", border:"1px solid rgba(232,179,75,0.2)", borderRadius:10, padding:"10px 14px", marginBottom:12, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                      <span style={{ fontSize:12, color:"rgba(255,255,255,0.5)" }}>💸 Amount to pay out to pastor/missionary</span>
+                      <span style={{ fontSize:16, fontWeight:700, color:"#e8b34b" }}>${fmt(em.goal||0)}</span>
+                    </div>
+                    {(em.raised||0) > (em.goal||0) && (
+                      <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)", marginBottom:12, marginTop:-6 }}>
+                        The remaining ${fmt((em.raised||0)-(em.goal||0))} is the platform surcharge — this stays in SendMe's account, do not pay this out.
+                      </div>
+                    )}
                     <button
                       onClick={() => markEmPaid(em)}
                       disabled={isActing}
