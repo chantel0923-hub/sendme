@@ -43,6 +43,12 @@ const mapRow = (row, i) => ({
   lat:parseFloat(row.lat)||0, lng:parseFloat(row.lng)||0,
   title:row.title||"Untitled Mission", blurb:row.blurb||row.description||"",
   raised:row.raised||0, goal:row.goal||1000,
+  // Fully-funded/progress calculations use this, not `goal` — donors need to
+  // reach the surcharge-inclusive collection_target for the mission to
+  // actually cover both the missionary's requested amount AND the 10%
+  // platform surcharge. Falls back to goal*1.1 for older records created
+  // before collection_target existed on this row.
+  fundingTarget: row.collection_target || Math.round((row.goal||1000)*1.1),
   color:(row.color && row.color !== "null") ? row.color : getColor(i),
   status:row.status||"active", milestone:row.milestone||0,
   souls:row.souls||0, bibles:row.bibles||0, churches:row.churches_planted||0,
@@ -549,7 +555,7 @@ const DonateScreen = ({ mission: m, onBack, onPayfast, user, onBrowseMissions })
   // from a stale mission card). Guard here rather than only at the button
   // in MissionDetail, since this screen is the one that actually accepts
   // payment.
-  const isFullyFunded = m.goal > 0 && m.raised >= m.goal;
+  const isFullyFunded = m.fundingTarget > 0 && m.raised >= m.fundingTarget;
   const [donateTab,setDonateTab] = useState("once");   // once | monthly
   const [amt,setAmt]             = useState("");
   const [monthly,setMonthly]     = useState(null);
@@ -612,7 +618,7 @@ const DonateScreen = ({ mission: m, onBack, onPayfast, user, onBrowseMissions })
             <div style={{ fontSize:40,marginBottom:12 }}>🎉</div>
             <div style={{ fontSize:19,fontWeight:700,color:"#eef1ff",marginBottom:10 }}>This mission's goal has been fully funded!</div>
             <div style={{ fontSize:14,color:"rgba(255,255,255,0.5)",lineHeight:1.7,marginBottom:8 }}>
-              Thanks to generous givers like you, <strong style={{ color:"#3ecf8e" }}>{m.protected?"this mission":m.name}</strong> has reached its ${fmt(m.goal)} goal.
+              Thanks to generous givers like you, <strong style={{ color:"#3ecf8e" }}>{m.protected?"this mission":m.name}</strong> has reached its ${fmt(m.fundingTarget)} goal.
             </div>
             <div style={{ fontSize:13,color:"rgba(255,255,255,0.35)" }}>Your gift can go even further supporting a mission still in need.</div>
           </div>
@@ -635,10 +641,10 @@ const DonateScreen = ({ mission: m, onBack, onPayfast, user, onBrowseMissions })
           <div style={{ fontSize:11,color:m.color,letterSpacing:2,textTransform:"uppercase",marginBottom:4 }}>Donating to</div>
           <div style={{ fontSize:20,fontWeight:700,color:"#eef1ff",marginBottom:4 }}>{m.protected?"Protected Missionary":m.name}</div>
           <div style={{ fontSize:13,color:"rgba(255,255,255,0.4)",marginBottom:14 }}>{m.title}</div>
-          <Bar raised={m.raised} goal={m.goal} color={m.color} height={8}/>
+          <Bar raised={m.raised} goal={m.fundingTarget} color={m.color} height={8}/>
           <div style={{ display:"flex",justifyContent:"space-between",marginTop:8 }}>
             <span style={{ fontSize:13,color:m.color,fontWeight:700 }}>${fmt(m.raised)} raised</span>
-            <span style={{ fontSize:12,color:"rgba(255,255,255,0.3)" }}>{m.raised>=m.goal?"🎉 Goal reached!":`$${fmt(m.goal-m.raised)} still needed`}</span>
+            <span style={{ fontSize:12,color:"rgba(255,255,255,0.3)" }}>{m.raised>=m.fundingTarget?"🎉 Goal reached!":`$${fmt(m.fundingTarget-m.raised)} still needed`}</span>
           </div>
         </div>
         <div style={{ background:"rgba(232,179,75,0.06)",borderRadius:14,border:"1px solid rgba(232,179,75,0.2)",padding:"14px 18px",display:"flex",gap:10 }}>
@@ -826,7 +832,7 @@ const MissionDetail = ({ mission: m, onBack, onDonate, onLedger, user, userRole,
     if (m.status === "complete") return 5;
     if (proofItems.length > 0 || (m.souls||0) > 0 || (m.bibles||0) > 0 || (m.churches||0) > 0) return 4;
     if (fieldReportCount > 0) return 3;
-    if (m.goal > 0 && m.raised >= m.goal) return 2;
+    if (m.fundingTarget > 0 && m.raised >= m.fundingTarget) return 2;
     return 1;
   })();
 
@@ -842,12 +848,12 @@ const MissionDetail = ({ mission: m, onBack, onDonate, onLedger, user, userRole,
   const shareWhatsApp = () => {
     const name    = m.protected ? "a faithful missionary" : m.name;
     const country = m.country || m.region;
-    const funded  = pct(m.raised, m.goal);
+    const funded  = pct(m.raised, m.fundingTarget);
     const short   = m.blurb.length > 100 ? m.blurb.slice(0, 100) + "..." : m.blurb;
     const text = encodeURIComponent(
       `Help Reach Souls in ${country}!\n\n` +
       `Mission by ${name}\n` +
-      `Goal: $${fmt(m.goal)} - ${funded}% funded\n\n` +
+      `Goal: $${fmt(m.fundingTarget)} - ${funded}% funded\n\n` +
       `"${short}"\n\n` +
       `Help us reach unreached souls - SendMe Global Mission Fund\n` +
       `https://sendme-nine.vercel.app`
@@ -883,10 +889,10 @@ const MissionDetail = ({ mission: m, onBack, onDonate, onLedger, user, userRole,
             <span style={{ fontSize:13,color:"rgba(255,255,255,0.4)" }}>Funding Progress</span>
             <MsTrack current={m.milestone} color={m.color}/>
           </div>
-          <Bar raised={m.raised} goal={m.goal} color={m.color} height={10}/>
+          <Bar raised={m.raised} goal={m.fundingTarget} color={m.color} height={10}/>
           <div style={{ display:"flex",justifyContent:"space-between",marginTop:10 }}>
             <span style={{ fontSize:16,color:m.color,fontWeight:700 }}>${fmt(m.raised)} raised</span>
-            <span style={{ fontSize:13,color:"rgba(255,255,255,0.3)" }}>{pct(m.raised,m.goal)}% of ${fmt(m.goal)}</span>
+            <span style={{ fontSize:13,color:"rgba(255,255,255,0.3)" }}>{pct(m.raised,m.fundingTarget)}% of ${fmt(m.fundingTarget)}</span>
           </div>
           <div style={{ display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginTop:20 }}>
             {[["🙏",m.souls,"Souls",m.color],["📖",m.bibles,"Bibles","#5b9cf6"],["⛪",m.churches,"Churches","#3ecf8e"]].map(([icon,val,label,c])=>(
@@ -951,7 +957,7 @@ const MissionDetail = ({ mission: m, onBack, onDonate, onLedger, user, userRole,
                 another mission instead of continuing to solicit gifts here.
                 (DonateScreen also guards this directly for anyone who gets
                 there another way — this is just the primary path.) */}
-            {m.goal > 0 && m.raised >= m.goal ? (
+            {m.fundingTarget > 0 && m.raised >= m.fundingTarget ? (
               <button onClick={onBrowseMissions} style={{ padding:"16px 0",borderRadius:14,border:"none",background:"linear-gradient(135deg,#3ecf8e,#2fa06d)",color:"#000",fontWeight:700,cursor:"pointer",fontSize:16,fontFamily:"Georgia, serif",boxShadow:"0 6px 28px rgba(62,207,142,0.3)" }}>
                 🎉 Goal Reached — Support Another Mission
               </button>
@@ -1686,10 +1692,10 @@ const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, o
                   </div>
                 </div>
                 <div style={{ fontSize:14,fontWeight:600,color:"rgba(238,241,255,0.8)",marginBottom:10 }}>{m.title}</div>
-                <Bar raised={m.raised} goal={m.goal} color={m.color}/>
+                <Bar raised={m.raised} goal={m.fundingTarget} color={m.color}/>
                 <div style={{ display:"flex",justifyContent:"space-between",margin:"8px 0 14px" }}>
                   <span style={{ fontSize:13,color:m.color,fontWeight:700 }}>${fmt(m.raised)} raised</span>
-                  <span style={{ fontSize:12,color:"rgba(255,255,255,0.3)" }}>{pct(m.raised,m.goal)}% of ${fmt(m.goal)}</span>
+                  <span style={{ fontSize:12,color:"rgba(255,255,255,0.3)" }}>{pct(m.raised,m.fundingTarget)}% of ${fmt(m.fundingTarget)}</span>
                 </div>
                 <button onClick={e=>{e.stopPropagation();onMission(m);}} style={{ width:"100%",padding:"12px 0",borderRadius:12,border:"none",background:`linear-gradient(135deg,${m.color},${m.color}cc)`,color:"#000",fontWeight:700,cursor:"pointer",fontSize:14,boxShadow:`0 4px 20px ${m.color}44` }}>View Mission & Donate</button>
               </div>
@@ -1747,12 +1753,12 @@ const DonorBrowse = ({ onBack, onMission, user }) => {
   const sorted = [...missions]
     .filter(m => region === "All" || m.region === region)
     .sort((a,b) => {
-      if (sort === "urgent")  return pct(a.raised,a.goal) - pct(b.raised,b.goal);
-      if (sort === "least")   return (a.raised - a.goal) - (b.raised - b.goal);
+      if (sort === "urgent")  return pct(a.raised,a.fundingTarget) - pct(b.raised,b.fundingTarget);
+      if (sort === "least")   return (a.raised - a.fundingTarget) - (b.raised - b.fundingTarget);
       return 0; // newest — already ordered from DB
     });
 
-  const totalNeeded = sorted.reduce((acc,m) => acc + Math.max(0, m.goal - m.raised), 0);
+  const totalNeeded = sorted.reduce((acc,m) => acc + Math.max(0, m.fundingTarget - m.raised), 0);
 
   return (
     <div style={{ minHeight:"100vh", background:"#060c18", color:"#eef1ff", fontFamily:"Georgia, serif" }}>
@@ -1809,8 +1815,8 @@ const DonorBrowse = ({ onBack, onMission, user }) => {
 
         <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
           {sorted.map(m => {
-            const funded  = pct(m.raised, m.goal);
-            const needed  = Math.max(0, m.goal - m.raised);
+            const funded  = pct(m.raised, m.fundingTarget);
+            const needed  = Math.max(0, m.fundingTarget - m.raised);
             const urgent  = funded < 40;
             return (
               <div key={m.id}
@@ -1846,14 +1852,14 @@ const DonorBrowse = ({ onBack, onMission, user }) => {
 
                 {/* Progress bar */}
                 <div style={{ marginBottom:10 }}>
-                  <Bar raised={m.raised} goal={m.goal} color={m.color} height={7}/>
+                  <Bar raised={m.raised} goal={m.fundingTarget} color={m.color} height={7}/>
                 </div>
 
                 {/* Stats row */}
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
                   <div style={{ display:"flex", gap:16 }}>
                     <span style={{ fontSize:13, color:m.color, fontWeight:700 }}>${fmt(m.raised)} raised</span>
-                    <span style={{ fontSize:12, color:"rgba(255,255,255,0.35)" }}>{m.raised>=m.goal?"🎉 Goal reached!":`$${fmt(needed)} still needed`}</span>
+                    <span style={{ fontSize:12, color:"rgba(255,255,255,0.35)" }}>{m.raised>=m.fundingTarget?"🎉 Goal reached!":`$${fmt(needed)} still needed`}</span>
                   </div>
                   <div style={{ fontSize:12, fontWeight:700, color:"rgba(255,255,255,0.5)",
                     background:"rgba(255,255,255,0.05)", borderRadius:8, padding:"4px 10px" }}>

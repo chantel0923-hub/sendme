@@ -149,6 +149,7 @@ export default function MapboxMap({ missions, churches = [], onMissionClick }) {
               status:    m.status,
               raised:    m.raised,
               goal:      m.goal,
+              fundingTarget: m.fundingTarget || m.goal,
               riskLevel: m.riskLevel,
             },
           })),
@@ -205,7 +206,7 @@ export default function MapboxMap({ missions, churches = [], onMissionClick }) {
         map.current.getCanvas().style.cursor = "pointer";
         const props = e.features[0].properties;
         const coords = e.features[0].geometry.coordinates.slice();
-        const pct = Math.min(100, Math.round((props.raised / props.goal) * 100));
+        const pct = Math.min(100, Math.round((props.raised / props.fundingTarget) * 100));
         popup.current
           .setLngLat(coords)
           .setHTML(`

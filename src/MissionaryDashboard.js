@@ -262,7 +262,7 @@ export default function MissionaryDashboard({ onBack, user, onSubmitProof }) {
               const proofs = proofsByMission[m.id] || [];
               const currentMilestone = m.current_milestone || m.milestone || 1;
               const raised = m.raised || 0;
-              const goal = m.goal || m.collection_target || 1;
+              const goal = m.collection_target || Math.round((m.goal||0)*1.1) || 1;
               const bucket = missionBucket(m, proofs);
               const defaultCollapsed = defaultCollapsedFor(bucket);
               const isCollapsed = collapsedOverride[m.id] !== undefined ? collapsedOverride[m.id] : defaultCollapsed;

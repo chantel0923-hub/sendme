@@ -145,11 +145,11 @@ export default function MissionMatching({ missions, onMission, onBack }) {
                     </div>
                     <div style={{ fontSize:13, color:"rgba(255,255,255,0.6)", marginBottom:10, lineHeight:1.6 }}>{m.title}</div>
                     <div style={{ background:"rgba(255,255,255,0.07)", borderRadius:999, height:5, overflow:"hidden", marginBottom:8 }}>
-                      <div style={{ width:`${pct(m.raised,m.goal)}%`, height:"100%", borderRadius:999, background:m.color }}/>
+                      <div style={{ width:`${pct(m.raised,m.fundingTarget||m.goal)}%`, height:"100%", borderRadius:999, background:m.color }}/>
                     </div>
                     <div style={{ display:"flex", justifyContent:"space-between" }}>
                       <span style={{ fontSize:12, color:m.color, fontWeight:700 }}>${fmt(m.raised)} raised</span>
-                      <span style={{ fontSize:11, color:"rgba(255,255,255,0.3)" }}>{pct(m.raised,m.goal)}% of ${fmt(m.goal)}</span>
+                      <span style={{ fontSize:11, color:"rgba(255,255,255,0.3)" }}>{pct(m.raised,m.fundingTarget||m.goal)}% of ${fmt(m.fundingTarget||m.goal)}</span>
                     </div>
                   </div>
                 ))}

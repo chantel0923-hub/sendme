@@ -208,7 +208,7 @@ export default function EmergencyRequests({ onBack, user, userRole }) {
                   removed entirely rather than just disabled, so there's no
                   way to submit a donation through this form. Non-monetary
                   help (contact details + note) can still be offered below. */}
-              {(responding.raised||0) >= (responding.goal||1000) ? (
+              {(responding.raised||0) >= (responding.collection_target || Math.round((responding.goal||1000)*1.1)) ? (
                 <div style={{ background:"rgba(62,207,142,0.08)", border:"1px solid rgba(62,207,142,0.25)", borderRadius:10, padding:"12px 14px", marginBottom:12, fontSize:13, color:"#3ecf8e" }}>
                   ✓ This emergency has reached its funding goal — donations are closed. You can still offer to help with your time, skills, or supplies using the message below.
                 </div>
@@ -367,16 +367,23 @@ export default function EmergencyRequests({ onBack, user, userRole }) {
                       {r.contact_email && <div style={{ fontSize:12, color:"rgba(232,179,75,0.7)" }}>✉ {r.contact_email}{r.contact_phone?" · "+r.contact_phone:""}</div>}
                     </div>
                   </div>
-                  <Bar raised={r.raised||0} goal={r.goal||1000} color={u.color}/>
+                  {(() => {
+                    // Falls back to goal*1.1 for older requests submitted
+                    // before collection_target existed on this table.
+                    const target = r.collection_target || Math.round((r.goal||1000)*1.1);
+                    return (<>
+                  <Bar raised={r.raised||0} goal={target} color={u.color}/>
                   <div style={{ display:"flex", justifyContent:"space-between", marginTop:8, marginBottom:14 }}>
                     <span style={{ fontSize:13, color:u.color, fontWeight:700 }}>${fmt(r.raised||0)} raised</span>
-                    <span style={{ fontSize:12, color:(r.raised||0)>=(r.goal||1000)?"#3ecf8e":"rgba(255,255,255,0.3)" }}>
-                      {(r.raised||0)>=(r.goal||1000) ? "✓ Fully Funded" : `$${fmt((r.goal||1000)-(r.raised||0))} still needed`}
+                    <span style={{ fontSize:12, color:(r.raised||0)>=target?"#3ecf8e":"rgba(255,255,255,0.3)" }}>
+                      {(r.raised||0)>=target ? "✓ Fully Funded" : `$${fmt(target-(r.raised||0))} still needed`}
                     </span>
                   </div>
                   <button onClick={()=>{setResponding(r);setRespDone(false);setRespError("");setResponse({name:"",email:"",phone:"",amount:"",note:""});}} style={{ width:"100%", padding:"12px 0", borderRadius:12, border:"none", background:`linear-gradient(135deg,${u.color},${u.color}cc)`, color:"#fff", fontWeight:700, cursor:"pointer", fontSize:14, fontFamily:"Georgia, serif" }}>
-                    {(r.raised||0)>=(r.goal||1000) ? "🙏 Goal Reached — Offer Non-Monetary Help" : "💝 Respond to This Emergency"}
+                    {(r.raised||0)>=target ? "🙏 Goal Reached — Offer Non-Monetary Help" : "💝 Respond to This Emergency"}
                   </button>
+                    </>);
+                  })()}
                 </div>
               );
             })}
