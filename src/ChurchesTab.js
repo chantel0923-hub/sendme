@@ -79,11 +79,17 @@ const ChurchesMap = ({ churches, onChurchClick }) => {
       // Map (MapboxMap.js), where the nav control and info box don't collide.
       L.control.zoom({ position: "topright" }).addTo(mapRef.current);
 
-      // Dark tile layer — CartoDB Dark Matter (free, no token)
-      L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/">CARTO</a>',
-        subdomains: "abcd",
+      // Dark tile layer — switched from CartoDB (which began requiring an
+      // API key in Aug 2026, breaking previously-free anonymous access and
+      // showing an "API KEY REQUIRED" watermark) to Mapbox's raster tiles,
+      // reusing the same token already configured for the Mission Map
+      // (MapboxMap.js) rather than signing up for a separate CARTO key.
+      const MAPBOX_TOKEN = process.env.REACT_APP_MAPBOX_TOKEN || "pk.eyJ1Ijoic2VuZG1lMDkyMyIsImEiOiJjbXI1anZpOGcwYXJvMzFyMHo2aDU2YnI2In0.CutnKCVEf1SzDpddacdekg";
+      L.tileLayer(`https://api.mapbox.com/styles/v1/mapbox/dark-v10/tiles/{z}/{x}/{y}?access_token=${MAPBOX_TOKEN}`, {
+        attribution: '© <a href="https://www.mapbox.com/about/maps/">Mapbox</a> © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
         maxZoom: 19,
+        tileSize: 512,
+        zoomOffset: -1,
       }).addTo(mapRef.current);
 
       // Add church markers
