@@ -7,6 +7,97 @@ import WatchHowLink from "./WatchHowLink";
 
 const fmt = (n) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 
+// Same currency list and conversion helper as MissionaryApplication.js's
+// FundingGoalCurrency — kept in sync so a missionary and a church submitting
+// an emergency request get the identical local-currency-to-USD experience.
+const CURRENCIES = [
+  { code:"USD", label:"US Dollar (USD)" },
+  { code:"AED", label:"UAE Dirham (AED)" },
+  { code:"ARS", label:"Argentine Peso (ARS)" },
+  { code:"AUD", label:"Australian Dollar (AUD)" },
+  { code:"BDT", label:"Bangladeshi Taka (BDT)" },
+  { code:"BRL", label:"Brazilian Real (BRL)" },
+  { code:"CAD", label:"Canadian Dollar (CAD)" },
+  { code:"CHF", label:"Swiss Franc (CHF)" },
+  { code:"CLP", label:"Chilean Peso (CLP)" },
+  { code:"CNY", label:"Chinese Yuan (CNY)" },
+  { code:"COP", label:"Colombian Peso (COP)" },
+  { code:"CZK", label:"Czech Koruna (CZK)" },
+  { code:"DKK", label:"Danish Krone (DKK)" },
+  { code:"EGP", label:"Egyptian Pound (EGP)" },
+  { code:"ETB", label:"Ethiopian Birr (ETB)" },
+  { code:"EUR", label:"Euro (EUR)" },
+  { code:"GBP", label:"British Pound (GBP)" },
+  { code:"GHS", label:"Ghanaian Cedi (GHS)" },
+  { code:"HKD", label:"Hong Kong Dollar (HKD)" },
+  { code:"HUF", label:"Hungarian Forint (HUF)" },
+  { code:"IDR", label:"Indonesian Rupiah (IDR)" },
+  { code:"ILS", label:"Israeli Shekel (ILS)" },
+  { code:"INR", label:"Indian Rupee (INR)" },
+  { code:"JPY", label:"Japanese Yen (JPY)" },
+  { code:"KES", label:"Kenyan Shilling (KES)" },
+  { code:"KRW", label:"South Korean Won (KRW)" },
+  { code:"LKR", label:"Sri Lankan Rupee (LKR)" },
+  { code:"MAD", label:"Moroccan Dirham (MAD)" },
+  { code:"MWK", label:"Malawian Kwacha (MWK)" },
+  { code:"MXN", label:"Mexican Peso (MXN)" },
+  { code:"MYR", label:"Malaysian Ringgit (MYR)" },
+  { code:"MZN", label:"Mozambican Metical (MZN)" },
+  { code:"NAD", label:"Namibian Dollar (NAD)" },
+  { code:"NGN", label:"Nigerian Naira (NGN)" },
+  { code:"NOK", label:"Norwegian Krone (NOK)" },
+  { code:"NPR", label:"Nepalese Rupee (NPR)" },
+  { code:"NZD", label:"New Zealand Dollar (NZD)" },
+  { code:"PEN", label:"Peruvian Sol (PEN)" },
+  { code:"PHP", label:"Philippine Peso (PHP)" },
+  { code:"PKR", label:"Pakistani Rupee (PKR)" },
+  { code:"PLN", label:"Polish Zloty (PLN)" },
+  { code:"RON", label:"Romanian Leu (RON)" },
+  { code:"RWF", label:"Rwandan Franc (RWF)" },
+  { code:"SEK", label:"Swedish Krona (SEK)" },
+  { code:"SGD", label:"Singapore Dollar (SGD)" },
+  { code:"THB", label:"Thai Baht (THB)" },
+  { code:"TZS", label:"Tanzanian Shilling (TZS)" },
+  { code:"UGX", label:"Ugandan Shilling (UGX)" },
+  { code:"UAH", label:"Ukrainian Hryvnia (UAH)" },
+  { code:"VND", label:"Vietnamese Dong (VND)" },
+  { code:"XAF", label:"Central African CFA Franc (XAF)" },
+  { code:"XOF", label:"West African CFA Franc (XOF)" },
+  { code:"ZAR", label:"South African Rand (ZAR)" },
+  { code:"ZMW", label:"Zambian Kwacha (ZMW)" },
+];
+
+// Converts an amount in fromCurrency to USD using the fawazahmed0 currency API
+// (free, no API key required, 170+ currencies including all African currencies).
+const convertToUSD = async (amount, fromCurrency) => {
+  if (!amount || Number(amount) <= 0) return null;
+  if (fromCurrency === "USD") return Number(amount);
+  const lowerCurrency = fromCurrency.toLowerCase();
+  const toDateString = (d) => d.toISOString().split("T")[0];
+  const today = toDateString(new Date());
+  const yesterday = toDateString(new Date(Date.now() - 86400000));
+
+  const fetchRate = async (dateStr) => {
+    const res = await fetch(
+      `https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@${dateStr}/v1/currencies/usd.json`
+    );
+    if (!res.ok) throw new Error("fetch failed");
+    const data = await res.json();
+    const rate = data?.usd?.[lowerCurrency];
+    if (!rate) throw new Error("Currency not found: " + lowerCurrency);
+    return rate;
+  };
+
+  try {
+    let rate;
+    try { rate = await fetchRate(today); }
+    catch { rate = await fetchRate(yesterday); }
+    return Number(amount) / rate;
+  } catch {
+    return null;
+  }
+};
+
 const URGENCY = {
   critical: { color:"#e85b5b", bg:"rgba(232,91,91,0.12)",  label:"🔴 Critical" },
   urgent:   { color:"#f5a44a", bg:"rgba(245,164,74,0.12)", label:"🟠 Urgent"   },
@@ -19,6 +110,83 @@ const Bar = ({ raised, goal, color }) => (
     <div style={{ width:`${pct(raised,goal)}%`, height:"100%", borderRadius:999, background:color, transition:"width .7s ease" }}/>
   </div>
 );
+
+const currencyLabel = { fontSize: 12, color: "rgba(255,255,255,0.4)", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 7, display: "block" };
+
+// Same local-currency-to-USD funding input as MissionaryApplication.js's
+// FundingGoalCurrency — lets a pastor/church enter the amount in a currency
+// they actually think in (Naira, Cedi, Shilling, etc.) instead of guessing
+// a USD figure, which was leading to inflated goals set far higher than
+// what was actually needed.
+const FundingGoalCurrency = ({ form, set, inp }) => {
+  const [converting, setConverting] = useState(false);
+  const [rateError, setRateError] = useState(false);
+
+  useEffect(() => {
+    if (!form.localAmount || Number(form.localAmount) <= 0) {
+      set("goal", "");
+      return;
+    }
+    if (form.localCurrency === "USD") {
+      set("goal", form.localAmount);
+      setRateError(false);
+      return;
+    }
+    setConverting(true);
+    setRateError(false);
+    const timer = setTimeout(async () => {
+      const usd = await convertToUSD(form.localAmount, form.localCurrency);
+      if (usd === null) {
+        setRateError(true);
+        set("goal", "");
+      } else {
+        set("goal", Math.round(usd).toString());
+      }
+      setConverting(false);
+    }, 600);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.localAmount, form.localCurrency]);
+
+  return (
+    <div style={{ marginBottom:14 }}>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+        <div>
+          <label style={currencyLabel}>Funding Needed *</label>
+          <input type="number" placeholder="0" value={form.localAmount}
+            onChange={e=>set("localAmount", e.target.value)}
+            style={{ ...inp, marginBottom:0 }}/>
+        </div>
+        <div>
+          <label style={currencyLabel}>In Currency *</label>
+          <select value={form.localCurrency} onChange={e=>set("localCurrency", e.target.value)}
+            style={{ ...inp, marginBottom:0, color:"#eef1ff" }}>
+            {CURRENCIES.map(c=>(
+              <option key={c.code} value={c.code} style={{background:"#0c1628"}}>{c.label}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+      <div style={{ marginTop:10, minHeight:48 }}>
+        {form.localCurrency !== "USD" && Number(form.localAmount) > 0 && (
+          <div style={{ background:"rgba(232,179,75,0.07)",borderRadius:10,border:"1px solid rgba(232,179,75,0.2)",padding:"10px 14px",display:"flex",alignItems:"center",gap:10 }}>
+            {converting ? (
+              <span style={{ fontSize:13,color:"rgba(255,255,255,0.45)" }}>Converting to USD...</span>
+            ) : rateError ? (
+              <span style={{ fontSize:13,color:"#f05252" }}>Couldn't fetch a live exchange rate. Please check your connection and try again, or enter your goal directly in USD above.</span>
+            ) : form.goal ? (
+              <>
+                <span style={{ fontSize:13,color:"rgba(255,255,255,0.5)" }}>≈</span>
+                <span style={{ fontSize:18,fontWeight:700,color:"#e8b34b" }}>${Number(form.goal).toLocaleString()} USD</span>
+                <span style={{ fontSize:12,color:"rgba(255,255,255,0.35)",marginLeft:"auto" }}>This USD amount will be locked in once you submit</span>
+              </>
+            ) : null}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 
 const timeAgo = (dateStr) => {
   const d=new Date(dateStr), now=new Date(), diff=Math.floor((now-d)/1000);
@@ -36,7 +204,7 @@ export default function EmergencyRequests({ onBack, user, userRole }) {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading]   = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm]         = useState({ title:"", description:"", country:"", region:"", urgency:"urgent", goal:"", church_id:"", contact_email:"", contact_phone:"", surchargeAcknowledged:false });
+  const [form, setForm]         = useState({ title:"", description:"", country:"", region:"", urgency:"urgent", goal:"", localAmount:"", localCurrency:"USD", church_id:"", contact_email:"", contact_phone:"", surchargeAcknowledged:false });
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted]   = useState(false);
   const [churches, setChurches]     = useState([]);
@@ -73,6 +241,8 @@ export default function EmergencyRequests({ onBack, user, userRole }) {
         ...form, goal, raised:0,
         collection_target: collectionTarget,
         platform_surcharge: platformSurcharge,
+        local_amount: form.localCurrency === "USD" ? null : Number(form.localAmount) || null,
+        local_currency: form.localCurrency,
         church_id: form.church_id || null,
         contact_email: form.contact_email,
         contact_phone: form.contact_phone,
@@ -275,10 +445,8 @@ export default function EmergencyRequests({ onBack, user, userRole }) {
                 <WatchHowLink videoId={FEATURED_VIDEOS.emergencyRequest} label="Watch how to submit an emergency request" />
                 <input placeholder="Emergency title *" value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))} style={inp}/>
                 <textarea placeholder="Describe the emergency in detail *" value={form.description} onChange={e=>setForm(f=>({...f,description:e.target.value}))} style={{...inp,resize:"vertical",minHeight:90}}/>
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-                  <input placeholder="Country *" value={form.country} onChange={e=>setForm(f=>({...f,country:e.target.value}))} style={inp}/>
-                  <input placeholder="Funding needed ($)" type="number" value={form.goal} onChange={e=>setForm(f=>({...f,goal:e.target.value}))} style={inp}/>
-                </div>
+                <input placeholder="Country *" value={form.country} onChange={e=>setForm(f=>({...f,country:e.target.value}))} style={inp}/>
+                <FundingGoalCurrency form={form} set={(k,v)=>setForm(f=>({...f,[k]:v}))} inp={inp}/>
                 {churches.length > 0 && (
                   <select value={form.church_id} onChange={e=>setForm(f=>({...f,church_id:e.target.value}))} style={{...inp,color:form.church_id?"#eef1ff":"rgba(255,255,255,0.35)"}}>
                     <option value="" style={{background:"#0c1628"}}>Link a verified church (for payout routing)</option>

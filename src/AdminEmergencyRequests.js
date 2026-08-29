@@ -152,6 +152,11 @@ export default function AdminEmergencyRequests({ onBack, adminEmail }) {
                 {r.contact_email && <div style={{ fontSize:12, color:"rgba(232,179,75,0.7)", marginBottom:4 }}>✉ {r.contact_email}{r.contact_phone ? " · " + r.contact_phone : ""}</div>}
                 {r.church_id && <div style={{ fontSize:12, color:"#3ecf8e", marginBottom:4 }}>⛪ Linked to verified church</div>}
                 <div style={{ fontSize:13, fontWeight:700, color:u.color, marginTop:8 }}>Goal: ${fmt(r.goal)}</div>
+                {r.local_currency && r.local_currency !== "USD" && r.local_amount && (
+                  <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)", marginTop:2 }}>
+                    Originally entered as {fmt(r.local_amount)} {r.local_currency}
+                  </div>
+                )}
                 {r.platform_surcharge != null && (
                   <div style={{ fontSize:12, color:"#5b9cf6", marginTop:2 }}>
                     + ${fmt(r.platform_surcharge)} platform surcharge (10%) — ${fmt(r.collection_target)} total asked from donors
