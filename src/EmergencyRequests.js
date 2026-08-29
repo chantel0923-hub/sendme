@@ -195,7 +195,7 @@ const timeAgo = (dateStr) => {
   return `${Math.floor(diff/86400)}d ago`;
 };
 
-export default function EmergencyRequests({ onBack, user, userRole }) {
+export default function EmergencyRequests({ onBack, user, userRole, preselectedId }) {
   // #79: Donor/Supporter role should not see "+ Submit Emergency". Guests
   // never reach this screen at all — App.js already routes them to
   // GuestBlocked before EmergencyRequests renders.
@@ -224,10 +224,24 @@ export default function EmergencyRequests({ onBack, user, userRole }) {
         ]);
         setRequests(erData || []);
         if (chData) setChurches(chData);
+        // Deep-linked from a specific card on the Home screen — jump
+        // straight into that emergency's donate/respond modal instead of
+        // landing on the general list, mirroring exactly what clicking
+        // "Respond to This Emergency" does below.
+        if (preselectedId) {
+          const match = (erData || []).find(r => r.id === preselectedId);
+          if (match) {
+            setResponding(match);
+            setRespDone(false);
+            setRespError("");
+            setResponse({ name:"", email:"", phone:"", amount:"", note:"" });
+          }
+        }
       } catch { setRequests([]); }
       setLoading(false);
     };
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSubmit = async () => {

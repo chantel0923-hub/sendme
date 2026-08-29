@@ -1565,7 +1565,7 @@ if (typeof document !== "undefined" && !document.getElementById(_navStyleId)) {
   document.head.appendChild(_navStyle);
 }
 
-const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, onMyChurch, onChurches, onProfile, onEmergency, onMatching, onPray, onTestimonies, onWorker, onQR, onFaq, onPayout, onAdminPayouts, isAdmin, isPastor, onMilestoneProof, onPastorReview, onMissionaryDashboard, onAdminApprovals, onAdminChurchVerification, guest, onSignIn, onDonate, onAdminWorkers, onAdminEmergency, onAdminPipeline }) => {
+const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, onMyChurch, onChurches, onProfile, onEmergency, onEmergencyDetail, onMatching, onPray, onTestimonies, onWorker, onQR, onFaq, onPayout, onAdminPayouts, isAdmin, isPastor, onMilestoneProof, onPastorReview, onMissionaryDashboard, onAdminApprovals, onAdminChurchVerification, guest, onSignIn, onDonate, onAdminWorkers, onAdminEmergency, onAdminPipeline }) => {
   const [region,setRegion]       = useState("All");
   const [missions,setMissions]   = useState([]);
   const [emergencies,setEmergencies] = useState([]);
@@ -1691,7 +1691,7 @@ const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, o
                 const target = em.collection_target || Math.round((em.goal||1000)*1.1);
                 const pctFunded = Math.min(100,Math.round(((em.raised||0)/target)*100));
                 return (
-                  <div key={em.id} onClick={onEmergency} style={{ background:"#0c1628",borderRadius:16,border:`1px solid ${urgColor}44`,borderLeft:`4px solid ${urgColor}`,padding:"16px 18px",cursor:"pointer" }}>
+                  <div key={em.id} onClick={()=>onEmergencyDetail(em.id)} style={{ background:"#0c1628",borderRadius:16,border:`1px solid ${urgColor}44`,borderLeft:`4px solid ${urgColor}`,padding:"16px 18px",cursor:"pointer" }}>
                     <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,marginBottom:8 }}>
                       <div style={{ fontSize:15,fontWeight:700,color:"#eef1ff" }}>{em.title}</div>
                       <span style={{ fontSize:11,padding:"3px 10px",borderRadius:999,background:`${urgColor}18`,color:urgColor,border:`1px solid ${urgColor}33`,whiteSpace:"nowrap" }}>{urgLabel}</span>
@@ -2086,6 +2086,10 @@ export default function App() {
   const [authReady,setAuthReady]               = useState(false);
   const [screen,setScreen]                     = useState("home");
   const [selectedMission,setSelectedMission]   = useState(null);
+  // Set when a specific emergency card on Home is clicked, so the
+  // Emergency Requests screen can jump straight into that one's
+  // donate/respond modal instead of landing on the general list.
+  const [selectedEmergencyId,setSelectedEmergencyId] = useState(null);
   const [guest,setGuest]                       = useState(false);
   const [pfReturn,setPfReturn]                 = useState(null);
   const [pendingMissionId,setPendingMissionId] = useState(null);
@@ -2208,7 +2212,7 @@ export default function App() {
   if(screen==="church")           return (isPastor||isAdminUser) ? <ChurchRegistration onBack={()=>setScreen("home")} user={user} userRole={userRole}/> : null;
   if(screen==="my-church")        return (isPastor||isAdminUser) ? <MyChurch onBack={()=>setScreen("home")} user={user} userRole={userRole} onPayout={()=>setScreen("payout")}/> : null;
   if(screen==="profile")          return <DonorProfile user={user} onBack={()=>setScreen("home")} userRole={userRole} isAdmin={isAdminUser}/>;
-  if(screen==="emergency")        return guest ? <GuestBlocked title="Registration Required" message="Submitting an emergency mission request requires a SendMe account, so admin can verify and follow up with you directly. Please sign in or register to continue." onBack={()=>setScreen("home")} onRegister={()=>{setGuest(false);setScreen("home");}}/> : <EmergencyRequests onBack={()=>setScreen("home")} user={user} userRole={userRole}/>;
+  if(screen==="emergency")        return guest ? <GuestBlocked title="Registration Required" message="Submitting an emergency mission request requires a SendMe account, so admin can verify and follow up with you directly. Please sign in or register to continue." onBack={()=>setScreen("home")} onRegister={()=>{setGuest(false);setScreen("home");}}/> : <EmergencyRequests onBack={()=>{setSelectedEmergencyId(null);setScreen("home");}} user={user} userRole={userRole} preselectedId={selectedEmergencyId}/>;
   if(screen==="matching")         return <MissionMatching missions={liveMissions} onMission={openMission} onBack={()=>setScreen("home")}/>;
   if(screen==="testimonies")      return <TestimonyEngine onBack={()=>setScreen("home")} onMission={openMission}/>;
   if(screen==="worker")           return guest ? <GuestBlocked title="Registration Required" message="Posting or responding to a worker request requires a SendMe account, so churches can coordinate and follow up directly. Please sign in or register to continue." onBack={()=>setScreen("home")} onRegister={()=>{setGuest(false);setScreen("home");}}/> : <SendAWorker onBack={()=>setScreen("home")} user={user}/>;
@@ -2230,7 +2234,7 @@ export default function App() {
       onApply={()=>setScreen("apply")} onChurch={()=>setScreen("church")}
       onMyChurch={()=>setScreen("my-church")}
       onChurches={()=>setScreen("churches")} onProfile={()=>setScreen("profile")}
-      onEmergency={()=>setScreen("emergency")} onMatching={()=>setScreen("matching")}
+      onEmergency={()=>setScreen("emergency")} onEmergencyDetail={(id)=>{ setSelectedEmergencyId(id); setScreen("emergency"); }} onMatching={()=>setScreen("matching")}
       onPray={()=>{ setPrayerWallFilterMissionId(null); setScreen("pray"); }} onTestimonies={()=>setScreen("testimonies")}
       onWorker={()=>setScreen("worker")} onQR={()=>setScreen("qr")}
       onFaq={()=>setScreen("faq")}
