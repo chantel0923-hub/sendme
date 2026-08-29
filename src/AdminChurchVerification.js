@@ -172,6 +172,49 @@ export default function AdminChurchVerification({ onBack, user }) {
     setActing(null);
   };
 
+  const [reasonById, setReasonById] = useState({});
+
+  const reject = async (church) => {
+    const reason = reasonById[church.id] || "";
+    setActing(church.id);
+    setError("");
+    try {
+      const { error } = await supabase
+        .from("churches")
+        .update({ rejected: true, rejection_reason: reason || null, verified: false })
+        .eq("id", church.id);
+      if (error) throw error;
+      // Let the pastor know, mirroring the missionary application_rejected pattern.
+      if (church.pastor_email) {
+        sendNotification("church_rejected", church.pastor_email, {
+          churchName: church.name,
+          pastorName: church.pastor_name,
+          reason,
+        });
+      }
+      await load();
+    } catch (e) {
+      setError("Could not reject church. (" + (e.message || "") + ")");
+    }
+    setActing(null);
+  };
+
+  const reopen = async (church) => {
+    setActing(church.id);
+    setError("");
+    try {
+      const { error } = await supabase
+        .from("churches")
+        .update({ rejected: false, rejection_reason: null })
+        .eq("id", church.id);
+      if (error) throw error;
+      await load();
+    } catch (e) {
+      setError("Could not reopen church. (" + (e.message || "") + ")");
+    }
+    setActing(null);
+  };
+
   const [refEmailSent, setRefEmailSent] = useState({});
 
   const sendReferenceEmails = async (c) => {
@@ -251,11 +294,12 @@ export default function AdminChurchVerification({ onBack, user }) {
   }
 
   const filtered = churches.filter(c => {
-    if (filter === "pending") return c.verified === false || c.verified == null;
+    if (filter === "pending")  return (c.verified === false || c.verified == null) && !c.rejected;
     if (filter === "verified") return c.verified === true;
+    if (filter === "rejected") return c.rejected === true;
     return true; // all
   });
-  const pendingCount = churches.filter(c => c.verified === false || c.verified == null).length;
+  const pendingCount = churches.filter(c => (c.verified === false || c.verified == null) && !c.rejected).length;
 
   return (
     <div style={{ minHeight: "100vh", background: "#060c18", color: "#eef1ff", fontFamily: "Georgia, serif" }}>
@@ -288,7 +332,7 @@ export default function AdminChurchVerification({ onBack, user }) {
 
         {/* Filter tabs */}
         <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
-          {[["pending", "Pending"], ["verified", "Verified"], ["all", "All"]].map(([key, label]) => (
+          {[["pending", "Pending"], ["verified", "Verified"], ["rejected", "Rejected"], ["all", "All"]].map(([key, label]) => (
             <button key={key} onClick={() => setFilter(key)}
               style={{ padding: "7px 18px", borderRadius: 999, border: `1px solid ${filter === key ? "#e8b34b" : "rgba(255,255,255,0.1)"}`, background: filter === key ? "rgba(232,179,75,0.15)" : "rgba(255,255,255,0.03)", color: filter === key ? "#e8b34b" : "rgba(255,255,255,0.4)", cursor: "pointer", fontSize: 13, fontWeight: 600, fontFamily: "Georgia, serif" }}>
               {label}
@@ -315,12 +359,13 @@ export default function AdminChurchVerification({ onBack, user }) {
           <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
             {filtered.map(c => {
               const isVerified = c.verified === true;
+              const isRejected = c.rejected === true;
               const isActing = acting === c.id;
               const isGeocoding = geocoding === c.id;
               const missingCoords = c.lat == null || c.lng == null;
               const isOrgRow = c.entity_type === "organization";
               return (
-                <div key={c.id} style={{ background: "#0c1628", borderRadius: 18, border: `1px solid ${!isVerified ? "rgba(232,179,75,0.25)" : "rgba(255,255,255,0.07)"}`, padding: "20px 22px" }}>
+                <div key={c.id} style={{ background: "#0c1628", borderRadius: 18, border: `1px solid ${isRejected ? "rgba(232,91,91,0.3)" : !isVerified ? "rgba(232,179,75,0.25)" : "rgba(255,255,255,0.07)"}`, padding: "20px 22px" }}>
 
                   {/* Header row */}
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, marginBottom: 12 }}>
@@ -337,10 +382,10 @@ export default function AdminChurchVerification({ onBack, user }) {
                       <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)" }}>📍 {c.city ? `${c.city}, ` : ""}{c.country || "Unknown"}{c.province ? ` (${c.province})` : ""}</div>
                     </div>
                     <span style={{ padding: "4px 12px", borderRadius: 999, fontSize: 11, fontWeight: 700, whiteSpace: "nowrap",
-                      background: isVerified ? "rgba(62,207,142,0.12)" : "rgba(232,179,75,0.12)",
-                      color: isVerified ? "#3ecf8e" : "#e8b34b",
-                      border: `1px solid ${isVerified ? "rgba(62,207,142,0.3)" : "rgba(232,179,75,0.3)"}` }}>
-                      {isVerified ? "✓ Verified" : "Pending"}
+                      background: isRejected ? "rgba(232,91,91,0.12)" : isVerified ? "rgba(62,207,142,0.12)" : "rgba(232,179,75,0.12)",
+                      color: isRejected ? "#e85b5b" : isVerified ? "#3ecf8e" : "#e8b34b",
+                      border: `1px solid ${isRejected ? "rgba(232,91,91,0.3)" : isVerified ? "rgba(62,207,142,0.3)" : "rgba(232,179,75,0.3)"}` }}>
+                      {isRejected ? "✗ Rejected" : isVerified ? "✓ Verified" : "Pending"}
                     </span>
                   </div>
 
@@ -405,16 +450,42 @@ export default function AdminChurchVerification({ onBack, user }) {
                   )}
 
                   {/* Action */}
-                  {isVerified ? (
+                  {isRejected ? (
+                    <>
+                      {c.rejection_reason && (
+                        <div style={{ background: "rgba(232,91,91,0.08)", border: "1px solid rgba(232,91,91,0.2)", borderRadius: 10, padding: "10px 14px", marginBottom: 12, fontSize: 12, color: "rgba(255,255,255,0.6)" }}>
+                          <strong style={{ color: "#e85b5b" }}>Rejection reason:</strong> {c.rejection_reason}
+                        </div>
+                      )}
+                      <button onClick={() => reopen(c)} disabled={isActing}
+                        style={{ width: "100%", padding: "12px 0", borderRadius: 12, border: "1px solid rgba(232,179,75,0.3)", background: "rgba(232,179,75,0.06)", color: "#e8b34b", fontWeight: 700, cursor: isActing ? "default" : "pointer", fontSize: 13, fontFamily: "Georgia, serif" }}>
+                        {isActing ? "Saving..." : "↩ Reopen for Review"}
+                      </button>
+                    </>
+                  ) : isVerified ? (
                     <button onClick={() => unverify(c)} disabled={isActing}
                       style={{ width: "100%", padding: "12px 0", borderRadius: 12, border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.03)", color: "rgba(255,255,255,0.5)", fontWeight: 700, cursor: isActing ? "default" : "pointer", fontSize: 13, fontFamily: "Georgia, serif" }}>
                       {isActing ? "Saving..." : "↩ Revoke Verification"}
                     </button>
                   ) : (
-                    <button onClick={() => verify(c)} disabled={isActing}
-                      style={{ width: "100%", padding: "13px 0", borderRadius: 12, border: "none", background: isActing ? "rgba(62,207,142,0.1)" : "linear-gradient(135deg,#3ecf8e,#2aaf74)", color: isActing ? "#3ecf8e" : "#000", fontWeight: 700, cursor: isActing ? "default" : "pointer", fontSize: 14, fontFamily: "Georgia, serif", boxShadow: isActing ? "none" : "0 4px 18px rgba(62,207,142,0.35)" }}>
-                      {isActing ? "Saving..." : "✅ Verify Church"}
-                    </button>
+                    <>
+                      <textarea
+                        placeholder="Rejection reason (only needed if rejecting)"
+                        value={reasonById[c.id] || ""}
+                        onChange={e => setReasonById(prev => ({ ...prev, [c.id]: e.target.value }))}
+                        style={{ width: "100%", marginBottom: 12, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, padding: "10px 12px", color: "#eef1ff", fontSize: 13, fontFamily: "Georgia, serif", resize: "vertical", minHeight: 50, boxSizing: "border-box" }}
+                      />
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button onClick={() => verify(c)} disabled={isActing}
+                          style={{ flex: 1, padding: "13px 0", borderRadius: 12, border: "none", background: isActing ? "rgba(62,207,142,0.1)" : "linear-gradient(135deg,#3ecf8e,#2aaf74)", color: isActing ? "#3ecf8e" : "#000", fontWeight: 700, cursor: isActing ? "default" : "pointer", fontSize: 14, fontFamily: "Georgia, serif", boxShadow: isActing ? "none" : "0 4px 18px rgba(62,207,142,0.35)" }}>
+                          {isActing ? "Saving..." : "✅ Verify"}
+                        </button>
+                        <button onClick={() => reject(c)} disabled={isActing}
+                          style={{ flex: 1, padding: "13px 0", borderRadius: 12, border: "1px solid rgba(232,91,91,0.35)", background: "rgba(232,91,91,0.08)", color: "#e85b5b", fontWeight: 700, cursor: isActing ? "default" : "pointer", fontSize: 14, fontFamily: "Georgia, serif" }}>
+                          {isActing ? "Saving..." : "✗ Reject"}
+                        </button>
+                      </div>
+                    </>
                   )}
                 </div>
               );

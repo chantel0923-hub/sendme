@@ -511,12 +511,25 @@ export default function ChurchRegistration({ onBack, user, userRole }) {
 
       // Ping admin on WhatsApp — matches the "church_registered" template
       // already defined in supabase/functions/notify-admin/index.ts
-      notifyAdmin("church_registered", {
+      const notifyData = {
         churchName:  form.churchName,
         city:        form.city,
         country:     resolvedCountry,
         pastorName:  form.pastorName,
         pastorEmail: form.pastorEmail,
+      };
+      notifyAdmin("church_registered", notifyData);
+
+      // Admin email — separate channel from the WhatsApp notifyAdmin() call
+      // above, previously missing entirely for this flow (unlike
+      // mission_applied in MissionaryApplication.js). Fire-and-forget: a
+      // slow/failed email must never block registration from completing.
+      supabase.functions.invoke("send-notification", {
+        body: { type: "church_registered", to: "sendmemissionfund@gmail.com", data: notifyData },
+      }).then(({ error }) => {
+        if (error) console.error("church_registered admin email failed", error);
+      }).catch((err) => {
+        console.error("church_registered admin email threw", err);
       });
 
       // Advance to banking step
