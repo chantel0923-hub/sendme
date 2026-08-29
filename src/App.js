@@ -1568,6 +1568,7 @@ if (typeof document !== "undefined" && !document.getElementById(_navStyleId)) {
 const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, onMyChurch, onChurches, onProfile, onEmergency, onMatching, onPray, onTestimonies, onWorker, onQR, onFaq, onPayout, onAdminPayouts, isAdmin, isPastor, onMilestoneProof, onPastorReview, onMissionaryDashboard, onAdminApprovals, onAdminChurchVerification, guest, onSignIn, onDonate, onAdminWorkers, onAdminEmergency, onAdminPipeline }) => {
   const [region,setRegion]       = useState("All");
   const [missions,setMissions]   = useState([]);
+  const [emergencies,setEmergencies] = useState([]);
   const [loading,setLoading]     = useState(true);
   useEffect(()=>{
     const fetchMissions = async () => {
@@ -1580,6 +1581,19 @@ const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, o
       setLoading(false);
     };
     fetchMissions();
+    // Active emergencies were previously only visible inside the dedicated
+    // Emergency Requests tab — easy to miss entirely if someone never taps
+    // into it. Surfacing them here too, right above the mission list, so
+    // an approved emergency doesn't rely on someone finding a specific
+    // nav item to ever see it.
+    const fetchEmergencies = async () => {
+      try {
+        const {data,error} = await supabase.from("emergency_requests").select("*").eq("status","active").order("created_at",{ascending:false});
+        if(error) throw error;
+        setEmergencies(data || []);
+      } catch { setEmergencies([]); }
+    };
+    fetchEmergencies();
   },[]);
   const visible      = region==="All"?missions:missions.filter(m=>m.region===region||m.region.startsWith(region.slice(0,3)));
   const totalRaised  = missions.reduce((acc,m)=>acc+(m.raised||0),0);
@@ -1660,6 +1674,48 @@ const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, o
             </div>
           ))}
         </div>
+
+        {/* Active Emergencies — deliberately placed above Active Missions,
+            since these were previously only visible inside the dedicated
+            Emergency tab and easy to miss entirely. */}
+        {emergencies.length > 0 && (
+          <div style={{ marginBottom:28 }}>
+            <div style={{ fontSize:18,fontWeight:700,color:"#e85b5b",marginBottom:16,display:"flex",alignItems:"center",gap:8 }}>
+              🚨 Active Emergencies
+              <span style={{ fontSize:12,fontWeight:400,color:"rgba(255,255,255,0.35)" }}>— urgent needs from the field</span>
+            </div>
+            <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
+              {emergencies.slice(0,3).map(em=>{
+                const urgColor = em.urgency==="critical"?"#e85b5b":em.urgency==="urgent"?"#f5a44a":"#e8b34b";
+                const urgLabel = em.urgency==="critical"?"🔴 Critical":em.urgency==="urgent"?"🟠 Urgent":"🟡 Needed";
+                const target = em.collection_target || Math.round((em.goal||1000)*1.1);
+                const pctFunded = Math.min(100,Math.round(((em.raised||0)/target)*100));
+                return (
+                  <div key={em.id} onClick={onEmergency} style={{ background:"#0c1628",borderRadius:16,border:`1px solid ${urgColor}44`,borderLeft:`4px solid ${urgColor}`,padding:"16px 18px",cursor:"pointer" }}>
+                    <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,marginBottom:8 }}>
+                      <div style={{ fontSize:15,fontWeight:700,color:"#eef1ff" }}>{em.title}</div>
+                      <span style={{ fontSize:11,padding:"3px 10px",borderRadius:999,background:`${urgColor}18`,color:urgColor,border:`1px solid ${urgColor}33`,whiteSpace:"nowrap" }}>{urgLabel}</span>
+                    </div>
+                    <div style={{ fontSize:12,color:"rgba(255,255,255,0.4)",marginBottom:10 }}>📍 {em.country}</div>
+                    <div style={{ background:"rgba(255,255,255,0.07)",borderRadius:999,height:6,overflow:"hidden",marginBottom:8 }}>
+                      <div style={{ width:`${pctFunded}%`,height:"100%",borderRadius:999,background:urgColor }}/>
+                    </div>
+                    <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center" }}>
+                      <span style={{ fontSize:13,color:urgColor,fontWeight:700 }}>${fmt(em.raised||0)} raised of ${fmt(target)}</span>
+                      <span style={{ fontSize:12,color:"rgba(255,255,255,0.4)" }}>💝 Give Now →</span>
+                    </div>
+                  </div>
+                );
+              })}
+              {emergencies.length > 3 && (
+                <button onClick={onEmergency} style={{ padding:"10px 0",borderRadius:12,border:"1px solid rgba(232,91,91,0.3)",background:"rgba(232,91,91,0.06)",color:"#e85b5b",fontWeight:700,cursor:"pointer",fontSize:13,fontFamily:"Georgia, serif" }}>
+                  View all {emergencies.length} active emergencies →
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
         <div style={{ fontSize:18,fontWeight:700,color:"#eef1ff",marginBottom:16 }}>✝ Active Missions</div>
         {loading?(
           <div style={{ textAlign:"center",padding:"40px 0",color:"rgba(255,255,255,0.3)",fontSize:14 }}>Loading missions...</div>
