@@ -80,7 +80,7 @@ export default function AdminMonthlyReport({ onBack }) {
       ...stats.churchesVerified.map(c => `  • ${c.name} — ${c.country}`),
       "",
       `📖 See these testimonies and more, and give toward what God is doing:`,
-      `${siteUrl}`,
+      `${siteUrl}/testimonies`,
       "",
       `"Here am I Lord, send me." — Isaiah 6:8`,
     ];
