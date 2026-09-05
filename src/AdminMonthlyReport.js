@@ -61,22 +61,26 @@ export default function AdminMonthlyReport({ onBack }) {
 
   const buildReportText = () => {
     if (!stats) return "";
+    const siteUrl = "https://sendme-nine.vercel.app";
     const lines = [
       `✝ SENDME MONTHLY REPORT — ${monthLabel(target).toUpperCase()}`,
       "",
       `💰 Total raised: $${fmt(stats.totalRaised)} across ${stats.donationCount} gift${stats.donationCount !== 1 ? "s" : ""}`,
       "",
       `🌍 Missions approved this month (${stats.missionsApproved.length}):`,
-      ...stats.missionsApproved.map(m => `  • ${m.title} — ${m.country}`),
+      ...stats.missionsApproved.map(m => `  • ${m.title} — ${m.country}\n    ${siteUrl}/mission/${m.id}`),
       "",
       `🎉 Missions completed this month (${stats.missionsCompleted.length}):`,
-      ...stats.missionsCompleted.map(m => `  • ${m.title} — ${m.country}`),
+      ...stats.missionsCompleted.map(m => `  • ${m.title} — ${m.country}\n    ${siteUrl}/mission/${m.id}`),
       "",
       `🚨 Emergency needs approved this month (${stats.emergenciesApproved.length}):`,
       ...stats.emergenciesApproved.map(e => `  • ${e.title} — ${e.country}`),
       "",
       `⛪ Churches verified this month (${stats.churchesVerified.length}):`,
       ...stats.churchesVerified.map(c => `  • ${c.name} — ${c.country}`),
+      "",
+      `📖 See these testimonies and more, and give toward what God is doing:`,
+      `${siteUrl}`,
       "",
       `"Here am I Lord, send me." — Isaiah 6:8`,
     ];

@@ -62,7 +62,7 @@ export default function AdminPipeline({ onBack, onAdminChurchVerification, onAdm
     try {
       const [missionsRes, churchesRes, payoutDetailsRes, proofsRes, recordsRes, emergencyRes] = await Promise.all([
         supabase.from("missions").select("*").order("created_at", { ascending: false }),
-        supabase.from("churches").select("id, name, verified, pastor_name, created_at"),
+        supabase.from("churches").select("id, name, verified, rejected, pastor_name, created_at"),
         supabase.from("payout_details").select("mission_id, church_id"),
         supabase.from("milestone_proofs").select("mission_id, milestone_number, status, submitted_at, reviewed_at").order("submitted_at", { ascending: false }),
         supabase.from("payout_records").select("mission_id, milestone_number, status"),
@@ -133,6 +133,14 @@ export default function AdminPipeline({ onBack, onAdminChurchVerification, onAdm
         }
         if (m.status === "pending") {
           const church = m.church_id ? churchById[m.church_id] : null;
+          if (m.church_id && church && church.rejected) {
+            // The church card itself no longer appears here (rejected
+            // churches are resolved, not stuck) — but this mission is
+            // still stuck without it, so it needs its own visibility
+            // rather than silently disappearing.
+            pushTo("church_verification", { ...m, church_name: "⚠ Linked church was rejected — missionary needs a different church" }, { since: m.created_at });
+            return;
+          }
           if (m.church_id && church && !church.verified) {
             return; // covered by the church's own card below
           }
@@ -187,7 +195,12 @@ export default function AdminPipeline({ onBack, onAdminChurchVerification, onAdm
       // missions, so a brand-new church with zero missions attached yet is
       // still visible here (previously invisible entirely).
       (churchesRes.data || []).forEach(c => {
-        if (c.verified) return;
+        // Skip both verified AND rejected churches — a rejected church is
+        // resolved (admin already made a decision), it's just resolved as
+        // "no" rather than "yes", so it shouldn't sit in a pipeline titled
+        // "where is everything stuck." It only reappears here if the church
+        // itself is reopened for review from AdminChurchVerification.js.
+        if (c.verified || c.rejected) return;
         const waitingCount = missionCountByChurch[c.id] || 0;
         pushTo("church_verification", {
           id: c.id,
