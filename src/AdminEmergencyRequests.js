@@ -191,10 +191,20 @@ export default function AdminEmergencyRequests({ onBack, adminEmail }) {
                 )}
 
                 {r.status === "active" && (
-                  <button disabled={isBusy} onClick={()=>reject(r)}
-                    style={{ marginTop:14, width:"100%", padding:"10px 0", borderRadius:12, border:"1px solid rgba(232,91,91,0.25)", background:"rgba(232,91,91,0.06)", color:"#e85b5b", cursor:isBusy?"default":"pointer", fontSize:13, fontFamily:"Georgia, serif", fontWeight:600, opacity:isBusy?0.6:1 }}>
-                    Take Down / Reject
-                  </button>
+                  <>
+                    <a
+                      href={`https://wa.me/?text=${encodeURIComponent(
+                        `🚨 EMERGENCY NEED APPROVED\n\n*${r.title || "Untitled Request"}*\n📍 ${r.country || "Unknown"} · ${u.label.replace(/^[^\s]+\s/,"")}\n💰 Goal: $${fmt(r.goal||0)}\n\n${(r.description || "").slice(0, 150)}${(r.description || "").length > 150 ? "..." : ""}\n\nRespond or give on SendMe:\nhttps://sendme-nine.vercel.app`
+                      )}`}
+                      target="_blank" rel="noopener noreferrer"
+                      style={{ display:"block", textAlign:"center", marginTop:14, padding:"10px 0", borderRadius:12, border:"1px solid rgba(37,211,102,0.35)", background:"rgba(37,211,102,0.08)", color:"#25d366", fontWeight:700, fontSize:13, fontFamily:"Georgia, serif", textDecoration:"none" }}>
+                      📲 Post to WhatsApp Group
+                    </a>
+                    <button disabled={isBusy} onClick={()=>reject(r)}
+                      style={{ marginTop:10, width:"100%", padding:"10px 0", borderRadius:12, border:"1px solid rgba(232,91,91,0.25)", background:"rgba(232,91,91,0.06)", color:"#e85b5b", cursor:isBusy?"default":"pointer", fontSize:13, fontFamily:"Georgia, serif", fontWeight:600, opacity:isBusy?0.6:1 }}>
+                      Take Down / Reject
+                    </button>
+                  </>
                 )}
 
                 {r.status === "rejected" && (

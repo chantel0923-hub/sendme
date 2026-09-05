@@ -205,6 +205,22 @@ export default function AdminWorkerRequests({ onBack }) {
                   </div>
                 )}
 
+                {/* One-tap WhatsApp group post — worker requests go live
+                    immediately when a church posts them (no admin approval
+                    gate like missions/emergencies), so this is available
+                    any time a request is still open, not tied to an
+                    "approve" action. */}
+                {!isClosed && (
+                  <a
+                    href={`https://wa.me/?text=${encodeURIComponent(
+                      `🤝 HELPER NEEDED\n\n*${req.title || "Untitled Request"}*\n⛪ ${req.church || "A church"}\n📍 ${req.country || "Unknown"}\n\n${(req.description || "").slice(0, 150)}${(req.description || "").length > 150 ? "..." : ""}\n\nRespond on SendMe:\nhttps://sendme-nine.vercel.app`
+                    )}`}
+                    target="_blank" rel="noopener noreferrer"
+                    style={{ display:"block", textAlign:"center", marginBottom:14, padding:"10px 0", borderRadius:10, border:"1px solid rgba(37,211,102,0.35)", background:"rgba(37,211,102,0.08)", color:"#25d366", fontWeight:700, fontSize:13, fontFamily:"Georgia, serif", textDecoration:"none" }}>
+                    📲 Post to WhatsApp Group
+                  </a>
+                )}
+
                 {/* Responses section */}
                 {reqResponses.length > 0 && (
                   <div style={{ marginBottom:14 }}>

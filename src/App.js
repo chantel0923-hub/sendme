@@ -27,6 +27,8 @@ import AdminApprovals from './AdminApprovals';
 import AdminChurchVerification from './AdminChurchVerification';
 import AdminWorkerRequests from './AdminWorkerRequests';
 import AdminEmergencyRequests from './AdminEmergencyRequests';
+import AdminWhatsAppGroup from './AdminWhatsAppGroup';
+import AdminMonthlyReport from './AdminMonthlyReport';
 import NotificationOptIn from './NotificationOptIn';
 import AddToHomeScreenPrompt from './AddToHomeScreenPrompt';
 
@@ -1416,7 +1418,7 @@ const PayoutsDropdown = ({ onPayout, onPastorReview }) => {
 // Emergencies, Approvals, Payouts) that used to sit as separate buttons in
 // the main nav, cluttering the bar for the one person who ever sees them.
 // Same collapsible pattern as NavDropdown ("More") and PayoutsDropdown.
-const AdminDropdown = ({ onAdminChurchVerification, onAdminWorkers, onAdminEmergency, onAdminApprovals, onAdminPayouts, onAdminPipeline }) => {
+const AdminDropdown = ({ onAdminChurchVerification, onAdminWorkers, onAdminEmergency, onAdminApprovals, onAdminPayouts, onAdminPipeline, onAdminWhatsAppGroup, onAdminMonthlyReport }) => {
   const [open,setOpen] = useState(false);
   const ref = useRef(null);
 
@@ -1433,6 +1435,8 @@ const AdminDropdown = ({ onAdminChurchVerification, onAdminWorkers, onAdminEmerg
     { label:"📋 Approvals",       color:"#e8b34b", onClick:onAdminApprovals },
     { label:"💰 Payouts",         color:"#e85b5b", onClick:onAdminPayouts },
     { label:"🗺 Mission Pipeline", color:"#3ecf8e", onClick:onAdminPipeline },
+    { label:"📲 WhatsApp Group",  color:"#25d366", onClick:onAdminWhatsAppGroup },
+    { label:"📊 Monthly Report",  color:"#e8b34b", onClick:onAdminMonthlyReport },
   ];
 
   return (
@@ -1565,7 +1569,7 @@ if (typeof document !== "undefined" && !document.getElementById(_navStyleId)) {
   document.head.appendChild(_navStyle);
 }
 
-const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, onMyChurch, onChurches, onProfile, onEmergency, onEmergencyDetail, onMatching, onPray, onTestimonies, onWorker, onQR, onFaq, onPayout, onAdminPayouts, isAdmin, isPastor, onMilestoneProof, onPastorReview, onMissionaryDashboard, onAdminApprovals, onAdminChurchVerification, guest, onSignIn, onDonate, onAdminWorkers, onAdminEmergency, onAdminPipeline }) => {
+const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, onMyChurch, onChurches, onProfile, onEmergency, onEmergencyDetail, onMatching, onPray, onTestimonies, onWorker, onQR, onFaq, onPayout, onAdminPayouts, isAdmin, isPastor, onMilestoneProof, onPastorReview, onMissionaryDashboard, onAdminApprovals, onAdminChurchVerification, guest, onSignIn, onDonate, onAdminWorkers, onAdminEmergency, onAdminPipeline, onAdminWhatsAppGroup, onAdminMonthlyReport }) => {
   const [region,setRegion]       = useState("All");
   const [missions,setMissions]   = useState([]);
   const [emergencies,setEmergencies] = useState([]);
@@ -1622,7 +1626,7 @@ const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, o
             onProfile={onProfile} onEmergency={onEmergency} onTestimonies={onTestimonies}
             onWorker={onWorker} onMatching={onMatching} onQR={onQR} onFaq={onFaq}
           />
-          {isAdmin && <AdminDropdown onAdminChurchVerification={onAdminChurchVerification} onAdminWorkers={onAdminWorkers} onAdminEmergency={onAdminEmergency} onAdminApprovals={onAdminApprovals} onAdminPayouts={onAdminPayouts} onAdminPipeline={onAdminPipeline} />}
+          {isAdmin && <AdminDropdown onAdminChurchVerification={onAdminChurchVerification} onAdminWorkers={onAdminWorkers} onAdminEmergency={onAdminEmergency} onAdminApprovals={onAdminApprovals} onAdminPayouts={onAdminPayouts} onAdminPipeline={onAdminPipeline} onAdminWhatsAppGroup={onAdminWhatsAppGroup} onAdminMonthlyReport={onAdminMonthlyReport} />}
           {user&&<button onClick={onSignOut} style={{ background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:10,padding:"8px 14px",color:"rgba(255,255,255,0.4)",cursor:"pointer",fontSize:12 }}>Sign Out</button>}
         </div>
       </div>
@@ -2224,6 +2228,8 @@ export default function App() {
   if(screen==="admin-church-verification") return isAdminUser ? <AdminChurchVerification onBack={()=>setScreen("home")} user={user}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
   if(screen==="admin-workers")        return isAdminUser ? <AdminWorkerRequests onBack={()=>setScreen("home")}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
   if(screen==="admin-emergency")      return isAdminUser ? <AdminEmergencyRequests onBack={()=>setScreen("home")} adminEmail={user?.email}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
+  if(screen==="admin-whatsapp-group") return isAdminUser ? <AdminWhatsAppGroup onBack={()=>setScreen("home")}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
+  if(screen==="admin-monthly-report") return isAdminUser ? <AdminMonthlyReport onBack={()=>setScreen("home")}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
   if(screen==="ledger"&&selectedMission)  return <TransparencyLedger mission={selectedMission} onBack={()=>setScreen("detail")}/>;
   if(screen==="detail"&&selectedMission)  return <MissionDetail mission={selectedMission} onBack={()=>setScreen("home")} onDonate={openDonate} onLedger={()=>setScreen("ledger")} user={user} userRole={userRole} guest={guest} isAdmin={isAdminUser} onBrowseMissions={()=>setScreen("donor-browse")} onViewPrayerWall={()=>{ setPrayerWallFilterMissionId(selectedMission.id); setScreen("pray"); }}/>;
   if(screen==="donate"&&selectedMission)  return <DonateScreen mission={selectedMission} onBack={()=>setScreen("detail")} onPayfast={handlePayfastDonate} user={user} onBrowseMissions={()=>setScreen("donor-browse")}/>;
@@ -2253,6 +2259,8 @@ export default function App() {
       onDonate={()=>setScreen("donor-browse")}
       onAdminWorkers={()=>setScreen("admin-workers")}
       onAdminEmergency={()=>setScreen("admin-emergency")}
+      onAdminWhatsAppGroup={()=>setScreen("admin-whatsapp-group")}
+      onAdminMonthlyReport={()=>setScreen("admin-monthly-report")}
     />
   );
 }

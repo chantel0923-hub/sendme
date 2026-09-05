@@ -324,6 +324,23 @@ export default function AdminApprovals({ onBack, user }) {
                     </div>
                   )}
 
+                  {/* One-tap WhatsApp group post — opens WhatsApp with the
+                      message pre-filled; admin picks the group and hits
+                      send. WhatsApp has no free API for posting to a group
+                      automatically (CallMeBot's free tier explicitly
+                      excludes groups), so this keeps it to one tap instead
+                      of a fully hands-off send. */}
+                  {m.status === "active" && (
+                    <a
+                      href={`https://wa.me/?text=${encodeURIComponent(
+                        `✝ NEW MISSION APPROVED\n\n*${m.title || "Untitled Mission"}*\n📍 ${m.country || "Unknown"}\n💰 Goal: $${fmt(m.goal)}\n\n${(m.blurb || "").slice(0, 150)}${(m.blurb || "").length > 150 ? "..." : ""}\n\nGive or pray for this mission on SendMe:\nhttps://sendme-nine.vercel.app`
+                      )}`}
+                      target="_blank" rel="noopener noreferrer"
+                      style={{ display: "block", textAlign: "center", marginTop: 12, padding: "11px 0", borderRadius: 10, border: "1px solid rgba(37,211,102,0.35)", background: "rgba(37,211,102,0.08)", color: "#25d366", fontWeight: 700, fontSize: 13, fontFamily: "Georgia, serif", textDecoration: "none" }}>
+                      📲 Post to WhatsApp Group
+                    </a>
+                  )}
+
                   {/* Action area — only for pending */}
                   {isPending && (
                     <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 16 }}>
