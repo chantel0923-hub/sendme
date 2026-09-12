@@ -2157,6 +2157,7 @@ export default function App() {
       "/emergency":"emergency",
       "/pastor-review":"pastor-review",
       "/testimonies":"testimonies",
+      "/faq":"faq",
     };
     if(ROUTE_SCREENS[path]) setScreen(ROUTE_SCREENS[path]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
