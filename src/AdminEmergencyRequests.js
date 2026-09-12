@@ -194,7 +194,7 @@ export default function AdminEmergencyRequests({ onBack, adminEmail }) {
                   <>
                     <a
                       href={`https://wa.me/?text=${encodeURIComponent(
-                        `🚨 EMERGENCY NEED APPROVED\n\n*${r.title || "Untitled Request"}*\n📍 ${r.country || "Unknown"} · ${u.label.replace(/^[^\s]+\s/,"")}\n💰 Goal: $${fmt(r.goal||0)}\n\n${(r.description || "").slice(0, 150)}${(r.description || "").length > 150 ? "..." : ""}\n\nRespond or give on SendMe:\nhttps://sendme-nine.vercel.app`
+                        `🚨 EMERGENCY NEED APPROVED\n\n*${r.title || "Untitled Request"}*\n📍 ${r.country || "Unknown"} · ${u.label.replace(/^[^\s]+\s/,"")}\n💰 Goal: $${fmt(r.goal||0)}\n\n${(r.description || "").slice(0, 150)}${(r.description || "").length > 150 ? "..." : ""}\n\nRespond or give on SendMe:\nhttps://sendmeglobalmission.org`
                       )}`}
                       target="_blank" rel="noopener noreferrer"
                       style={{ display:"block", textAlign:"center", marginTop:14, padding:"10px 0", borderRadius:12, border:"1px solid rgba(37,211,102,0.35)", background:"rgba(37,211,102,0.08)", color:"#25d366", fontWeight:700, fontSize:13, fontFamily:"Georgia, serif", textDecoration:"none" }}>

@@ -61,7 +61,7 @@ export default function AdminMonthlyReport({ onBack }) {
 
   const buildReportText = () => {
     if (!stats) return "";
-    const siteUrl = "https://sendme-nine.vercel.app";
+    const siteUrl = "https://sendmeglobalmission.org";
     const lines = [
       `✝ SENDME MONTHLY REPORT — ${monthLabel(target).toUpperCase()}`,
       "",

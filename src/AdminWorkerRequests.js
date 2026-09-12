@@ -213,7 +213,7 @@ export default function AdminWorkerRequests({ onBack }) {
                 {!isClosed && (
                   <a
                     href={`https://wa.me/?text=${encodeURIComponent(
-                      `🤝 HELPER NEEDED\n\n*${req.title || "Untitled Request"}*\n⛪ ${req.church || "A church"}\n📍 ${req.country || "Unknown"}\n\n${(req.description || "").slice(0, 150)}${(req.description || "").length > 150 ? "..." : ""}\n\nRespond on SendMe:\nhttps://sendme-nine.vercel.app`
+                      `🤝 HELPER NEEDED\n\n*${req.title || "Untitled Request"}*\n⛪ ${req.church || "A church"}\n📍 ${req.country || "Unknown"}\n\n${(req.description || "").slice(0, 150)}${(req.description || "").length > 150 ? "..." : ""}\n\nRespond on SendMe:\nhttps://sendmeglobalmission.org`
                     )}`}
                     target="_blank" rel="noopener noreferrer"
                     style={{ display:"block", textAlign:"center", marginBottom:14, padding:"10px 0", borderRadius:10, border:"1px solid rgba(37,211,102,0.35)", background:"rgba(37,211,102,0.08)", color:"#25d366", fontWeight:700, fontSize:13, fontFamily:"Georgia, serif", textDecoration:"none" }}>
