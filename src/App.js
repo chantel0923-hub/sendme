@@ -1580,6 +1580,7 @@ const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, o
   const [region,setRegion]       = useState("All");
   const [missions,setMissions]   = useState([]);
   const [emergencies,setEmergencies] = useState([]);
+  const [familyNeeds,setFamilyNeeds] = useState([]);
   const [loading,setLoading]     = useState(true);
   useEffect(()=>{
     const fetchMissions = async () => {
@@ -1605,6 +1606,20 @@ const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, o
       } catch { setEmergencies([]); }
     };
     fetchEmergencies();
+    // Same visibility reasoning as emergencies above, added when Family In
+    // Need got its own Home screen banner. Queries the anonymised public
+    // view (never the base family_needs table) — status "published" is
+    // still fundraising, "funded" has hit its goal but isn't paid out yet;
+    // both are worth showing here, same as how a fully-funded emergency
+    // still appears until it's taken down.
+    const fetchFamilyNeeds = async () => {
+      try {
+        const {data,error} = await supabase.from("family_needs_public").select("*").in("status",["published","funded"]).order("created_at",{ascending:false});
+        if(error) throw error;
+        setFamilyNeeds(data || []);
+      } catch { setFamilyNeeds([]); }
+    };
+    fetchFamilyNeeds();
   },[]);
   const visible      = region==="All"?missions:missions.filter(m=>m.region===region||m.region.startsWith(region.slice(0,3)));
   const totalRaised  = missions.reduce((acc,m)=>acc+(m.raised||0),0);
@@ -1721,6 +1736,50 @@ const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, o
               {emergencies.length > 3 && (
                 <button onClick={onEmergency} style={{ padding:"10px 0",borderRadius:12,border:"1px solid rgba(232,91,91,0.3)",background:"rgba(232,91,91,0.06)",color:"#e85b5b",fontWeight:700,cursor:"pointer",fontSize:13,fontFamily:"Georgia, serif" }}>
                   View all {emergencies.length} active emergencies →
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Active Family Needs — same visibility reasoning as Active
+            Emergencies above: previously only visible via the nav menu's
+            "Family In Need" item, easy to miss entirely. Cards link to the
+            full Family In Need page rather than a per-item detail (that
+            page has no individual deep-link/modal yet, unlike emergencies'
+            onEmergencyDetail). */}
+        {familyNeeds.length > 0 && (
+          <div style={{ marginBottom:28 }}>
+            <div style={{ fontSize:18,fontWeight:700,color:"#3ecf8e",marginBottom:16,display:"flex",alignItems:"center",gap:8 }}>
+              🤝 Family In Need
+              <span style={{ fontSize:12,fontWeight:400,color:"rgba(255,255,255,0.35)" }}>— church-endorsed, anonymous, accountable</span>
+            </div>
+            <div style={{ display:"flex",flexDirection:"column",gap:12 }}>
+              {familyNeeds.slice(0,3).map(fn=>{
+                const catColor = { food:"#e8b34b", clothing:"#5b9cf6", electricity:"#f5a44a", school:"#b06cf5", medical:"#e85b5b", other:"#3ecf8e" }[fn.category] || "#3ecf8e";
+                const catLabel = { food:"🍲 Food", clothing:"👕 Clothing", electricity:"💡 Electricity", school:"🎒 School", medical:"🏥 Medical", other:"🤝 Other" }[fn.category] || "🤝 Other";
+                const target = fn.collection_target || Math.round((fn.goal||1000)*1.1);
+                const pctFunded = Math.min(100,Math.round(((fn.raised||0)/target)*100));
+                return (
+                  <div key={fn.id} onClick={onFamilyNeed} style={{ background:"#0c1628",borderRadius:16,border:`1px solid ${catColor}44`,borderLeft:`4px solid ${catColor}`,padding:"16px 18px",cursor:"pointer" }}>
+                    <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,marginBottom:8 }}>
+                      <div style={{ fontSize:13,color:"rgba(255,255,255,0.6)",lineHeight:1.6 }}>{fn.public_summary || "A family in need, endorsed by their local church."}</div>
+                      <span style={{ fontSize:11,padding:"3px 10px",borderRadius:999,background:`${catColor}18`,color:catColor,border:`1px solid ${catColor}33`,whiteSpace:"nowrap" }}>{catLabel}</span>
+                    </div>
+                    <div style={{ fontSize:12,color:"rgba(255,255,255,0.4)",marginBottom:10 }}>📍 {fn.city}{fn.province?`, ${fn.province}`:""}, {fn.country}</div>
+                    <div style={{ background:"rgba(255,255,255,0.07)",borderRadius:999,height:6,overflow:"hidden",marginBottom:8 }}>
+                      <div style={{ width:`${pctFunded}%`,height:"100%",borderRadius:999,background:catColor }}/>
+                    </div>
+                    <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center" }}>
+                      <span style={{ fontSize:13,color:catColor,fontWeight:700 }}>${fmt(fn.raised||0)} raised of ${fmt(target)}</span>
+                      <span style={{ fontSize:12,color:"rgba(255,255,255,0.4)" }}>💝 Give Now →</span>
+                    </div>
+                  </div>
+                );
+              })}
+              {familyNeeds.length > 3 && (
+                <button onClick={onFamilyNeed} style={{ padding:"10px 0",borderRadius:12,border:"1px solid rgba(62,207,142,0.3)",background:"rgba(62,207,142,0.06)",color:"#3ecf8e",fontWeight:700,cursor:"pointer",fontSize:13,fontFamily:"Georgia, serif" }}>
+                  View all {familyNeeds.length} family needs →
                 </button>
               )}
             </div>
