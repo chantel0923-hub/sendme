@@ -388,7 +388,7 @@ export default function FamilyNeeds({ onBack, user, userRole }) {
           <div style={{ fontSize:18, fontWeight:700 }}>Family In Need</div>
           <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", letterSpacing:2, marginTop:2 }}>CHURCH-ENDORSED, ANONYMOUS, ACCOUNTABLE</div>
         </div>
-        {userRole !== "donor" && user && (
+        {user && (
           <button onClick={()=>setShowForm(f=>!f)} style={{ marginLeft:"auto", background:"linear-gradient(135deg,#3ecf8e,#2aaf74)", border:"none", borderRadius:10, padding:"8px 16px", color:"#000", cursor:"pointer", fontSize:13, fontWeight:700 }}>
             + Submit a Family Need
           </button>
