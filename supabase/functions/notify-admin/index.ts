@@ -88,6 +88,22 @@ const TEMPLATES: Record<string, (d: any) => string> = {
     `✉ ${d.responderEmail || "no email"}\n` +
     (d.note ? `📝 "${d.note}"\n\n` : `\n`) +
     `Review + notify the church in Admin → Worker Requests`,
+  // ── Family In Need ──────────────────────────────────────────────────────
+  // Deliberately no applicant name/phone/email here — a WhatsApp message is
+  // less controlled than the admin email/dashboard, so this stays anonymised
+  // (category + city only) same as the public listing itself.
+  family_need_submitted: (d) =>
+    `🤝 SendMe — New Family In Need Submission\n\n` +
+    `Category: ${d.category || "unspecified"}\n` +
+    `📍 ${d.city || "unspecified"}, ${d.country || "unspecified"}\n` +
+    `💰 Amount needed: USD ${d.goal ?? "unset"}\n\n` +
+    `⚠ Awaiting pastor endorsement before it reaches your queue.`,
+  family_need_funded: (d) =>
+    `🙏 SendMe — Family Need Fully Funded\n\n` +
+    `Category: ${d.category || "unspecified"}\n` +
+    `📍 ${d.city || "unspecified"}, ${d.country || "unspecified"}\n` +
+    `💰 USD ${d.amount || 0} raised\n\n` +
+    `Action: Admin → Family Needs → mark as paid to church`,
 };
 serve(async (req) => {
   if (req.method === "OPTIONS") {

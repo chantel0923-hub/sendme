@@ -109,3 +109,50 @@ export async function startPayfastEmergencyDonation({ emergency, amount, user })
   const { action, fields } = await res.json();
   submitPayfastForm(action, fields);
 }
+
+// Family In Need contributions — same redirect mechanism again, tagged
+// kind:"family_need" so the ITN webhook credits family_needs.raised via
+// increment_family_need_raised instead of missions/emergency_requests.
+// Funds are still collected the same way as any other donation; the
+// church-not-family payout distinction happens later, at admin payout time,
+// not here.
+export async function startPayfastFamilyNeedDonation({ need, amount, user, guestInfo = null }) {
+  if (!need) throw new Error("No family need selected");
+
+  const payload = {
+    family_need_id: need.id,
+    family_need_title: `${need.category || "Family"} need — ${need.city || need.country || ""}`.trim(),
+    amount,
+    name: guestInfo?.name || user?.user_metadata?.full_name || user?.email?.split("@")[0] || "SendMe Donor",
+    email: guestInfo?.email || user?.email || "",
+    user_id: user?.id || null,
+    kind: "family_need",
+  };
+
+  try {
+    // Same sessionStorage shape as the other two flows — App.js's generic
+    // success/cancel handler matches on `mission_id`, reused here to hold
+    // the family need's id.
+    sessionStorage.setItem(
+      "sendme_pending_donation",
+      JSON.stringify({ mission_id: need.id, amount })
+    );
+  } catch {
+    // sessionStorage may be unavailable (e.g. private browsing) — non-fatal
+  }
+
+  const res = await fetch("/api/payfast-create", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    let msg = "Could not start PayFast payment";
+    try { const j = await res.json(); if (j?.error) msg = j.error; } catch {}
+    throw new Error(msg);
+  }
+
+  const { action, fields } = await res.json();
+  submitPayfastForm(action, fields);
+}

@@ -3,7 +3,8 @@
 // PayFast Instant Transaction Notification (ITN) webhook.
 // PayFast POSTs here server-to-server after every payment event.
 // We verify the signature, check the payment status, then update
-// the donations row and increment the mission's raised amount.
+// the donations row and increment the mission's (or emergency's, or
+// family need's) raised amount.
 //
 // Required Vercel env vars (same as payfast-create.js):
 //   SUPABASE_SERVICE_ROLE_KEY
@@ -18,7 +19,7 @@ import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
 
 const ADMIN_EMAIL = process.env.ADMIN_NOTIFICATION_EMAIL || "sendmemissionfund@gmail.com";
-const SITE_URL     = (process.env.SITE_URL || "https://sendme-nine.vercel.app").replace(/\/$/, "");
+const SITE_URL     = (process.env.SITE_URL || "https://sendmeglobalmission.org").replace(/\/$/, "");
 
 const PAYFAST_VALID_HOSTS = [
   "www.payfast.co.za",
@@ -137,7 +138,7 @@ export default async function handler(req, res) {
       custom_str1: target_id,
       custom_str2: type,
       custom_str3: user_id,
-      custom_str4: kind,   // "mission" | "emergency" — set by payfast-create.js
+      custom_str4: kind,   // "mission" | "emergency" | "family_need" — set by payfast-create.js
       pf_payment_id,
       name_first,
       email_address,
@@ -147,7 +148,8 @@ export default async function handler(req, res) {
                             // so it must be captured here to identify renewal charges later.
     } = params;
 
-    const isEmergency = kind === "emergency";
+    const isEmergency  = kind === "emergency";
+    const isFamilyNeed = kind === "family_need";
 
     const supabase = createClient(
       process.env.REACT_APP_SUPABASE_URL,
@@ -165,7 +167,7 @@ export default async function handler(req, res) {
     // by roughly the exchange rate. This lookup is the fix for that.
     let { data: donationRow, error: fetchError } = await supabase
       .from("donations")
-      .select("amount, mission_id, emergency_id, mission_title, donor_name, donor_email, user_id, type, kind")
+      .select("amount, mission_id, emergency_id, family_need_id, mission_title, donor_name, donor_email, user_id, type, kind")
       .eq("m_payment_id", m_payment_id)
       .maybeSingle();
     if (fetchError) {
@@ -184,7 +186,7 @@ export default async function handler(req, res) {
     if (!donationRow && token) {
       const { data: subRow, error: subErr } = await supabase
         .from("donations")
-        .select("amount, mission_id, emergency_id, mission_title, donor_name, donor_email, user_id, type, kind")
+        .select("amount, mission_id, emergency_id, family_need_id, mission_title, donor_name, donor_email, user_id, type, kind")
         .eq("payfast_token", token)
         .order("created_at", { ascending: true })
         .limit(1)
@@ -198,8 +200,9 @@ export default async function handler(req, res) {
           .insert({
             m_payment_id,
             payfast_token: token,
-            mission_id:    subRow.mission_id,
-            emergency_id:  subRow.emergency_id,
+            mission_id:      subRow.mission_id,
+            emergency_id:    subRow.emergency_id,
+            family_need_id:  subRow.family_need_id,
             mission_title: subRow.mission_title,
             amount:        subRow.amount,
             donor_name:    subRow.donor_name,
@@ -209,7 +212,7 @@ export default async function handler(req, res) {
             kind:          subRow.kind,
             status:        "pending",
           })
-          .select("amount, mission_id, emergency_id, mission_title, donor_name, donor_email, user_id, type, kind")
+          .select("amount, mission_id, emergency_id, family_need_id, mission_title, donor_name, donor_email, user_id, type, kind")
           .single();
         if (insertErr) {
           console.error("payfast-notify: renewal donation insert failed", insertErr);
@@ -241,7 +244,8 @@ export default async function handler(req, res) {
       return res.status(200).send("OK");
     }
 
-    // Increment the mission's (or emergency request's) raised amount on COMPLETE
+    // Increment the mission's (or emergency request's, or family need's)
+    // raised amount on COMPLETE
     if (status === "complete" && target_id) {
       // Fallback to amount_gross only if the original donation row lookup
       // somehow failed — better to credit something than nothing, but the
@@ -254,7 +258,30 @@ export default async function handler(req, res) {
       // per-kind below, then sent once after crediting either branch.
       let notifyTitle = null, notifyRaised = null, notifyGoal = null, notifyPath = "/";
 
-      if (isEmergency) {
+      if (isFamilyNeed) {
+        const { error: rpcError } = await supabase.rpc("increment_family_need_raised", {
+          p_need_id: target_id,
+          p_amount: creditAmount,
+        });
+        if (rpcError) {
+          console.error("payfast-notify: increment_family_need_raised failed", rpcError);
+        }
+
+        // Public-facing title stays anonymised here too — category+city,
+        // never applicant_name, even in this admin-only notification.
+        // Selecting from the base table (service role bypasses RLS) but
+        // deliberately only pulling public-safe columns.
+        const { data: needRow, error: needFetchError } = await supabase
+          .from("family_needs")
+          .select("category, city, country, raised, goal")
+          .eq("id", target_id)
+          .maybeSingle();
+        if (needFetchError) console.error("payfast-notify: family_needs fetch for notification failed", needFetchError);
+        notifyTitle  = needRow ? `${needRow.category || "Family"} need — ${needRow.city || needRow.country || ""}`.trim() : null;
+        notifyRaised = needRow?.raised ?? null;
+        notifyGoal   = needRow?.goal   ?? null;
+        notifyPath   = "/family-in-need";
+      } else if (isEmergency) {
         const { error: rpcError } = await supabase.rpc("increment_emergency_raised", {
           p_emergency_id: target_id,
           p_amount: creditAmount,
@@ -283,7 +310,8 @@ export default async function handler(req, res) {
         }
 
         // Also append to mission_ledger for transparency (missions only —
-        // there's no equivalent ledger table for emergency requests yet)
+        // there's no equivalent ledger table for emergency requests or
+        // family needs yet)
         const { error: ledgerError } = await supabase.from("mission_ledger").insert({
           mission_id: target_id,
           amount: creditAmount,
@@ -314,7 +342,7 @@ export default async function handler(req, res) {
       // each other on what they report.
       const notifyData = {
         amount:      creditAmount,
-        missionTitle: notifyTitle || (isEmergency ? "an emergency request" : "a mission"),
+        missionTitle: notifyTitle || (isFamilyNeed ? "a Family In Need gift" : isEmergency ? "an emergency request" : "a mission"),
         donorName:   donationRow?.donor_name  || name_first    || null,
         donorEmail:  donationRow?.donor_email || email_address || null,
         isGuest:     !(donationRow?.user_id || user_id),
@@ -333,9 +361,9 @@ export default async function handler(req, res) {
       }
 
       // #94 — WhatsApp ping to admin on every completed donation (guest or
-      // logged-in, mission or emergency). Fire-and-forget, same as the
-      // email above — a failed/slow WhatsApp send must never block or fail
-      // the ITN response PayFast is waiting on.
+      // logged-in, mission, emergency, or family need). Fire-and-forget,
+      // same as the email above — a failed/slow WhatsApp send must never
+      // block or fail the ITN response PayFast is waiting on.
       try {
         const { error: waError } = await supabase.functions.invoke("notify-admin", {
           body: { type: "donation_received", data: notifyData },

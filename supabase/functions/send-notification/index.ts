@@ -17,6 +17,13 @@ const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 // ── IMPORTANT: update this once your domain is verified in Resend ──
 const FROM_ADDRESS = "SendMe Global Mission <notifications@sendmeglobalmission.org>";
 
+// Fallback link used only when a template's caller doesn't pass a specific
+// URL. Previously hardcoded per-template as "https://sendme-nine.vercel.app"
+// (the old Vercel subdomain, dead since the sendmeglobalmission.org
+// migration) — every one of those fallbacks below is now this constant so
+// there's exactly one place to update if the domain ever changes again.
+const SITE_URL = "https://sendmeglobalmission.org";
+
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -94,7 +101,7 @@ const TEMPLATES: Record<string, (d: any) => { subject: string; html: string }> =
       Your church now appears in the public Message Church &amp; Organization Directory, and can be selected
       by missionaries applying to SendMe as their sending church.<br/><br/>
       Thank you for standing with the end-time Message and with those SendMe sends into the field.`,
-      "View the Directory", d.directoryUrl || "https://sendme-nine.vercel.app"
+      "View the Directory", d.directoryUrl || SITE_URL
     ),
   }),
 
@@ -107,7 +114,7 @@ const TEMPLATES: Record<string, (d: any) => { subject: string; html: string }> =
       Every milestone was reached, verified, and funded — and now your story becomes a permanent testimony
       for the Body to see what the Lord has done through your faithfulness.<br/><br/>
       Thank you for saying "Here am I, send me."`,
-      "View Testimonies", d.testimonyUrl || "https://sendme-nine.vercel.app"
+      "View Testimonies", d.testimonyUrl || SITE_URL
     ),
   }),
 
@@ -119,7 +126,7 @@ const TEMPLATES: Record<string, (d: any) => { subject: string; html: string }> =
       Praise God! Your application for <strong style="color:#e8b34b;">${d.missionTitle}</strong> has been reviewed and approved by SendMe.
       Your mission is now live and visible to donors on the platform.<br/><br/>
       Funds will be released to your church as you reach and submit proof for each milestone.`,
-      "View My Dashboard", d.dashboardUrl || "https://sendme-nine.vercel.app"
+      "View My Dashboard", d.dashboardUrl || SITE_URL
     ),
   }),
 
@@ -143,7 +150,7 @@ const TEMPLATES: Record<string, (d: any) => { subject: string; html: string }> =
       ${d.missionaryName || "Your missionary"} has submitted proof for milestone ${d.milestoneNumber} of
       <strong style="color:#e8b34b;">${d.missionTitle}</strong>. Please review and approve so the next
       milestone's funds can be released.`,
-      "Review Proof Now", d.reviewUrl || "https://sendme-nine.vercel.app"
+      "Review Proof Now", d.reviewUrl || SITE_URL
     ),
   }),
 
@@ -156,7 +163,7 @@ const TEMPLATES: Record<string, (d: any) => { subject: string; html: string }> =
       ${d.milestoneNumber} of <strong style="color:#e8b34b;">${d.missionTitle}</strong>. Funds for this
       milestone are being released to your church.<br/><br/>
       Keep pressing forward in the work — your next milestone begins now.`,
-      "View My Dashboard", d.dashboardUrl || "https://sendme-nine.vercel.app"
+      "View My Dashboard", d.dashboardUrl || SITE_URL
     ),
   }),
 
@@ -168,7 +175,7 @@ const TEMPLATES: Record<string, (d: any) => { subject: string; html: string }> =
       Your pastor reviewed your proof for milestone ${d.milestoneNumber} of
       <strong style="color:#e8b34b;">${d.missionTitle}</strong> and has asked for some changes before it can be approved.<br/><br/>
       ${d.reason ? `<div style="background:rgba(232,179,75,0.08);border:1px solid rgba(232,179,75,0.2);border-radius:10px;padding:14px 16px;margin-top:8px;"><strong style="color:#e8b34b;">Pastor's notes:</strong> ${d.reason}</div>` : ""}`,
-      "Resubmit Proof", d.resubmitUrl || "https://sendme-nine.vercel.app"
+      "Resubmit Proof", d.resubmitUrl || SITE_URL
     ),
   }),
 
@@ -181,7 +188,7 @@ const TEMPLATES: Record<string, (d: any) => { subject: string; html: string }> =
       for review by ${d.pastorName ? `Pastor ${d.pastorName}` : "their pastor"}.<br/><br/>
       This is for your visibility only — approval happens on the pastor's side. Nothing is required
       from you unless the pastor reaches out for help.`,
-      "View in Admin", d.adminUrl || "https://sendme-nine.vercel.app"
+      "View in Admin", d.adminUrl || SITE_URL
     ),
   }),
 
@@ -193,7 +200,7 @@ const TEMPLATES: Record<string, (d: any) => { subject: string; html: string }> =
       <strong>${d.missionTitle}</strong>${d.donorName ? ` by ${d.donorName}` : " by an anonymous donor"}.<br/><br/>
       ${d.donorEmail ? `<div style="font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:10px;">✉ <a href="mailto:${d.donorEmail}" style="color:#e8b34b;">${d.donorEmail}</a>${d.isGuest ? ` <span style="color:rgba(255,255,255,0.35);">(guest checkout — no SendMe account)</span>` : ""}</div>` : ""}
       Total raised so far: <strong style="color:#e8b34b;">$${d.totalRaised} of $${d.goal}</strong>.`,
-      "View Mission", d.missionUrl || "https://sendme-nine.vercel.app"
+      "View Mission", d.missionUrl || SITE_URL
     ),
   }),
 
@@ -291,7 +298,7 @@ const TEMPLATES: Record<string, (d: any) => { subject: string; html: string }> =
       Once submitted, SendMe will transfer the funds directly to your church account within a few business days.
       Your church then passes the funds to the missionary.<br/><br/>
       This is a confidential process — banking details are never shown publicly.`,
-      "✝ Submit Banking Details", `${d.siteUrl || "https://sendme-nine.vercel.app"}`
+      "✝ Submit Banking Details", d.siteUrl || SITE_URL
     ),
   }),
 
@@ -308,7 +315,7 @@ const TEMPLATES: Record<string, (d: any) => { subject: string; html: string }> =
       Country: ${d.country || "unspecified"}<br/>
       Church: ${d.churchName || "unregistered"}<br/><br/>
       Please review and approve or reject this application in Admin → Approvals.`,
-      "Review in Admin", `${d.siteUrl || "https://sendme-nine.vercel.app"}`
+      "Review in Admin", d.siteUrl || SITE_URL
     ),
   }),
 
@@ -323,7 +330,125 @@ const TEMPLATES: Record<string, (d: any) => { subject: string; html: string }> =
       Urgency: ${d.urgency || "unspecified"}<br/>
       Funding goal: $${d.goal ?? "unset"}<br/><br/>
       Requests stay hidden from the public list until approved. Please review in Admin → Payouts → Emergency.`,
-      "Review in Admin", `${d.siteUrl || "https://sendme-nine.vercel.app"}`
+      "Review in Admin", d.siteUrl || SITE_URL
+    ),
+  }),
+
+  // Admin-facing — fires alongside the existing WhatsApp notifyAdmin() call
+  // in ChurchRegistration.js. Previously this flow only had the WhatsApp
+  // ping with no matching admin email, unlike mission_applied above.
+  church_registered: (d) => ({
+    subject: `New Church Registration — ${d.churchName || "Untitled Church"}`,
+    html: wrapEmail(
+      "New Church Registration",
+      `A new church/organization has registered and is awaiting verification.<br/><br/>
+      <strong style="color:#e8b34b;">${d.churchName || "Untitled Church"}</strong><br/>
+      Location: ${d.city || "unspecified"}, ${d.country || "unspecified"}<br/>
+      Pastor: ${d.pastorName || "unknown"}<br/>
+      Email: ${d.pastorEmail || "not provided"}<br/><br/>
+      Please review and verify this church in Admin → Churches.`,
+      "Review in Admin", d.siteUrl || SITE_URL
+    ),
+  }),
+
+  // Pastor-facing — sent from AdminChurchVerification.js's reject() action.
+  church_rejected: (d) => ({
+    subject: `Update on your SendMe church registration`,
+    html: wrapEmail(
+      "Church Registration Update",
+      `Dear ${d.pastorName || "brother/sister"},<br/><br/>
+      Thank you for registering <strong>${d.churchName || "your church"}</strong> with SendMe. After review,
+      we're not able to verify it at this time.<br/><br/>
+      ${d.reason ? `<div style="background:rgba(232,91,91,0.08);border:1px solid rgba(232,91,91,0.2);border-radius:10px;padding:14px 16px;margin-top:8px;"><strong style="color:#e85b5b;">Reason given:</strong> ${d.reason}</div>` : "Please reach out to SendMe support for more detail."}
+      <br/>You're welcome to update your details and re-register, or reach out with any questions.`,
+    ),
+  }),
+
+  // ── Family In Need — admin-facing ──────────────────────────────────────
+  // Fires alongside the existing WhatsApp notifyAdmin() call in
+  // FamilyNeeds.js, same "email + WhatsApp both fire" pattern as
+  // mission_applied/emergency_submitted above. Deliberately gives no
+  // applicant name/phone/email — this is a family's private submission,
+  // not yet endorsed by anyone, and admin gets full detail in Admin →
+  // Family Needs, not by email.
+  family_need_submitted: (d) => ({
+    subject: `🤝 New Family In Need Submission — ${d.category || "unspecified"}`,
+    html: wrapEmail(
+      "New Family In Need Submission",
+      `A new family need has been submitted and is awaiting pastor endorsement.<br/><br/>
+      Category: ${d.category || "unspecified"}<br/>
+      Location: ${d.city || "unspecified"}, ${d.country || "unspecified"}<br/>
+      Amount needed: $${d.goal ?? "unset"}<br/><br/>
+      This will move to your queue once the family's church endorses it. No action needed from you yet.`,
+      "View in Admin", SITE_URL
+    ),
+  }),
+
+  // Pastor-facing — sent from AdminFamilyNeeds.js's publish() action, once
+  // admin has written the public summary and made the request live.
+  family_need_published: (d) => ({
+    subject: `A family need you endorsed is now published ✝`,
+    html: wrapEmail(
+      "Family Need Published",
+      `Dear ${withPastorTitle(d.pastorName)},<br/><br/>
+      The <strong style="color:#e8b34b;">${d.category || "family"}</strong> need you endorsed for a family in
+      <strong>${d.city || "your area"}</strong> is now published and visible to donors on SendMe.<br/><br/>
+      We'll let you know once it's fully funded and ready for payout to your church.`,
+      "View SendMe", SITE_URL
+    ),
+  }),
+
+  // Pastor-facing + admin-facing — sent from AdminFamilyNeeds.js's
+  // markFunded() action. Tells the pastor a payout is coming, mirrors
+  // banking_request's role for missions (though family needs use the
+  // church's banking details already on file, not a fresh request).
+  family_need_funded: (d) => ({
+    subject: `Family need fully funded — payout coming to your church 🙏`,
+    html: wrapEmail(
+      "Family Need Fully Funded",
+      `Dear ${withPastorTitle(d.pastorName)},<br/><br/>
+      Praise God! The <strong style="color:#e8b34b;">${d.category || "family"}</strong> need you endorsed for a
+      family in <strong>${d.city || "your area"}</strong> has been fully funded by donors — a total of
+      <strong style="color:#e8b34b;">$${d.amount ?? ""}</strong>.<br/><br/>
+      SendMe will process the payout to your church's banking details on file. Once you've used the funds to
+      help the family, please submit proof (receipts and/or a photo) so this request can be marked complete.`,
+      "View SendMe", SITE_URL
+    ),
+  }),
+
+  // Pastor-facing — sent from PastorFamilyNeedReview.js is NOT where this
+  // fires (that screen only sends the endorsement itself to admin, not an
+  // email to the pastor) — this is the confirmation sent back to the
+  // pastor once their own endorsement has been recorded, so they know it
+  // reached SendMe and what happens next.
+  family_need_endorsed: (d) => ({
+    subject: `Your endorsement was received — ${d.category || "family"} need`,
+    html: wrapEmail(
+      "Endorsement Received",
+      `Dear ${withPastorTitle(d.pastorName)},<br/><br/>
+      Thank you — your endorsement for the <strong style="color:#e8b34b;">${d.category || "family"}</strong>
+      need in <strong>${d.city || "your area"}</strong> has been recorded. SendMe admin will now write a
+      public summary (no names or addresses) and publish it for donors to see.<br/><br/>
+      You'll hear from us again once it's published, and once it's fully funded.`,
+      "View SendMe", SITE_URL
+    ),
+  }),
+
+  // Pastor-facing — sent from AdminFamilyNeeds.js's decideProof() action
+  // when a submitted proof is rejected and needs resubmission. (On
+  // approval, the need simply moves to "complete" — no email needed there,
+  // matching how proof_approved is the only side of the milestone-proof
+  // cycle that gets an email.)
+  family_need_proof_submitted: (d) => ({
+    subject: `Proof needs revision — ${d.category || "family"} need`,
+    html: wrapEmail(
+      "Family Need Proof Needs Revision",
+      `Dear ${withPastorTitle(d.pastorName)},<br/><br/>
+      SendMe admin reviewed the proof submitted for the <strong style="color:#e8b34b;">${d.category || "family"}</strong>
+      need in <strong>${d.city || "your area"}</strong> and has asked for some changes before it can be marked
+      complete.<br/><br/>
+      ${d.reason ? `<div style="background:rgba(232,179,75,0.08);border:1px solid rgba(232,179,75,0.2);border-radius:10px;padding:14px 16px;margin-top:8px;"><strong style="color:#e8b34b;">Notes:</strong> ${d.reason}</div>` : "Please log in to SendMe and resubmit receipts/photos for this family need."}`,
+      "View SendMe", SITE_URL
     ),
   }),
 };
@@ -366,6 +491,12 @@ serve(async (req) => {
       body: JSON.stringify({
         from: FROM_ADDRESS,
         to: [to],
+        // Without this, a reply defaults to FROM_ADDRESS
+        // (notifications@sendmeglobalmission.org) — a sending-only address
+        // that isn't actively monitored. This routes replies to the actual
+        // Gmail inbox Br Donald checks, same as the admin email destination
+        // used elsewhere (church_registered, contact_form, etc).
+        reply_to: "sendmemissionfund@gmail.com",
         subject,
         html,
       }),
