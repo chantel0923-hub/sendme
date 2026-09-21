@@ -150,7 +150,7 @@ export default function TestimonyEngine({ onBack, onMission, user }) {
     (async () => {
       const { data } = await supabase
         .from("milestone_proofs")
-        .select("id, milestone_number, description, media_url, status")
+        .select("id, milestone_number, description, media_url, media_urls, status")
         .eq("mission_id", selected.id)
         .eq("status", "approved")
         .order("milestone_number", { ascending: true });
@@ -168,7 +168,7 @@ export default function TestimonyEngine({ onBack, onMission, user }) {
       `${t.mission} — COMPLETED\n` +
       `${t.souls} souls reached | ${t.bibles} Bibles | ${t.churches} churches planted\n\n` +
       `"${t.story.slice(0, 150)}..."\n\n` +
-      `See the full testimony — SendMe Global Mission Fund\nhttps://sendme-nine.vercel.app`
+      `See the full testimony — SendMe Global Mission Fund\nhttps://sendmeglobalmission.org`
     );
     window.open(`https://wa.me/?text=${text}`, "_blank");
   };
@@ -263,9 +263,18 @@ export default function TestimonyEngine({ onBack, onMission, user }) {
                       <span style={{ fontSize:12, fontWeight:700, color:t.color }}>Milestone {p.milestone_number}</span>
                       <span style={{ fontSize:11, padding:"2px 10px", borderRadius:999, background:"rgba(62,207,142,0.1)", color:"#3ecf8e", border:"1px solid rgba(62,207,142,0.25)" }}>✓ Verified</span>
                     </div>
-                    <div style={{ fontSize:13, color:"rgba(255,255,255,0.6)", lineHeight:1.7, marginBottom: p.media_url ? 10 : 0 }}>
+                    <div style={{ fontSize:13, color:"rgba(255,255,255,0.6)", lineHeight:1.7, marginBottom: (p.media_urls?.length || p.media_url) ? 10 : 0 }}>
                       {p.description}
                     </div>
+                    {p.media_urls?.length > 0 && (
+                      <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom: p.media_url ? 10 : 0 }}>
+                        {p.media_urls.map((url, i) => (
+                          <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                            <img src={url} alt="" style={{ width:70, height:70, objectFit:"cover", borderRadius:10, border:"1px solid rgba(255,255,255,0.15)" }}/>
+                          </a>
+                        ))}
+                      </div>
+                    )}
                     {p.media_url && (
                       <a href={p.media_url} target="_blank" rel="noopener noreferrer"
                         style={{ display:"inline-flex", alignItems:"center", gap:6, fontSize:12, color:t.color, textDecoration:"none", fontWeight:600 }}>

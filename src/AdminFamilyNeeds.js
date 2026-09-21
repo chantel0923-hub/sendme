@@ -274,8 +274,16 @@ export default function AdminFamilyNeeds({ onBack, adminEmail }) {
                   <div key={p.id} style={{ background:"#0c1628", borderRadius:16, border:`1px solid ${meta.color}33`, padding:20 }}>
                     <div style={{ fontSize:12, color:meta.color, marginBottom:8 }}>{meta.label} · {n ? `${n.city}, ${n.country}` : "Unknown need"}</div>
                     <div style={{ fontSize:13, color:"rgba(255,255,255,0.6)", lineHeight:1.7, marginBottom:10 }}>{p.description}</div>
-                    {p.receipt_url && <a href={p.receipt_url} target="_blank" rel="noopener noreferrer" style={{ fontSize:12, color:"#5b9cf6", display:"block", marginBottom:6 }}>📎 View Receipt ↗</a>}
-                    {p.media_url && <a href={p.media_url} target="_blank" rel="noopener noreferrer" style={{ fontSize:12, color:"#5b9cf6", display:"block", marginBottom:12 }}>📎 View Delivery Photo ↗</a>}
+                    {p.media_urls?.length > 0 && (
+                      <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:12 }}>
+                        {p.media_urls.map((url,i)=>(
+                          <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                            <img src={url} alt="" style={{ width:90, height:90, objectFit:"cover", borderRadius:10, border:"1px solid rgba(255,255,255,0.15)" }}/>
+                          </a>
+                        ))}
+                      </div>
+                    )}
+                    {p.media_url && <a href={p.media_url} target="_blank" rel="noopener noreferrer" style={{ fontSize:12, color:"#5b9cf6", display:"block", marginBottom:12 }}>📎 View Video/Link ↗</a>}
                     <div style={{ display:"flex", gap:8 }}>
                       <button disabled={busyId===p.id} onClick={()=>decideProof(p,"approved")} style={{ flex:1, padding:"10px 0", borderRadius:12, border:"none", background:"linear-gradient(135deg,#3ecf8e,#2aaf74)", color:"#000", fontWeight:700, cursor:"pointer", fontSize:13, fontFamily:"Georgia, serif" }}>✓ Approve — Mark Complete</button>
                       <button disabled={busyId===p.id} onClick={()=>{ const reason = window.prompt("What needs to change before this proof can be approved? (sent to the pastor)"); if (reason !== null) decideProof(p,"rejected",reason); }} style={{ flex:1, padding:"10px 0", borderRadius:12, border:"1px solid rgba(232,91,91,0.35)", background:"rgba(232,91,91,0.08)", color:"#e85b5b", fontWeight:700, cursor:"pointer", fontSize:13, fontFamily:"Georgia, serif" }}>✗ Reject</button>

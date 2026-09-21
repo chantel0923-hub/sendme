@@ -9,9 +9,92 @@
 // (endorse) or submitted -> pastor_declined (decline). Publishing, payout,
 // and proof review all happen later in AdminFamilyNeeds.js.
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "./supabase";
 import { sendNotification } from "./notifications";
+
+// ── Photo upload helpers ─────────────────────────────────────────────────────
+// Same compress-then-upload approach as MilestoneProof.js — kept duplicated
+// here rather than shared, matching this codebase's existing convention of
+// small helpers copied per-file (see CURRENCIES/convertToUSD across
+// EmergencyRequests.js/FamilyNeeds.js) rather than a shared module system.
+function compressImage(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = (e) => { img.src = e.target.result; };
+    img.onerror = reject;
+    img.onload = () => {
+      const maxDim = 1600;
+      let { width, height } = img;
+      if (width > maxDim || height > maxDim) {
+        if (width > height) { height = Math.round(height * maxDim / width); width = maxDim; }
+        else { width = Math.round(width * maxDim / height); height = maxDim; }
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width; canvas.height = height;
+      canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+      canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("Could not process image")), "image/jpeg", 0.8);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function uploadProofPhoto(file, folder) {
+  const compressed = await compressImage(file);
+  const fileName = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
+  const { error } = await supabase.storage.from("proof-media").upload(fileName, compressed, { contentType: "image/jpeg" });
+  if (error) throw error;
+  const { data } = supabase.storage.from("proof-media").getPublicUrl(fileName);
+  return data.publicUrl;
+}
+
+function PhotoUploader({ photos, onChange, folder, max = 3 }) {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+  const inputRef = useRef(null);
+
+  const handleFiles = async (e) => {
+    const files = Array.from(e.target.files || []).slice(0, max - photos.length);
+    if (files.length === 0) return;
+    setUploading(true);
+    setError("");
+    try {
+      const uploaded = [];
+      for (const file of files) uploaded.push(await uploadProofPhoto(file, folder));
+      onChange([...photos, ...uploaded]);
+    } catch (err) {
+      setError("Could not upload photo. Please check your connection and try again. (" + (err.message || "") + ")");
+    }
+    setUploading(false);
+    if (inputRef.current) inputRef.current.value = "";
+  };
+
+  const removeAt = (i) => onChange(photos.filter((_, idx) => idx !== i));
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 8 }}>
+        {photos.map((url, i) => (
+          <div key={i} style={{ position: "relative", width: 70, height: 70 }}>
+            <img src={url} alt="" style={{ width: 70, height: 70, objectFit: "cover", borderRadius: 10, border: "1px solid rgba(255,255,255,0.15)" }} />
+            <button onClick={() => removeAt(i)} type="button"
+              style={{ position: "absolute", top: -6, right: -6, width: 20, height: 20, borderRadius: "50%", border: "none", background: "#e85b5b", color: "#fff", cursor: "pointer", fontSize: 11, lineHeight: "20px", padding: 0 }}>✕</button>
+          </div>
+        ))}
+        {photos.length < max && (
+          <button type="button" onClick={() => inputRef.current?.click()} disabled={uploading}
+            style={{ width: 70, height: 70, borderRadius: 10, border: "1px dashed rgba(255,255,255,0.25)", background: "rgba(255,255,255,0.03)", color: "rgba(255,255,255,0.4)", cursor: uploading ? "default" : "pointer", fontSize: 20, fontFamily: "Georgia, serif" }}>
+            {uploading ? "…" : "+"}
+          </button>
+        )}
+      </div>
+      <input ref={inputRef} type="file" accept="image/*" multiple onChange={handleFiles} style={{ display: "none" }} />
+      {error && <div style={{ fontSize: 12, color: "#e85b5b" }}>{error}</div>}
+    </div>
+  );
+}
 
 const fmt = (n) => String(Math.round(n||0)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 
@@ -41,7 +124,7 @@ export default function PastorFamilyNeedReview({ onBack, user, isAdmin }) {
   const [error, setError]       = useState("");
   // Per-need accountability checkbox — must be ticked before Endorse enables.
   const [attested, setAttested] = useState({});
-  // Per-need proof-submission draft — { [needId]: { description, receipt_url, media_url } }
+  // Per-need proof-submission draft — { [needId]: { description, photos: [], videoUrl } }
   const [proofDraft, setProofDraft] = useState({});
 
   const load = async () => {
@@ -100,8 +183,8 @@ export default function PastorFamilyNeedReview({ onBack, user, isAdmin }) {
       const { error } = await supabase.from("family_need_proofs").insert({
         need_id: n.id,
         description: draft.description.trim(),
-        receipt_url: draft.receipt_url || null,
-        media_url: draft.media_url || null,
+        media_urls: (draft.photos && draft.photos.length > 0) ? draft.photos : null,
+        media_url: draft.videoUrl || null,
         submitted_by: user?.id || null,
         status: "pending",
       });
@@ -112,7 +195,7 @@ export default function PastorFamilyNeedReview({ onBack, user, isAdmin }) {
         .eq("need_id", n.id)
         .order("submitted_at", { ascending: false });
       setProofs(prev => [...(freshProofs || []), ...prev.filter(p => p.need_id !== n.id)]);
-      setProofDraft(d => ({ ...d, [n.id]: { description: "", receipt_url: "", media_url: "" } }));
+      setProofDraft(d => ({ ...d, [n.id]: { description: "", photos: [], videoUrl: "" } }));
     } catch (e) {
       setError("Could not submit proof. (" + (e.message || "") + ")");
     }
@@ -223,7 +306,7 @@ export default function PastorFamilyNeedReview({ onBack, user, isAdmin }) {
             <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
               {needsAwaitingProof.map(n => {
                 const meta = CATEGORY_META[n.category] || CATEGORY_META.other;
-                const draft = proofDraft[n.id] || { description:"", receipt_url:"", media_url:"" };
+                const draft = proofDraft[n.id] || { description:"", photos:[], videoUrl:"" };
                 const setDraft = (k,v) => setProofDraft(d => ({ ...d, [n.id]: { ...draft, [k]: v } }));
                 const priorRejected = proofs.find(p => p.need_id === n.id && p.status === "rejected");
                 return (
@@ -241,14 +324,19 @@ export default function PastorFamilyNeedReview({ onBack, user, isAdmin }) {
                       placeholder="How were the funds used? e.g. 'Paid the family's electricity reconnection fee and purchased a week of groceries.'"
                       value={draft.description}
                       onChange={e=>setDraft("description", e.target.value)}
-                      style={{ width:"100%", padding:"10px 14px", borderRadius:10, background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.1)", color:"#eef1ff", fontSize:13, fontFamily:"Georgia, serif", outline:"none", resize:"vertical", minHeight:70, boxSizing:"border-box", marginBottom:10 }}
+                      style={{ width:"100%", padding:"10px 14px", borderRadius:10, background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.1)", color:"#eef1ff", fontSize:13, fontFamily:"Georgia, serif", outline:"none", resize:"vertical", minHeight:70, boxSizing:"border-box", marginBottom:14 }}
                     />
-                    <input placeholder="Receipt URL (optional — a link to a photo of the receipt)" value={draft.receipt_url}
-                      onChange={e=>setDraft("receipt_url", e.target.value)}
-                      style={{ width:"100%", padding:"10px 14px", borderRadius:10, background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.1)", color:"#eef1ff", fontSize:13, fontFamily:"Georgia, serif", outline:"none", boxSizing:"border-box", marginBottom:10 }}/>
-                    <input placeholder="Photo URL (optional — a link to a delivery/handover photo)" value={draft.media_url}
-                      onChange={e=>setDraft("media_url", e.target.value)}
-                      style={{ width:"100%", padding:"10px 14px", borderRadius:10, background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.1)", color:"#eef1ff", fontSize:13, fontFamily:"Georgia, serif", outline:"none", boxSizing:"border-box", marginBottom:14 }}/>
+                    <div style={{ fontSize:12, color:"rgba(255,255,255,0.4)", marginBottom:8 }}>Photos <span style={{ color:"rgba(255,255,255,0.2)" }}>(optional but recommended — up to 3)</span></div>
+                    <div style={{ marginBottom:14 }}>
+                      <PhotoUploader photos={draft.photos} onChange={(photos)=>setDraft("photos", photos)} folder={`family-needs/${n.id}`} max={3} />
+                    </div>
+                    <div style={{ fontSize:12, color:"rgba(255,255,255,0.4)", marginBottom:8 }}>Video Link <span style={{ color:"rgba(255,255,255,0.2)" }}>(optional)</span></div>
+                    <input placeholder="Paste a YouTube link here once you have one" value={draft.videoUrl}
+                      onChange={e=>setDraft("videoUrl", e.target.value)}
+                      style={{ width:"100%", padding:"10px 14px", borderRadius:10, background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.1)", color:"#eef1ff", fontSize:13, fontFamily:"Georgia, serif", outline:"none", boxSizing:"border-box", marginBottom:6 }}/>
+                    <div style={{ fontSize:11, color:"rgba(255,255,255,0.25)", marginBottom:14, lineHeight:1.6 }}>
+                      📹 Have a video and no YouTube link yet? WhatsApp the video to SendMe admin directly — they'll upload it and can add the link here for you.
+                    </div>
                     <button onClick={()=>submitProof(n)} disabled={acting===n.id||!draft.description.trim()}
                       style={{ width:"100%", padding:"12px 0", borderRadius:12, border:"none",
                         background:draft.description.trim()?"linear-gradient(135deg,#3ecf8e,#2aaf74)":"rgba(255,255,255,0.06)",

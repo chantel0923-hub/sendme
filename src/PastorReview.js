@@ -30,7 +30,7 @@ export default function PastorReview({ onBack, user, isAdmin }) {
       const { data, error } = await supabase
         .from("milestone_proofs")
         .select(`
-          id, mission_id, milestone_number, description, media_url,
+          id, mission_id, milestone_number, description, media_url, media_urls,
           submitted_at, status, reviewed_at, pastor_notes,
           souls_reached, bibles_distributed, churches_started,
           missions ( id, title, country, city, church_id, church_name, current_milestone, missionary_role, missionary_email, milestone_1_detail, milestone_2_detail, milestone_3_detail, souls, bibles, churches_planted )
@@ -387,7 +387,23 @@ export default function PastorReview({ onBack, user, isAdmin }) {
                     </div>
                   )}
 
-                  {/* Media URL */}
+                  {/* Photos — new multi-photo uploads (media_urls). Shown
+                      before the legacy single media_url link below, so a
+                      proof with both (shouldn't normally happen, but a
+                      resubmission edge case could produce it) shows photos
+                      first, then any older/video link. */}
+                  {proof.media_urls?.length > 0 && (
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+                      {proof.media_urls.map((url, i) => (
+                        <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                          <img src={url} alt="" style={{ width: 90, height: 90, objectFit: "cover", borderRadius: 10, border: "1px solid rgba(255,255,255,0.15)" }} />
+                        </a>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Media URL — legacy single link (older proofs), or a
+                      video link submitted alongside the new photo uploads */}
                   {proof.media_url && (
                     <div style={{ marginBottom: 14 }}>
                       <a href={proof.media_url} target="_blank" rel="noopener noreferrer"

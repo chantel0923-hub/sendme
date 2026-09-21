@@ -1,12 +1,102 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "./supabase";
 import { sendNotification, notifyAdmin } from "./notifications";
 import { ADMIN_EMAIL } from "./AdminPayouts";
+
+// ── Photo upload helpers ─────────────────────────────────────────────────────
+// Resizes/compresses an image in-browser before upload (max 1600px on the
+// longest side, JPEG quality 0.8) so storage and bandwidth stay cheap even
+// as submissions grow — a full-resolution phone photo can be 8-12MB; this
+// brings it down to a few hundred KB with no visible quality loss at the
+// sizes these are ever viewed at (admin/pastor review screens, not print).
+function compressImage(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = (e) => { img.src = e.target.result; };
+    img.onerror = reject;
+    img.onload = () => {
+      const maxDim = 1600;
+      let { width, height } = img;
+      if (width > maxDim || height > maxDim) {
+        if (width > height) { height = Math.round(height * maxDim / width); width = maxDim; }
+        else { width = Math.round(width * maxDim / height); height = maxDim; }
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width; canvas.height = height;
+      canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+      canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("Could not process image")), "image/jpeg", 0.8);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function uploadProofPhoto(file, folder) {
+  const compressed = await compressImage(file);
+  const fileName = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
+  const { error } = await supabase.storage.from("proof-media").upload(fileName, compressed, { contentType: "image/jpeg" });
+  if (error) throw error;
+  const { data } = supabase.storage.from("proof-media").getPublicUrl(fileName);
+  return data.publicUrl;
+}
+
+// Reusable photo picker — up to `max` photos, each compressed and uploaded
+// immediately on selection so by the time Submit is pressed the URLs are
+// already sitting in state, ready to insert.
+function PhotoUploader({ photos, onChange, folder, max = 3 }) {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+  const inputRef = useRef(null);
+
+  const handleFiles = async (e) => {
+    const files = Array.from(e.target.files || []).slice(0, max - photos.length);
+    if (files.length === 0) return;
+    setUploading(true);
+    setError("");
+    try {
+      const uploaded = [];
+      for (const file of files) {
+        uploaded.push(await uploadProofPhoto(file, folder));
+      }
+      onChange([...photos, ...uploaded]);
+    } catch (err) {
+      setError("Could not upload photo. Please check your connection and try again. (" + (err.message || "") + ")");
+    }
+    setUploading(false);
+    if (inputRef.current) inputRef.current.value = "";
+  };
+
+  const removeAt = (i) => onChange(photos.filter((_, idx) => idx !== i));
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
+        {photos.map((url, i) => (
+          <div key={i} style={{ position: "relative", width: 80, height: 80 }}>
+            <img src={url} alt="" style={{ width: 80, height: 80, objectFit: "cover", borderRadius: 10, border: "1px solid rgba(255,255,255,0.15)" }} />
+            <button onClick={() => removeAt(i)} type="button"
+              style={{ position: "absolute", top: -6, right: -6, width: 22, height: 22, borderRadius: "50%", border: "none", background: "#e85b5b", color: "#fff", cursor: "pointer", fontSize: 12, lineHeight: "22px", padding: 0 }}>✕</button>
+          </div>
+        ))}
+        {photos.length < max && (
+          <button type="button" onClick={() => inputRef.current?.click()} disabled={uploading}
+            style={{ width: 80, height: 80, borderRadius: 10, border: "1px dashed rgba(255,255,255,0.25)", background: "rgba(255,255,255,0.03)", color: "rgba(255,255,255,0.4)", cursor: uploading ? "default" : "pointer", fontSize: 22, fontFamily: "Georgia, serif" }}>
+            {uploading ? "…" : "+"}
+          </button>
+        )}
+      </div>
+      <input ref={inputRef} type="file" accept="image/*" multiple onChange={handleFiles} style={{ display: "none" }} />
+      {error && <div style={{ fontSize: 12, color: "#e85b5b" }}>{error}</div>}
+    </div>
+  );
+}
 
 export default function MilestoneProof({ onBack, user }) {
   const [missions, setMissions]     = useState([]);
   const [selected, setSelected]     = useState(null);
   const [description, setDescription] = useState("");
+  const [photos, setPhotos]         = useState([]);
   const [mediaUrl, setMediaUrl]     = useState("");
   // #97 — optional impact numbers reported alongside the field report. Only
   // added to the mission's running totals once the pastor approves this
@@ -56,7 +146,7 @@ export default function MilestoneProof({ onBack, user }) {
     (async () => {
       const { data } = await supabase
         .from("milestone_proofs")
-        .select("id, description, media_url, status, submitted_at")
+        .select("id, description, media_url, media_urls, status, submitted_at")
         .eq("mission_id", selected.id)
         .eq("milestone_number", selected.current_milestone || 1)
         .eq("status", "pending")
@@ -92,6 +182,7 @@ export default function MilestoneProof({ onBack, user }) {
         milestone_number: selected.current_milestone || 1,
         description: description.trim(),
         media_url: mediaUrl.trim() || null,
+        media_urls: photos.length > 0 ? photos : null,
         souls_reached: soulsReached ? Number(soulsReached) : null,
         bibles_distributed: biblesDistributed ? Number(biblesDistributed) : null,
         churches_started: churchesStarted ? Number(churchesStarted) : null,
@@ -172,7 +263,7 @@ export default function MilestoneProof({ onBack, user }) {
         <div style={{ background: "rgba(232,179,75,0.08)", borderRadius: 16, border: "1px solid rgba(232,179,75,0.2)", padding: "20px 24px", marginBottom: 28 }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: "#e8b34b", marginBottom: 8 }}>✝ How Milestone Proof Works</div>
           <div style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", lineHeight: 1.8 }}>
-            Upload evidence of your completed milestone — a photo URL, video link, or written report. Your pastor will review and approve it. Once approved, SendMe will release the next milestone's funds to your church.
+            Upload evidence of your completed milestone — up to 3 photos, and a written report. Your pastor will review and approve it. Once approved, SendMe will release the next milestone's funds to your church.
           </div>
         </div>
 
@@ -267,13 +358,22 @@ export default function MilestoneProof({ onBack, user }) {
                   <span style={{ fontSize: 14, fontWeight: 700, color: "#e8b34b" }}>Already submitted — waiting on your pastor's review</span>
                 </div>
                 <div style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", marginBottom: 6 }}>Your Field Report / Description:</div>
-                <div style={{ fontSize: 14, color: "rgba(255,255,255,0.7)", lineHeight: 1.75, background: "rgba(255,255,255,0.03)", borderRadius: 10, padding: "12px 14px", marginBottom: existingProof.media_url ? 12 : 0 }}>
+                <div style={{ fontSize: 14, color: "rgba(255,255,255,0.7)", lineHeight: 1.75, background: "rgba(255,255,255,0.03)", borderRadius: 10, padding: "12px 14px", marginBottom: (existingProof.media_urls?.length || existingProof.media_url) ? 12 : 0 }}>
                   {existingProof.description}
                 </div>
+                {existingProof.media_urls?.length > 0 && (
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: existingProof.media_url ? 12 : 0 }}>
+                    {existingProof.media_urls.map((url, i) => (
+                      <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                        <img src={url} alt="" style={{ width: 70, height: 70, objectFit: "cover", borderRadius: 10, border: "1px solid rgba(255,255,255,0.15)" }} />
+                      </a>
+                    ))}
+                  </div>
+                )}
                 {existingProof.media_url && (
                   <a href={existingProof.media_url} target="_blank" rel="noopener noreferrer"
                     style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 10, background: "rgba(91,156,246,0.1)", border: "1px solid rgba(91,156,246,0.25)", color: "#5b9cf6", fontSize: 13, textDecoration: "none", fontFamily: "Georgia, serif", fontWeight: 600 }}>
-                    📎 View Your Submitted Evidence ↗
+                    📎 View Your Submitted Video/Link ↗
                   </a>
                 )}
                 <div style={{ fontSize: 12, color: "rgba(255,255,255,0.25)", marginTop: 14 }}>
@@ -294,17 +394,23 @@ export default function MilestoneProof({ onBack, user }) {
                   <div style={{ fontSize: 11, color: "rgba(255,255,255,0.2)", marginBottom: 14 }}>{description.length} characters</div>
                 </div>
 
-                {/* Media URL */}
+                {/* Photos — real upload, up to 3 */}
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", marginBottom: 8 }}>Photos <span style={{ color: "rgba(255,255,255,0.2)" }}>(optional but recommended — up to 3)</span></div>
+                  <PhotoUploader photos={photos} onChange={setPhotos} folder={`missions/${selected.id}`} max={3} />
+                </div>
+
+                {/* Video link — WhatsApp workflow, not an upload */}
                 <div style={{ marginBottom: 6 }}>
-                  <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", marginBottom: 8 }}>Photo / Video URL <span style={{ color: "rgba(255,255,255,0.2)" }}>(optional but recommended)</span></div>
+                  <div style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", marginBottom: 8 }}>Video Link <span style={{ color: "rgba(255,255,255,0.2)" }}>(optional)</span></div>
                   <input
                     value={mediaUrl}
                     onChange={e => setMediaUrl(e.target.value)}
-                    placeholder="e.g. https://photos.google.com/... or YouTube link"
+                    placeholder="Paste a YouTube link here once you have one"
                     style={inp}
                   />
                   <div style={{ fontSize: 12, color: "rgba(255,255,255,0.25)", marginBottom: 14, lineHeight: 1.6 }}>
-                    Upload your photo/video to Google Photos, YouTube, or Dropbox and paste the link here. This evidence is key to your pastor's review.
+                    📹 Have a video and no YouTube link yet? WhatsApp the video to SendMe admin directly — they'll upload it and can add the link to this proof for you.
                   </div>
                 </div>
 
