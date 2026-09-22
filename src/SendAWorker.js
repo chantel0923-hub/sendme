@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "./supabase";
-import { notifyAdmin } from "./notifications";
+import { notifyAdmin, sendNotification } from "./notifications";
 import { FEATURED_VIDEOS } from "./sendmeVideos";
 import WatchHowLink from "./WatchHowLink";
 
@@ -82,6 +82,16 @@ export default function SendAWorker({ onBack, user }) {
         country: form.country,
         type:    form.type,
       });
+      // Email backup — same pattern as mission_applied/church_registered/
+      // emergency_submitted, previously missing here. Fire-and-forget: a
+      // slow/failed email must never block the request from completing.
+      sendNotification("worker_request", "sendmemissionfund@gmail.com", {
+        title:   form.title,
+        church:  form.church,
+        city:    form.city,
+        country: form.country,
+        type:    form.type,
+      }).catch(err => console.error("worker_request admin email threw", err));
     } catch (e) {
       setSubmitMsg("⚠ Could not post request: " + (e.message || "Please try again."));
     }
@@ -109,6 +119,14 @@ export default function SendAWorker({ onBack, user }) {
         responderPhone: response.phone || null,
         note:           response.note,
       });
+      sendNotification("worker_response_received", "sendmemissionfund@gmail.com", {
+        requestTitle:   req.title,
+        requestChurch:  req.church,
+        commitment:     response.commitment,
+        responderEmail: response.email,
+        responderPhone: response.phone || null,
+        note:           response.note,
+      }).catch(err => console.error("worker_response_received admin email threw", err));
     } catch (e) {
       console.error("submitResponse error:", e);
     }

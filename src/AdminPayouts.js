@@ -325,7 +325,7 @@ export default function AdminPayouts({ onBack }) {
         pastorName:   r.pastorName || "Pastor",
         missionTitle: r.missionTitle,
         churchName:   r.churchName,
-        siteUrl:      "https://sendme-nine.vercel.app",
+        siteUrl:      "https://sendmeglobalmission.org",
       });
       notifyAdmin("banking_missing", {
         missionTitle: r.missionTitle,

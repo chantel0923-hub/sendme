@@ -5,6 +5,7 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "./supabase";
+import { sendNotification } from "./notifications";
 
 const timeAgo = (d) => {
   const diff = Math.floor((new Date() - new Date(d)) / 1000);
@@ -54,6 +55,14 @@ export default function AdminEmergencyRequests({ onBack, adminEmail }) {
         .eq("id", r.id);
       if (error) throw error;
       setRequests(prev => prev.map(x => x.id === r.id ? { ...x, status: "active" } : x));
+      // Previously the submitter was never told either way — approval or
+      // rejection just updated the database silently. Fire-and-forget, same
+      // pattern as every other admin action: a slow/failed email must never
+      // block the actual approval.
+      if (r.contact_email) {
+        sendNotification("emergency_approved", r.contact_email, { title: r.title })
+          .catch(err => console.error("emergency_approved email threw", err));
+      }
     } catch (e) {
       console.log("approve error:", e);
       window.alert("Approval failed — check console for details.");
@@ -71,6 +80,10 @@ export default function AdminEmergencyRequests({ onBack, adminEmail }) {
         .eq("id", r.id);
       if (error) throw error;
       setRequests(prev => prev.map(x => x.id === r.id ? { ...x, status: "rejected", rejection_reason: reason } : x));
+      if (r.contact_email) {
+        sendNotification("emergency_rejected", r.contact_email, { title: r.title, reason: reason || null })
+          .catch(err => console.error("emergency_rejected email threw", err));
+      }
     } catch (e) {
       console.log("reject error:", e);
       window.alert("Rejection failed — check console for details.");

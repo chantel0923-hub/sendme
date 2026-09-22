@@ -155,6 +155,17 @@ export default function AdminFamilyNeeds({ onBack, adminEmail }) {
         .eq("id", n.id);
       if (error) throw error;
       setNeeds(prev => prev.map(x => x.id === n.id ? { ...x, status: "paid" } : x));
+      // Previously only admin's own WhatsApp was pinged here — the pastor's
+      // last update was "funded, payout coming" with nothing ever
+      // confirming the money actually landed.
+      if (church?.pastor_email) {
+        sendNotification("family_need_paid", church.pastor_email, {
+          pastorName: church.pastor_name || "",
+          category: n.category,
+          city: n.city,
+          amount: owed,
+        }).catch(err => console.error("family_need_paid email threw", err));
+      }
       notifyAdmin("payout_processed", { missionTitle: `Family In Need — ${n.category} (${n.city})`, amount: owed, recipientName: church?.name || "endorsing church" });
     } catch (e) {
       window.alert("Could not update status: " + (e.message || ""));
@@ -206,6 +217,17 @@ export default function AdminFamilyNeeds({ onBack, adminEmail }) {
         .eq("id", n.id);
       if (error) throw error;
       setNeeds(prev => prev.map(x => x.id === n.id ? { ...x, status: "pastor_declined", pastor_decline_reason: reason } : x));
+      // The prompt above says "shown to the pastor" — previously nothing
+      // was actually sent, so that was a promise the code didn't keep.
+      const church = churchById(n.church_id);
+      if (church?.pastor_email) {
+        sendNotification("family_need_admin_declined", church.pastor_email, {
+          pastorName: church.pastor_name || "",
+          category: n.category,
+          city: n.city,
+          reason: reason || "",
+        }).catch(err => console.error("family_need_admin_declined email threw", err));
+      }
     } catch (e) {
       window.alert("Could not update status: " + (e.message || ""));
     }
