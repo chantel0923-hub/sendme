@@ -1212,17 +1212,36 @@ const ROLE_LABELS = {
 const DonorProfile = ({ user, onBack, userRole, isAdmin }) => {
   const [donations,setDonations] = useState([]);
   const [loading,setLoading]     = useState(true);
+  const [newsletterOptin,setNewsletterOptin] = useState(false);
+  const [savingOptin,setSavingOptin] = useState(false);
   useEffect(() => {
     const fetch = async () => {
       if (!user) { setLoading(false); return; }
       try {
-        const { data } = await supabase.from("donations").select("*").eq("user_id",user.id).order("created_at",{ascending:false});
+        const [{ data }, { data: profile }] = await Promise.all([
+          supabase.from("donations").select("*").eq("user_id",user.id).order("created_at",{ascending:false}),
+          supabase.from("profiles").select("newsletter_optin").eq("id",user.id).maybeSingle(),
+        ]);
         setDonations(data||[]);
+        setNewsletterOptin(profile?.newsletter_optin || false);
       } catch { setDonations([]); }
       setLoading(false);
     };
     fetch();
   },[user]);
+  const toggleNewsletter = async () => {
+    const next = !newsletterOptin;
+    setNewsletterOptin(next); // optimistic
+    setSavingOptin(true);
+    try {
+      const { error } = await supabase.from("profiles").update({ newsletter_optin: next }).eq("id", user.id);
+      if (error) throw error;
+    } catch (e) {
+      setNewsletterOptin(!next); // revert on failure
+      window.alert("Could not update your preference — please try again.");
+    }
+    setSavingOptin(false);
+  };
   const DEMO = [
     {id:1,mission_name:"Gospel & Food Aid — Merkato",country:"Ethiopia",amount:50, created_at:"2025-03-12",status:"active"},
     {id:2,mission_name:"Amazon River Mission",        country:"Brazil",  amount:100,created_at:"2025-04-01",status:"active"},
@@ -1287,6 +1306,19 @@ const DonorProfile = ({ user, onBack, userRole, isAdmin }) => {
           ))}
         </div>
         {donations.length===0&&!loading&&<div style={{ background:"rgba(232,179,75,0.05)",borderRadius:10,border:"1px solid rgba(232,179,75,0.1)",padding:"10px 14px",marginTop:12,fontSize:12,color:"rgba(255,255,255,0.3)",textAlign:"center" }}>Demo data shown — your real giving history will appear here after your first donation.</div>}
+
+        <div style={{ fontSize:16,fontWeight:700,color:"#eef1ff",marginTop:32,marginBottom:14 }}>Notification Preferences</div>
+        <div onClick={toggleNewsletter} style={{ background:"#0c1628",borderRadius:14,border:"1px solid rgba(255,255,255,0.07)",padding:"16px 18px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,cursor:savingOptin?"default":"pointer" }}>
+          <div>
+            <div style={{ fontSize:14,fontWeight:700,color:"#eef1ff" }}>📧 Monthly Newsletter</div>
+            <div style={{ fontSize:12,color:"rgba(255,255,255,0.35)",marginTop:3 }}>How much was raised, missions completed, and testimonies — once a month</div>
+          </div>
+          <div style={{ width:44,height:26,borderRadius:999,flexShrink:0,position:"relative",transition:"background .2s",
+            background:newsletterOptin?"linear-gradient(135deg,#3ecf8e,#2aaf74)":"rgba(255,255,255,0.1)" }}>
+            <div style={{ width:20,height:20,borderRadius:"50%",background:"#fff",position:"absolute",top:3,
+              left:newsletterOptin?21:3,transition:"left .2s" }}/>
+          </div>
+        </div>
         <div style={{ textAlign:"center",padding:"32px 0 0",borderTop:"1px solid rgba(255,255,255,0.05)",marginTop:32 }}>
           <div style={{ fontSize:13,color:"#e8b34b",fontStyle:"italic" }}>"Go ye into all the world and preach the gospel to every creature." — Mark 16:15</div>
         </div>
@@ -2298,7 +2330,7 @@ export default function App() {
   if(screen==="admin-workers")        return isAdminUser ? <AdminWorkerRequests onBack={()=>setScreen("home")}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
   if(screen==="admin-emergency")      return isAdminUser ? <AdminEmergencyRequests onBack={()=>setScreen("home")} adminEmail={user?.email}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
   if(screen==="admin-whatsapp-group") return isAdminUser ? <AdminWhatsAppGroup onBack={()=>setScreen("home")}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
-  if(screen==="admin-monthly-report") return isAdminUser ? <AdminMonthlyReport onBack={()=>setScreen("home")}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
+  if(screen==="admin-monthly-report") return isAdminUser ? <AdminMonthlyReport onBack={()=>setScreen("home")} user={user}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
   if(screen==="family-needs")     return guest ? <GuestBlocked title="Registration Required" message="Submitting a family need requires a SendMe account, so the family's church can be contacted for endorsement. Please sign in or register to continue." onBack={()=>setScreen("home")} onRegister={()=>{setGuest(false);setScreen("home");}}/> : <FamilyNeeds onBack={()=>setScreen("home")} user={user} userRole={userRole}/>;
   if(screen==="admin-family-needs") return isAdminUser ? <AdminFamilyNeeds onBack={()=>setScreen("home")} adminEmail={user?.email}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
   if(screen==="ledger"&&selectedMission)  return <TransparencyLedger mission={selectedMission} onBack={()=>setScreen("detail")}/>;
