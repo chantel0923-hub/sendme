@@ -15,6 +15,11 @@ export default function WelcomeScreen({ user, onContinue }) {
   // consent-collection half of that flow, not an automatic add).
   const [joinGroup, setJoinGroup] = useState(false);
   const [whatsappNumber, setWhatsappNumber] = useState("");
+  // Newsletter opt-in — same consent-collection pattern as WhatsApp above,
+  // but email doesn't have WhatsApp's "no automatic add" limitation, so
+  // this one just works immediately once someone's opted in — no manual
+  // admin step needed on this side.
+  const [joinNewsletter, setJoinNewsletter] = useState(false);
 
   const handleContinue = async () => {
     setSaving(true);
@@ -26,6 +31,7 @@ export default function WelcomeScreen({ user, onContinue }) {
             has_seen_welcome: true,
             whatsapp_group_optin: joinGroup,
             whatsapp_number: joinGroup ? (whatsappNumber || null) : null,
+            newsletter_optin: joinNewsletter,
           })
           .eq("id", user.id);
         // Same rule as everywhere else in this app: Supabase's JS client
@@ -122,6 +128,33 @@ export default function WelcomeScreen({ user, onContinue }) {
               </div>
             </div>
           )}
+        </div>
+
+        {/* Newsletter opt-in — no manual admin step needed on this side,
+            unlike WhatsApp above; this just works the moment it's on. */}
+        <div style={{ background: "rgba(232,179,75,0.06)", border: "1px solid rgba(232,179,75,0.2)", borderRadius: 16, padding: "18px 20px", marginBottom: 32, textAlign: "left" }}>
+          <div
+            onClick={() => setJoinNewsletter(j => !j)}
+            style={{ display: "flex", gap: 12, alignItems: "flex-start", cursor: "pointer" }}
+          >
+            <div style={{
+              width: 22, height: 22, borderRadius: 6, flexShrink: 0, marginTop: 1,
+              background: joinNewsletter ? "linear-gradient(135deg,#e8b34b,#c8942b)" : "rgba(255,255,255,0.05)",
+              border: joinNewsletter ? "none" : "1px solid rgba(255,255,255,0.15)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 13, color: "#000", fontWeight: 700,
+            }}>
+              {joinNewsletter ? "✓" : ""}
+            </div>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#eef1ff", marginBottom: 3 }}>
+                📧 Get the Monthly Newsletter
+              </div>
+              <div style={{ fontSize: 12.5, color: "rgba(255,255,255,0.5)", lineHeight: 1.65 }}>
+                Once a month: how much was given, how many missions were helped, and testimonies from the field — straight to your email.
+              </div>
+            </div>
+          </div>
         </div>
 
         <button
