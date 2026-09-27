@@ -110,6 +110,47 @@ export async function startPayfastEmergencyDonation({ emergency, amount, user })
   submitPayfastForm(action, fields);
 }
 
+// General Fund contributions — same redirect mechanism again, but with no
+// target at all (no mission/emergency/need id) since this fund never closes
+// and isn't earmarked for anything specific. Tagged kind:"general_fund" so
+// the ITN webhook logs it via log_general_fund_donation instead of crediting
+// any table's `raised` column.
+export async function startPayfastGeneralFundDonation({ amount, user, guestInfo = null }) {
+  const payload = {
+    amount,
+    name: guestInfo?.name || user?.user_metadata?.full_name || user?.email?.split("@")[0] || "SendMe Donor",
+    email: guestInfo?.email || user?.email || "",
+    user_id: user?.id || null,
+    kind: "general_fund",
+  };
+
+  try {
+    // No target id to stash here, unlike the other three flows — the
+    // return-screen handler doesn't need one for General Fund since there's
+    // no specific mission/need page to route back to afterward.
+    sessionStorage.setItem(
+      "sendme_pending_donation",
+      JSON.stringify({ mission_id: null, amount, general_fund: true })
+    );
+  } catch {
+    // sessionStorage may be unavailable (e.g. private browsing) — non-fatal
+  }
+
+  const res = await fetch("/api/payfast-create", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    let msg = "Could not start PayFast payment";
+    try { const j = await res.json(); if (j?.error) msg = j.error; } catch {}
+    throw new Error(msg);
+  }
+
+  const { action, fields } = await res.json();
+  submitPayfastForm(action, fields);
+}
 // Family In Need contributions — same redirect mechanism again, tagged
 // kind:"family_need" so the ITN webhook credits family_needs.raised via
 // increment_family_need_raised instead of missions/emergency_requests.

@@ -138,7 +138,7 @@ export default async function handler(req, res) {
       custom_str1: target_id,
       custom_str2: type,
       custom_str3: user_id,
-      custom_str4: kind,   // "mission" | "emergency" | "family_need" — set by payfast-create.js
+      custom_str4: kind,   // "mission" | "emergency" | "family_need" | "general_fund" — set by payfast-create.js
       pf_payment_id,
       name_first,
       email_address,
@@ -148,8 +148,9 @@ export default async function handler(req, res) {
                             // so it must be captured here to identify renewal charges later.
     } = params;
 
-    const isEmergency  = kind === "emergency";
-    const isFamilyNeed = kind === "family_need";
+    const isEmergency   = kind === "emergency";
+    const isFamilyNeed  = kind === "family_need";
+    const isGeneralFund = kind === "general_fund";
 
     const supabase = createClient(
       process.env.REACT_APP_SUPABASE_URL,
@@ -167,7 +168,7 @@ export default async function handler(req, res) {
     // by roughly the exchange rate. This lookup is the fix for that.
     let { data: donationRow, error: fetchError } = await supabase
       .from("donations")
-      .select("amount, mission_id, emergency_id, family_need_id, mission_title, donor_name, donor_email, user_id, type, kind")
+      .select("amount, mission_id, emergency_id, family_need_id, is_general_fund, mission_title, donor_name, donor_email, user_id, type, kind")
       .eq("m_payment_id", m_payment_id)
       .maybeSingle();
     if (fetchError) {
@@ -186,7 +187,7 @@ export default async function handler(req, res) {
     if (!donationRow && token) {
       const { data: subRow, error: subErr } = await supabase
         .from("donations")
-        .select("amount, mission_id, emergency_id, family_need_id, mission_title, donor_name, donor_email, user_id, type, kind")
+        .select("amount, mission_id, emergency_id, family_need_id, is_general_fund, mission_title, donor_name, donor_email, user_id, type, kind")
         .eq("payfast_token", token)
         .order("created_at", { ascending: true })
         .limit(1)
@@ -203,6 +204,7 @@ export default async function handler(req, res) {
             mission_id:      subRow.mission_id,
             emergency_id:    subRow.emergency_id,
             family_need_id:  subRow.family_need_id,
+            is_general_fund: subRow.is_general_fund,
             mission_title: subRow.mission_title,
             amount:        subRow.amount,
             donor_name:    subRow.donor_name,
@@ -212,7 +214,7 @@ export default async function handler(req, res) {
             kind:          subRow.kind,
             status:        "pending",
           })
-          .select("amount, mission_id, emergency_id, family_need_id, mission_title, donor_name, donor_email, user_id, type, kind")
+          .select("amount, mission_id, emergency_id, family_need_id, is_general_fund, mission_title, donor_name, donor_email, user_id, type, kind")
           .single();
         if (insertErr) {
           console.error("payfast-notify: renewal donation insert failed", insertErr);
@@ -245,8 +247,9 @@ export default async function handler(req, res) {
     }
 
     // Increment the mission's (or emergency request's, or family need's)
-    // raised amount on COMPLETE
-    if (status === "complete" && target_id) {
+    // raised amount on COMPLETE — or, for General Fund, just log the
+    // donation, since there's no target row to increment at all.
+    if (status === "complete" && (target_id || isGeneralFund)) {
       // Fallback to amount_gross only if the original donation row lookup
       // somehow failed — better to credit something than nothing, but the
       // usdAmount path above should be the normal case.
@@ -258,7 +261,22 @@ export default async function handler(req, res) {
       // per-kind below, then sent once after crediting either branch.
       let notifyTitle = null, notifyRaised = null, notifyGoal = null, notifyPath = "/";
 
-      if (isFamilyNeed) {
+      if (isGeneralFund) {
+        // No target row to increment at all — just log it. This RPC is
+        // security-definer so it works even though this donations row (and
+        // this webhook) run under the service role, same trust boundary as
+        // the increment_*_raised RPCs used by the other three kinds.
+        const { error: rpcError } = await supabase.rpc("log_general_fund_donation", {
+          p_amount: creditAmount,
+          p_donor_name: donationRow?.donor_name || name_first || null,
+          p_donor_email: donationRow?.donor_email || email_address || null,
+        });
+        if (rpcError) {
+          console.error("payfast-notify: log_general_fund_donation failed", rpcError);
+        }
+        notifyTitle = "the SendMe General Fund";
+        notifyPath  = "/general-fund";
+      } else if (isFamilyNeed) {
         const { error: rpcError } = await supabase.rpc("increment_family_need_raised", {
           p_need_id: target_id,
           p_amount: creditAmount,

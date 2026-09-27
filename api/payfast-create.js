@@ -78,18 +78,22 @@ export default async function handler(req, res) {
       amount, name, email, type, kind, user_id,
     } = req.body || {};
 
-    // Three donation kinds share this one endpoint: "mission" (default),
-    // "emergency", and "family_need". Each has its own id/title fields on
-    // the request so the client helpers (payfast.js) stay simple, but from
-    // here on they're normalised into targetId/targetTitle.
-    const isEmergency  = kind === "emergency";
-    const isFamilyNeed = kind === "family_need";
+    // Four donation kinds share this one endpoint: "mission" (default),
+    // "emergency", "family_need", and "general_fund". Each of the first
+    // three has its own id/title fields on the request so the client
+    // helpers (payfast.js) stay simple, but from here on they're normalised
+    // into targetId/targetTitle. general_fund is the odd one out — it has
+    // no target at all, since the fund never closes and isn't earmarked for
+    // anything specific.
+    const isEmergency   = kind === "emergency";
+    const isFamilyNeed  = kind === "family_need";
+    const isGeneralFund = kind === "general_fund";
     const targetId    = isFamilyNeed ? family_need_id : isEmergency ? emergency_id : mission_id;
     const targetTitle = isFamilyNeed ? family_need_title : isEmergency ? emergency_title : mission_title;
 
     const amt = Number(amount);
     if (!amt || amt <= 0) return res.status(400).json({ error: "Invalid donation amount" });
-    if (!targetId) {
+    if (!isGeneralFund && !targetId) {
       const label = isFamilyNeed ? "No family need selected" : isEmergency ? "No emergency request selected" : "No mission selected";
       return res.status(400).json({ error: label });
     }
@@ -120,13 +124,17 @@ export default async function handler(req, res) {
 
     const missionIdStr = String(targetId ?? "");
 
-    const itemDescription = isFamilyNeed
+    const itemDescription = isGeneralFund
+      ? "General Fund gift via SendMe Global Mission Fund"
+      : isFamilyNeed
       ? "Family In Need relief gift via SendMe Global Mission Fund"
       : isEmergency
       ? "Emergency relief gift via SendMe Global Mission Fund"
       : "Missionary love offering via SendMe Global Mission Fund";
 
-    const defaultItemName = isFamilyNeed
+    const defaultItemName = isGeneralFund
+      ? "SendMe General Fund Gift"
+      : isFamilyNeed
       ? "SendMe Family In Need Gift"
       : isEmergency
       ? "SendMe Emergency Request"
@@ -149,7 +157,7 @@ export default async function handler(req, res) {
       ["custom_str1",       missionIdStr],
       ["custom_str2",       type || "once"],
       ["custom_str3",       user_id ? String(user_id) : ""],
-      ["custom_str4",       isFamilyNeed ? "family_need" : isEmergency ? "emergency" : "mission"],
+      ["custom_str4",       isGeneralFund ? "general_fund" : isFamilyNeed ? "family_need" : isEmergency ? "emergency" : "mission"],
     ];
 
     // Recurring billing fields — MUST be appended last, after the custom_str*
@@ -200,16 +208,17 @@ export default async function handler(req, res) {
       // exists rather than overloading mission_id.
       const { error: pendingInsertError } = await supabase.from("donations").insert({
         m_payment_id,
-        mission_id:      (!isEmergency && !isFamilyNeed) ? (targetId || null) : null,
+        mission_id:      (!isEmergency && !isFamilyNeed && !isGeneralFund) ? (targetId || null) : null,
         emergency_id:    isEmergency ? (targetId || null) : null,
         family_need_id:  isFamilyNeed ? (targetId || null) : null,
-        mission_title:   targetTitle || null,
+        is_general_fund: isGeneralFund,
+        mission_title:   targetTitle || (isGeneralFund ? "SendMe General Fund" : null),
         amount:          amt,
         donor_name:      name || null,
         donor_email:     email || null,
         user_id:         user_id || null,
         type:            type || "once",
-        kind:            isFamilyNeed ? "family_need" : isEmergency ? "emergency" : "mission",
+        kind:            isGeneralFund ? "general_fund" : isFamilyNeed ? "family_need" : isEmergency ? "emergency" : "mission",
         status:          "pending",
       });
       // Supabase's JS client does NOT throw on a failed insert — it returns
