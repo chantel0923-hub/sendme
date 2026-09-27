@@ -19,7 +19,7 @@ import PayoutSetup from './PayoutSetup';
 import AdminPayouts, { ADMIN_EMAIL } from './AdminPayouts';
 import YouTubeEmbed from './YouTubeEmbed';
 import { FEATURED_VIDEOS, SENDME_CHANNEL_URL } from './sendmeVideos';
-import { startPayfastDonation } from './payfast';
+import { startPaystackDonation } from './paystack';
 import MilestoneProof from './MilestoneProof';
 import PastorReview from './PastorReview';
 import MissionaryDashboard from './MissionaryDashboard';
@@ -2316,7 +2316,7 @@ export default function App() {
   const isAdminUser   = user?.email === ADMIN_EMAIL || user?.isAdmin === true;
   const openMission   = (m)  =>{setSelectedMission(m);setScreen("detail");};
   const openDonate    = ()   =>{setScreen("donate");};
-  const handlePayfastDonate = (amt, guestInfo, type = "once") => startPayfastDonation({ mission: selectedMission, amount: amt, user, guestInfo, type });
+  const handlePayfastDonate = (amt, guestInfo, type = "once") => startPaystackDonation({ mission: selectedMission, amount: amt, user, guestInfo, type });
 
   if(!authReady) return(<div style={{ minHeight:"100vh",background:"#060c18",display:"flex",alignItems:"center",justifyContent:"center" }}><div style={{ fontSize:48,color:"#e8b34b" }}>✝</div></div>);
   if(pfReturn) return <PayfastResultScreen status={pfReturn.status} amount={pfReturn.amount} onContinue={()=>setPfReturn(null)}/>;

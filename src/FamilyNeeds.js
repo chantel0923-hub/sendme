@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { startPayfastFamilyNeedDonation } from "./payfast";
+import { startPaystackFamilyNeedDonation } from "./paystack";
 import { supabase } from "./supabase";
 import { notifyAdmin } from "./notifications";
 
@@ -317,7 +317,7 @@ export default function FamilyNeeds({ onBack, user, userRole }) {
     setGiveError("");
     try {
       // Browser navigates away on success — nothing after this line runs.
-      await startPayfastFamilyNeedDonation({
+      await startPaystackFamilyNeedDonation({
         need: giving,
         amount: Number(gift.amount),
         user,

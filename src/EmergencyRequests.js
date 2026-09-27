@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { startPayfastEmergencyDonation } from "./payfast";
+import { startPaystackEmergencyDonation } from "./paystack";
 import { supabase } from "./supabase";
 import { notifyAdmin } from "./notifications";
 import { FEATURED_VIDEOS } from "./sendmeVideos";
@@ -340,7 +340,7 @@ export default function EmergencyRequests({ onBack, user, userRole, preselectedI
         // Redirect to PayFast to actually collect the pledged amount.
         // The browser navigates away here, so nothing after this line runs
         // on success.
-        await startPayfastEmergencyDonation({ emergency: responding, amount: amt, user });
+        await startPaystackEmergencyDonation({ emergency: responding, amount: amt, user });
         return;
       } catch (e) {
         console.log("payfast redirect error:", e);

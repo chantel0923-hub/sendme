@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { startPayfastGeneralFundDonation } from "./payfast";
+import { startPaystackGeneralFundDonation } from "./paystack";
 import { supabase } from "./supabase";
 
 const fmt = (n) => String(Math.round(n||0)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
@@ -53,7 +53,7 @@ export default function GeneralFund({ onBack, user }) {
     setGiveSaving(true);
     setGiveError("");
     try {
-      await startPayfastGeneralFundDonation({
+      await startPaystackGeneralFundDonation({
         amount: Number(gift.amount),
         user,
         guestInfo: user ? null : { name: gift.name, email: gift.email },
