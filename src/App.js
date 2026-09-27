@@ -1822,6 +1822,19 @@ const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, o
           </div>
         )}
 
+        {/* General Fund — always visible, unlike the two banners above,
+            since this fund never has an "empty" state to hide behind (no
+            list of items, no active/inactive check) — it's meant to be the
+            permanent "give here when nothing else is open" option. */}
+        <div onClick={onGeneralFund} style={{ background:"linear-gradient(135deg,rgba(62,207,142,0.1),rgba(62,207,142,0.03))", borderRadius:16, border:"1px solid rgba(62,207,142,0.3)", padding:"18px 20px", marginBottom:28, cursor:"pointer", display:"flex", alignItems:"center", gap:16 }}>
+          <div style={{ fontSize:28 }}>🌐</div>
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:15, fontWeight:700, color:"#eef1ff", marginBottom:4 }}>SendMe General Fund</div>
+            <div style={{ fontSize:12.5, color:"rgba(255,255,255,0.5)", lineHeight:1.6 }}>Always open — give here anytime, especially when nothing specific is listed. SendMe puts it where it's needed most.</div>
+          </div>
+          <div style={{ fontSize:13, color:"#3ecf8e", fontWeight:700, whiteSpace:"nowrap" }}>Give Now →</div>
+        </div>
+
         <div style={{ fontSize:18,fontWeight:700,color:"#eef1ff",marginBottom:16 }}>✝ Active Missions</div>
         {loading?(
           <div style={{ textAlign:"center",padding:"40px 0",color:"rgba(255,255,255,0.3)",fontSize:14 }}>Loading missions...</div>
