@@ -319,13 +319,13 @@ export default function EmergencyRequests({ onBack, user, userRole, preselectedI
       } catch(e) { console.log("notify error:", e); }
     } catch(e) {
       console.log("respond save error:", e);
-      // Pledge record failed to save, but don't block the PayFast redirect
+      // Pledge record failed to save, but don't block the Paystack redirect
       // if an amount was entered — the payment itself is the priority.
     }
 
     const amt = Number(response.amount) || 0;
     // #106 — once this emergency request is already fully funded, refuse to
-    // start a PayFast donation even if an amount was somehow entered. The
+    // start a Paystack donation even if an amount was somehow entered. The
     // amount input itself is hidden below once fully funded (see the
     // "Fully Funded" guard in the respond view), but this check protects
     // against a stale form state or a submit that slips through.
@@ -337,14 +337,14 @@ export default function EmergencyRequests({ onBack, user, userRole, preselectedI
     }
     if (amt > 0) {
       try {
-        // Redirect to PayFast to actually collect the pledged amount.
+        // Redirect to Paystack to actually collect the pledged amount.
         // The browser navigates away here, so nothing after this line runs
         // on success.
         await startPaystackEmergencyDonation({ emergency: responding, amount: amt, user });
         return;
       } catch (e) {
         console.log("payfast redirect error:", e);
-        setRespError("Could not start PayFast checkout. Please try again.");
+        setRespError("Could not start Paystack checkout. Please try again.");
         setRespSaving(false);
         return;
       }
@@ -411,7 +411,7 @@ export default function EmergencyRequests({ onBack, user, userRole, preselectedI
                   color:response.name&&response.email?"#fff":"rgba(255,255,255,0.25)",
                   fontWeight:700, cursor:response.name&&response.email?"pointer":"default",
                   fontSize:15, fontFamily:"Georgia, serif" }}>
-                {respSaving ? (Number(response.amount)>0 ? "Redirecting to PayFast…" : "Submitting...") : (Number(response.amount)>0 ? `💝 Give $${response.amount} via PayFast` : "💝 Submit Response")}
+                {respSaving ? (Number(response.amount)>0 ? "Redirecting to Paystack…" : "Submitting...") : (Number(response.amount)>0 ? `💝 Give $${response.amount} via Paystack` : "💝 Submit Response")}
               </button>
             </>
           )}

@@ -580,21 +580,22 @@ const DonateScreen = ({ mission: m, onBack, onPayfast, user, onBrowseMissions })
 
   const handleMonthlyAdopt = async () => {
     // #88 fix: this used to just insert a "pending" row straight into
-    // Supabase and immediately show the success screen — no PayFast
+    // Supabase and immediately show the success screen — no payment-processor
     // subscription was ever actually created, so no card was ever charged
-    // and nothing ever recurred. Now it goes through the real PayFast
-    // subscription checkout, same as the once-off flow does.
+    // and nothing ever recurred. Now it goes through the real Paystack
+    // subscription checkout (a Plan + subscription, see paystack-create.js),
+    // same as the once-off flow does.
     if (!monthly || (isGuest && !guestInfoValid) || submitting) return;
     setSubmitting(true);
     setError("");
     try {
       await onPayfast(monthly, isGuest ? { name: guestName.trim(), email: guestEmail.trim() } : null, "monthly");
       // No setMonthlyDone(true) here — the browser is being redirected to
-      // PayFast's hosted checkout right now. Success is only real once the
-      // donor completes checkout there and payfast-notify.js's ITN confirms
+      // Paystack's hosted checkout right now. Success is only real once the
+      // donor completes checkout there and paystack-webhook.js confirms
       // it; setSubmitting(false) is likewise skipped since the page is navigating away.
     } catch {
-      setError("Could not start PayFast checkout. Please try again.");
+      setError("Could not start Paystack checkout. Please try again.");
       setSubmitting(false);
     }
   };
@@ -606,7 +607,7 @@ const DonateScreen = ({ mission: m, onBack, onPayfast, user, onBrowseMissions })
     try {
       await onPayfast(amt, isGuest ? { name: guestName.trim(), email: guestEmail.trim() } : null);
     } catch {
-      setError("Could not start PayFast checkout. Please try again.");
+      setError("Could not start Paystack checkout. Please try again.");
       setSubmitting(false);
     }
   };
@@ -750,10 +751,10 @@ const DonateScreen = ({ mission: m, onBack, onPayfast, user, onBrowseMissions })
             color:canGive?"#000":"rgba(255,255,255,0.25)",fontWeight:700,cursor:canGive&&!submitting?"pointer":"default",
             fontSize:16,fontFamily:"Georgia, serif",opacity:submitting?0.7:1,
             boxShadow:canGive?`0 6px 28px ${m.color}44`:"none",transition:"all .2s" }}>
-          {!amt||Number(amt)===0?"Enter an amount to continue":!prayed?"✝  Tick the prayer commitment to give":(isGuest&&!guestInfoValid)?"Enter your details above":submitting?"Redirecting to PayFast…":`💝  Give $${amt} via PayFast`}
+          {!amt||Number(amt)===0?"Enter an amount to continue":!prayed?"✝  Tick the prayer commitment to give":(isGuest&&!guestInfoValid)?"Enter your details above":submitting?"Redirecting to Paystack…":`💝  Give $${amt} via Paystack`}
           </button>
           {error && <div style={{ textAlign:"center",fontSize:13,color:"#e85b5b" }}>{error}</div>}
-          <div style={{ textAlign:"center",fontSize:12,color:"rgba(255,255,255,0.2)" }}>🔒 Secure checkout via PayFast · Funds held in escrow · Released only on verified proof of work</div>
+          <div style={{ textAlign:"center",fontSize:12,color:"rgba(255,255,255,0.2)" }}>🔒 Secure checkout via Paystack · Funds held in escrow · Released only on verified proof of work</div>
         </div>}
       </div>
     </div>
@@ -769,9 +770,9 @@ const PayfastResultScreen = ({ status, amount, onContinue }) => (
           <div>
             <div style={{ fontSize:30,fontWeight:700,color:"#eef1ff",marginBottom:8 }}>God Bless You</div>
             <div style={{ fontSize:15,color:"rgba(255,255,255,0.5)",lineHeight:1.8 }}>
-              {amount?<>Your gift of <strong style={{ color:"#3ecf8e" }}>${amount}</strong> is on its way to the mission field via PayFast.</>:"Your donation via PayFast is being processed."}
+              {amount?<>Your gift of <strong style={{ color:"#3ecf8e" }}>${amount}</strong> is on its way via Paystack.</>:"Your donation via Paystack is being processed."}
             </div>
-            <div style={{ fontSize:13,color:"rgba(255,255,255,0.3)",marginTop:10 }}>It will appear in your Giving History once PayFast confirms the payment — usually within a few minutes.</div>
+            <div style={{ fontSize:13,color:"rgba(255,255,255,0.3)",marginTop:10 }}>It will appear in your Giving History once Paystack confirms the payment — usually within a few minutes.</div>
           </div>
         </>
       ) : (
@@ -2245,7 +2246,14 @@ export default function App() {
 
   useEffect(()=>{
     const params = new URLSearchParams(window.location.search);
-    const pf = params.get("payfast");
+    // Recognises both processors' return params — ?paystack= is what
+    // paystack-create.js now sends as its callback_url; ?payfast= is kept
+    // so any old bookmarked/in-flight PayFast return still lands correctly
+    // instead of silently doing nothing. Paystack also appends its own
+    // trxref/reference params to the callback URL — harmless here, since
+    // only `paystack`/`m` are read, and the replaceState below clears the
+    // whole query string afterward anyway.
+    const pf = params.get("paystack") || params.get("payfast");
     if(pf==="success"||pf==="cancel"){
       const missionId = params.get("m");
       let amount = null;

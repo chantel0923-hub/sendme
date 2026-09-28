@@ -59,7 +59,7 @@ export default function GeneralFund({ onBack, user }) {
         guestInfo: user ? null : { name: gift.name, email: gift.email },
       });
     } catch (e) {
-      setGiveError("Could not start PayFast checkout. Please try again.");
+      setGiveError("Could not start Paystack checkout. Please try again.");
       setGiveSaving(false);
     }
   };
@@ -92,7 +92,7 @@ export default function GeneralFund({ onBack, user }) {
               background:(Number(gift.amount)>0)?"linear-gradient(135deg,#3ecf8e,#2aaf74)":"rgba(255,255,255,0.06)",
               color:(Number(gift.amount)>0)?"#000":"rgba(255,255,255,0.25)",
               fontWeight:700, cursor:"pointer", fontSize:15, fontFamily:"Georgia, serif" }}>
-            {giveSaving ? "Redirecting to PayFast…" : (Number(gift.amount)>0 ? `💝 Give $${gift.amount} via PayFast` : "💝 Give")}
+            {giveSaving ? "Redirecting to Paystack…" : (Number(gift.amount)>0 ? `💝 Give $${gift.amount} via Paystack` : "💝 Give")}
           </button>
         </div>
       </div>

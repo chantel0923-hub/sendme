@@ -325,7 +325,7 @@ export default function FamilyNeeds({ onBack, user, userRole }) {
       });
     } catch (e) {
       console.log("payfast redirect error:", e);
-      setGiveError("Could not start PayFast checkout. Please try again.");
+      setGiveError("Could not start Paystack checkout. Please try again.");
       setGiveSaving(false);
     }
   };
@@ -373,7 +373,7 @@ export default function FamilyNeeds({ onBack, user, userRole }) {
               color:gift.name&&gift.email&&Number(gift.amount)>0?"#fff":"rgba(255,255,255,0.25)",
               fontWeight:700, cursor:gift.name&&gift.email&&Number(gift.amount)>0?"pointer":"default",
               fontSize:15, fontFamily:"Georgia, serif" }}>
-            {giveSaving ? "Redirecting to PayFast…" : (Number(gift.amount)>0 ? `💝 Give $${gift.amount} via PayFast` : "💝 Give")}
+            {giveSaving ? "Redirecting to Paystack…" : (Number(gift.amount)>0 ? `💝 Give $${gift.amount} via Paystack` : "💝 Give")}
           </button>
         </div>
       </div>
