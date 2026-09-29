@@ -1658,6 +1658,14 @@ const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, o
     };
     fetchFamilyNeeds();
   },[]);
+  // Admin-only registered-user count, shown top-left next to the logo.
+  const [userCount,setUserCount] = useState(null);
+  useEffect(()=>{
+    if(!isAdmin) return;
+    supabase.from("profiles").select("id",{count:"exact",head:true}).then(({count})=>{
+      setUserCount(count ?? null);
+    });
+  },[isAdmin]);
   const visible      = region==="All"?missions:missions.filter(m=>m.region===region||m.region.startsWith(region.slice(0,3)));
   const totalRaised  = missions.reduce((acc,m)=>acc+(m.raised||0),0);
   const activeCount  = missions.filter(m=>m.status==="active").length;
@@ -1668,6 +1676,9 @@ const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, o
         <div>
           <div style={{ fontSize:28,fontWeight:800,color:"#fff" }}>Send<span style={{ color:"#e8b34b" }}>Me</span></div>
           <div style={{ fontSize:10,color:"rgba(255,255,255,0.3)",letterSpacing:4 }}>GLOBAL MISSION FUND</div>
+          {isAdmin && userCount!==null && (
+            <div style={{ fontSize:11,color:"#e8b34b",marginTop:4,fontWeight:600 }}>👥 {userCount} registered user{userCount!==1?"s":""}</div>
+          )}
         </div>
         <div className="sendme-home-nav-buttons" style={{ display:"flex",gap:8,alignItems:"center",flexWrap:"wrap" }}>
           {user&&<span style={{ fontSize:12,color:"rgba(255,255,255,0.4)" }}>✝ {user.email?.split("@")[0]}</span>}
