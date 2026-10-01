@@ -31,6 +31,21 @@ export default function AdminApprovals({ onBack, user }) {
   const [cancelling, setCancelling]   = useState(null);   // mission id showing the cancel UI
   const [reallocTarget, setReallocTarget] = useState({});  // { [missionId]: "general_fund" | otherMissionId }
   const [cancelReason, setCancelReason]   = useState({});  // { [missionId]: string }
+  // Flag Missionary — admin's case-by-case call that someone who got full
+  // upfront funding never submitted proof. Blocks new applications until
+  // admin manually unblocks (no automated deadline — pure judgment call).
+  const [flagging, setFlagging]     = useState(null);   // mission id showing the flag UI
+  const [flagReason, setFlagReason] = useState({});       // { [missionId]: string }
+  const [blockedProfiles, setBlockedProfiles] = useState([]);
+  const loadBlockedProfiles = async () => {
+    const { data } = await supabase
+      .from("profiles")
+      .select("id, full_name, email, blocked_reason, blocked_at")
+      .eq("blocked_from_applying", true)
+      .order("blocked_at", { ascending: false });
+    setBlockedProfiles(data || []);
+  };
+  useEffect(() => { loadBlockedProfiles(); }, []);
 
   const isAdmin = user?.email === ADMIN_EMAIL;
 
@@ -187,6 +202,50 @@ export default function AdminApprovals({ onBack, user }) {
     setActing(null);
   };
 
+  // Flag a missionary as currently ineligible for new applications — a
+  // judgment call, not an automated rule, so no deadline logic lives here.
+  // Lives on the missionary's profile (not the mission) since it's about
+  // their eligibility going forward, independent of which specific mission
+  // this was about.
+  const flagMissionary = async (m) => {
+    const reason = (flagReason[m.id] || "").trim();
+    if (!reason) { window.alert("Please give a reason — this is recorded and can be shown if the missionary asks why."); return; }
+    if (!m.missionary_id) { window.alert("This mission has no linked missionary account to flag."); return; }
+
+    const ok = window.confirm(`Block ${m.missionary_name || "this missionary"} from submitting new applications?\n\nYou can unblock them later from the Blocked Missionaries list on this page.`);
+    if (!ok) return;
+
+    setActing(m.id);
+    setError("");
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ blocked_from_applying: true, blocked_reason: reason, blocked_at: new Date().toISOString() })
+        .eq("id", m.missionary_id);
+      if (error) throw error;
+      setFlagging(null);
+      await loadBlockedProfiles();
+    } catch (e) {
+      setError("Could not flag this missionary. (" + (e.message || "") + ")");
+    }
+    setActing(null);
+  };
+
+  const unblockMissionary = async (profileId) => {
+    const ok = window.confirm("Allow this person to submit new mission applications again?");
+    if (!ok) return;
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ blocked_from_applying: false, blocked_reason: null, blocked_at: null })
+        .eq("id", profileId);
+      if (error) throw error;
+      await loadBlockedProfiles();
+    } catch (e) {
+      window.alert("Could not unblock this person. (" + (e.message || "") + ")");
+    }
+  };
+
   const reject = async (m) => {
     setActing(m.id);
     setError("");
@@ -262,6 +321,29 @@ export default function AdminApprovals({ onBack, user }) {
             is sorted — otherwise milestone payouts will have nowhere to go.
           </div>
         </div>
+
+        {/* Blocked Missionaries — the only place to see and reverse a
+            flag set via "🚫 Flag Missionary" below. Only shown when
+            non-empty, so it doesn't clutter the common case. */}
+        {blockedProfiles.length > 0 && (
+          <div style={{ background: "rgba(232,91,91,0.05)", borderRadius: 16, border: "1px solid rgba(232,91,91,0.2)", padding: "16px 20px", marginBottom: 24 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#e85b5b", marginBottom: 12 }}>🚫 Blocked Missionaries ({blockedProfiles.length})</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {blockedProfiles.map(p => (
+                <div key={p.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, background: "rgba(255,255,255,0.02)", borderRadius: 10, padding: "10px 14px" }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "#eef1ff" }}>{p.full_name || p.email}</div>
+                    <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginTop: 2 }}>{p.blocked_reason}</div>
+                  </div>
+                  <button onClick={() => unblockMissionary(p.id)}
+                    style={{ flexShrink: 0, padding: "7px 14px", borderRadius: 8, border: "1px solid rgba(62,207,142,0.3)", background: "rgba(62,207,142,0.08)", color: "#3ecf8e", cursor: "pointer", fontSize: 12, fontWeight: 600, fontFamily: "Georgia, serif" }}>
+                    Unblock
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Filter tabs */}
         <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
@@ -459,6 +541,40 @@ export default function AdminApprovals({ onBack, user }) {
                       <button onClick={() => setCancelling(m.id)}
                         style={{ marginTop: 10, width: "100%", padding: "9px 0", borderRadius: 10, border: "1px solid rgba(232,91,91,0.25)", background: "rgba(232,91,91,0.05)", color: "#e85b5b", cursor: "pointer", fontSize: 12, fontFamily: "Georgia, serif", fontWeight: 600 }}>
                         🚫 Cancel Mission & Reallocate Funds
+                      </button>
+                    )
+                  )}
+
+                  {/* Flag Missionary — shown regardless of mission status
+                      (active, complete, or cancelled), since admin may
+                      judge this well after the mission itself is resolved.
+                      Not shown if already blocked, to avoid a confusing
+                      double-flag. */}
+                  {m.missionary_id && !blockedProfiles.some(p => p.id === m.missionary_id) && (
+                    flagging === m.id ? (
+                      <div style={{ marginTop: 10, background: "rgba(232,91,91,0.05)", border: "1px solid rgba(232,91,91,0.25)", borderRadius: 10, padding: 14 }}>
+                        <div style={{ fontSize: 12, color: "#e85b5b", fontWeight: 700, marginBottom: 10 }}>Flag This Missionary</div>
+                        <textarea
+                          value={flagReason[m.id] || ""}
+                          onChange={e => setFlagReason(r => ({ ...r, [m.id]: e.target.value }))}
+                          placeholder="Reason — e.g. 'Received full upfront funding for this mission, never submitted proof.'"
+                          style={{ width: "100%", padding: "9px 12px", borderRadius: 8, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", color: "#eef1ff", fontSize: 13, fontFamily: "Georgia, serif", outline: "none", resize: "vertical", minHeight: 50, boxSizing: "border-box", marginBottom: 10 }}
+                        />
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <button disabled={acting === m.id} onClick={() => flagMissionary(m)}
+                            style={{ flex: 1, padding: "9px 0", borderRadius: 8, border: "none", background: "linear-gradient(135deg,#e85b5b,#c44040)", color: "#fff", fontWeight: 700, cursor: "pointer", fontSize: 12, fontFamily: "Georgia, serif" }}>
+                            Confirm Block
+                          </button>
+                          <button onClick={() => setFlagging(null)}
+                            style={{ flex: 1, padding: "9px 0", borderRadius: 8, border: "1px solid rgba(255,255,255,0.15)", background: "transparent", color: "rgba(255,255,255,0.5)", cursor: "pointer", fontSize: 12, fontFamily: "Georgia, serif" }}>
+                            Never Mind
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button onClick={() => setFlagging(m.id)}
+                        style={{ marginTop: 8, width: "100%", padding: "8px 0", borderRadius: 10, border: "1px solid rgba(255,255,255,0.1)", background: "transparent", color: "rgba(255,255,255,0.4)", cursor: "pointer", fontSize: 11, fontFamily: "Georgia, serif" }}>
+                        🚫 Flag Missionary — No Proof Submitted
                       </button>
                     )
                   )}

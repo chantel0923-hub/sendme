@@ -590,6 +590,31 @@ const Step4 = ({ form, set }) => (
 );
 
 const Step5 = ({ form, set, submitted, submitting, onSubmit }) => {
+  if (blockedInfo === undefined) {
+    return (
+      <div style={{ textAlign:"center",padding:"60px 0",color:"rgba(255,255,255,0.3)" }}>Checking your account...</div>
+    );
+  }
+
+  if (blockedInfo) {
+    return (
+      <div style={{ textAlign:"center",padding:"20px 0 10px",display:"flex",flexDirection:"column",alignItems:"center",gap:20 }}>
+        <div style={{ width:80,height:80,borderRadius:"50%",background:"rgba(232,91,91,0.12)",border:"2px solid rgba(232,91,91,0.4)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:38 }}>⚠️</div>
+        <div>
+          <div style={{ fontSize:24,fontWeight:700,color:"#eef1ff",marginBottom:10 }}>New Applications Unavailable</div>
+          <div style={{ fontSize:14,color:"rgba(255,255,255,0.5)",lineHeight:1.8,maxWidth:400 }}>
+            Your account currently isn't able to submit new mission applications.<br/><br/>
+            {blockedInfo.reason
+              ? <div style={{ background:"rgba(232,91,91,0.08)",border:"1px solid rgba(232,91,91,0.2)",borderRadius:10,padding:"12px 16px",margin:"8px 0",textAlign:"left" }}><strong style={{color:"#e85b5b"}}>Reason given:</strong> {blockedInfo.reason}</div>
+              : null}
+            Please contact SendMe admin if you'd like to discuss this.
+          </div>
+        </div>
+        <button onClick={onBack} style={{ padding:"12px 28px",borderRadius:12,border:"1px solid rgba(255,255,255,0.15)",background:"transparent",color:"rgba(255,255,255,0.6)",cursor:"pointer",fontSize:14,fontFamily:"Georgia, serif" }}>Back to Home</button>
+      </div>
+    );
+  }
+
   if (submitted) {
     return (
       <div style={{ textAlign:"center",padding:"20px 0 10px",display:"flex",flexDirection:"column",alignItems:"center",gap:20 }}>
@@ -729,6 +754,25 @@ export default function MissionaryApplication({ onBack, user }) {
   // application? Drives a small notice on the Personal/Calling steps so
   // it's clear the data came from somewhere, not just appeared blank-filled.
   const [prefilledFromPrevious, setPrefilledFromPrevious] = useState(false);
+  // Eligibility gate — an admin can manually flag a missionary who received
+  // full upfront funding for a past mission and never submitted proof,
+  // blocking new applications until admin reviews and lifts it (case by
+  // case, no fixed deadline — this is a judgment call, not an automated
+  // timeout). Checked once per visit to this form, not cached, so a
+  // lifted block takes effect the next time someone opens the form.
+  const [blockedInfo, setBlockedInfo] = useState(undefined); // undefined = checking, null = not blocked, {reason} = blocked
+  useEffect(() => {
+    const checkBlocked = async () => {
+      if (!user?.id) { setBlockedInfo(null); return; }
+      const { data } = await supabase
+        .from("profiles")
+        .select("blocked_from_applying, blocked_reason")
+        .eq("id", user.id)
+        .maybeSingle();
+      setBlockedInfo(data?.blocked_from_applying ? { reason: data.blocked_reason } : null);
+    };
+    checkBlocked();
+  }, [user]);
 
   const [form, setForm] = useState({
     fullName: user?.user_metadata?.full_name||"", email: user?.email||"",
