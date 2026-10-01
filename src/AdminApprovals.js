@@ -24,6 +24,13 @@ export default function AdminApprovals({ onBack, user }) {
   const [reasons, setReasons]     = useState({});      // { [missionId]: string }
   const [error, setError]         = useState("");
   const [blockedNotice, setBlockedNotice] = useState(null); // mission id flashing a "church not verified" warning
+  // Cancel & Reallocate — for a mission that isn't working out (won't get
+  // fully funded, minister unavailable, etc). Lets admin move whatever's
+  // already been raised to the General Fund or to another active mission,
+  // rather than leaving it stranded on a mission going nowhere.
+  const [cancelling, setCancelling]   = useState(null);   // mission id showing the cancel UI
+  const [reallocTarget, setReallocTarget] = useState({});  // { [missionId]: "general_fund" | otherMissionId }
+  const [cancelReason, setCancelReason]   = useState({});  // { [missionId]: string }
 
   const isAdmin = user?.email === ADMIN_EMAIL;
 
@@ -110,6 +117,72 @@ export default function AdminApprovals({ onBack, user }) {
       await load();
     } catch (e) {
       setError("Could not mark mission complete. (" + (e.message || "") + ")");
+    }
+    setActing(null);
+  };
+
+  // Cancel a mission that isn't working out and move whatever's already
+  // been raised elsewhere — General Fund, or another active mission —
+  // rather than leaving real donor money stranded on a mission going
+  // nowhere. This is a records-level reallocation only: no money actually
+  // moves between bank accounts here, since it was never paid out to begin
+  // with (payouts already require full/milestone funding first — see
+  // AdminPayouts.js's own safeguard). This just changes which mission's
+  // ledger that raised total belongs to.
+  const cancelAndReallocate = async (m) => {
+    const target = reallocTarget[m.id];
+    const reason = (cancelReason[m.id] || "").trim();
+    if (!reason) { window.alert("Please give a reason for cancelling — this is sent to the missionary."); return; }
+    if (m.raised > 0 && !target) { window.alert("Choose where the raised funds should go before confirming."); return; }
+
+    const destinationLabel = !target ? null
+      : target === "general_fund" ? "the General Fund"
+      : missions.find(x => x.id === target)?.title || "another mission";
+
+    const ok = window.confirm(
+      `Cancel "${m.title}"?\n\n` +
+      (m.raised > 0
+        ? `$${fmt(m.raised)} already raised will be moved to ${destinationLabel}.\n\n`
+        : `No funds have been raised yet, so nothing needs to move.\n\n`) +
+      `This cannot be undone. The missionary will be notified with your reason.`
+    );
+    if (!ok) return;
+
+    setActing(m.id);
+    setError("");
+    try {
+      if (m.raised > 0) {
+        if (target === "general_fund") {
+          const { error: gfError } = await supabase.from("general_fund_log").insert({
+            type: "donation",
+            amount: m.raised,
+            donor_name: `Reallocated from cancelled mission: ${m.title}`,
+          });
+          if (gfError) throw gfError;
+        } else {
+          const { error: rpcError } = await supabase.rpc("increment_mission_raised", { p_mission_id: target, p_amount: m.raised });
+          if (rpcError) throw rpcError;
+        }
+      }
+
+      const { error: cancelError } = await supabase
+        .from("missions")
+        .update({ status: "cancelled", raised: 0, cancellation_reason: reason, cancelled_at: new Date().toISOString() })
+        .eq("id", m.id);
+      if (cancelError) throw cancelError;
+
+      sendNotification("mission_cancelled", m.missionary_email, {
+        missionaryName: m.missionary_name,
+        missionTitle: m.title,
+        reason,
+        raised: m.raised,
+        destination: destinationLabel,
+      });
+
+      setCancelling(null);
+      await load();
+    } catch (e) {
+      setError("Could not cancel this mission. (" + (e.message || "") + ")");
     }
     setActing(null);
   };
@@ -234,9 +307,9 @@ export default function AdminApprovals({ onBack, user }) {
                       <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)" }}>📍 {m.city ? `${m.city}, ` : ""}{m.country || m.region || "Unknown"}</div>
                     </div>
                     <span style={{ padding: "4px 12px", borderRadius: 999, fontSize: 11, fontWeight: 700, whiteSpace: "nowrap",
-                      background: m.status === "active" ? "rgba(62,207,142,0.12)" : m.status === "rejected" ? "rgba(232,91,91,0.12)" : "rgba(232,179,75,0.12)",
-                      color: m.status === "active" ? "#3ecf8e" : m.status === "rejected" ? "#e85b5b" : "#e8b34b",
-                      border: `1px solid ${m.status === "active" ? "rgba(62,207,142,0.3)" : m.status === "rejected" ? "rgba(232,91,91,0.3)" : "rgba(232,179,75,0.3)"}` }}>
+                      background: m.status === "active" ? "rgba(62,207,142,0.12)" : m.status === "rejected" ? "rgba(232,91,91,0.12)" : m.status === "cancelled" ? "rgba(255,255,255,0.08)" : "rgba(232,179,75,0.12)",
+                      color: m.status === "active" ? "#3ecf8e" : m.status === "rejected" ? "#e85b5b" : m.status === "cancelled" ? "rgba(255,255,255,0.5)" : "#e8b34b",
+                      border: `1px solid ${m.status === "active" ? "rgba(62,207,142,0.3)" : m.status === "rejected" ? "rgba(232,91,91,0.3)" : m.status === "cancelled" ? "rgba(255,255,255,0.15)" : "rgba(232,179,75,0.3)"}` }}>
                       {m.status === "pending_church" ? "pending (church)" : (m.status || "pending")}
                     </span>
                   </div>
@@ -339,6 +412,55 @@ export default function AdminApprovals({ onBack, user }) {
                       style={{ display: "block", textAlign: "center", marginTop: 12, padding: "11px 0", borderRadius: 10, border: "1px solid rgba(37,211,102,0.35)", background: "rgba(37,211,102,0.08)", color: "#25d366", fontWeight: 700, fontSize: 13, fontFamily: "Georgia, serif", textDecoration: "none" }}>
                       📲 Post to WhatsApp Group
                     </a>
+                  )}
+
+                  {/* Cancel & Reallocate — for a mission that isn't working
+                      out (time period passed, minister unavailable, etc).
+                      Moves whatever's already raised to the General Fund or
+                      another active mission, rather than leaving it
+                      stranded. */}
+                  {m.status === "active" && (
+                    cancelling === m.id ? (
+                      <div style={{ marginTop: 12, background: "rgba(232,91,91,0.05)", border: "1px solid rgba(232,91,91,0.25)", borderRadius: 10, padding: 14 }}>
+                        <div style={{ fontSize: 12, color: "#e85b5b", fontWeight: 700, marginBottom: 10 }}>Cancel This Mission</div>
+                        <textarea
+                          value={cancelReason[m.id] || ""}
+                          onChange={e => setCancelReason(r => ({ ...r, [m.id]: e.target.value }))}
+                          placeholder="Reason for cancelling — sent to the missionary, e.g. 'Time period for this mission has passed without full funding.'"
+                          style={{ width: "100%", padding: "9px 12px", borderRadius: 8, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", color: "#eef1ff", fontSize: 13, fontFamily: "Georgia, serif", outline: "none", resize: "vertical", minHeight: 50, boxSizing: "border-box", marginBottom: 10 }}
+                        />
+                        {m.raised > 0 && (
+                          <>
+                            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginBottom: 6 }}>Move ${fmt(m.raised)} already raised to:</div>
+                            <select
+                              value={reallocTarget[m.id] || ""}
+                              onChange={e => setReallocTarget(t => ({ ...t, [m.id]: e.target.value }))}
+                              style={{ width: "100%", padding: "9px 12px", borderRadius: 8, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", color: "#eef1ff", fontSize: 13, fontFamily: "Georgia, serif", outline: "none", marginBottom: 10 }}>
+                              <option value="" style={{ background: "#0c1628" }}>Choose a destination...</option>
+                              <option value="general_fund" style={{ background: "#0c1628" }}>🌐 SendMe General Fund</option>
+                              {missions.filter(x => x.status === "active" && x.id !== m.id).map(x => (
+                                <option key={x.id} value={x.id} style={{ background: "#0c1628" }}>{x.title}</option>
+                              ))}
+                            </select>
+                          </>
+                        )}
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <button disabled={acting === m.id} onClick={() => cancelAndReallocate(m)}
+                            style={{ flex: 1, padding: "9px 0", borderRadius: 8, border: "none", background: "linear-gradient(135deg,#e85b5b,#c44040)", color: "#fff", fontWeight: 700, cursor: "pointer", fontSize: 12, fontFamily: "Georgia, serif" }}>
+                            Confirm Cancellation
+                          </button>
+                          <button onClick={() => setCancelling(null)}
+                            style={{ flex: 1, padding: "9px 0", borderRadius: 8, border: "1px solid rgba(255,255,255,0.15)", background: "transparent", color: "rgba(255,255,255,0.5)", cursor: "pointer", fontSize: 12, fontFamily: "Georgia, serif" }}>
+                            Never Mind
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button onClick={() => setCancelling(m.id)}
+                        style={{ marginTop: 10, width: "100%", padding: "9px 0", borderRadius: 10, border: "1px solid rgba(232,91,91,0.25)", background: "rgba(232,91,91,0.05)", color: "#e85b5b", cursor: "pointer", fontSize: 12, fontFamily: "Georgia, serif", fontWeight: 600 }}>
+                        🚫 Cancel Mission & Reallocate Funds
+                      </button>
+                    )
                   )}
 
                   {/* Action area — only for pending */}
