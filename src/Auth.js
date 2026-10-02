@@ -1,5 +1,92 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "./supabase";
+import YouTubeEmbed from "./YouTubeEmbed";
+import { FEATURED_VIDEOS } from "./sendmeVideos";
+
+// How long the confirmation link stays valid. Keep in step with the
+// "Email OTP expiration" setting in Supabase (Authentication → Sign In / Providers → Email).
+const CONFIRM_LINK_HOURS = 24;
+
+// Dial codes for the phone field. `iso` is the unique key (the USA and Canada
+// share +1, so the code alone can't identify the selected row).
+const COUNTRY_CODES = [
+  { iso:"ZA", name:"South Africa", code:"+27" },
+  { iso:"ZW", name:"Zimbabwe", code:"+263" },
+  { iso:"ZM", name:"Zambia", code:"+260" },
+  { iso:"BW", name:"Botswana", code:"+267" },
+  { iso:"NA", name:"Namibia", code:"+264" },
+  { iso:"MZ", name:"Mozambique", code:"+258" },
+  { iso:"MW", name:"Malawi", code:"+265" },
+  { iso:"LS", name:"Lesotho", code:"+266" },
+  { iso:"SZ", name:"Eswatini", code:"+268" },
+  { iso:"AO", name:"Angola", code:"+244" },
+  { iso:"TZ", name:"Tanzania", code:"+255" },
+  { iso:"KE", name:"Kenya", code:"+254" },
+  { iso:"UG", name:"Uganda", code:"+256" },
+  { iso:"RW", name:"Rwanda", code:"+250" },
+  { iso:"CD", name:"DR Congo", code:"+243" },
+  { iso:"ET", name:"Ethiopia", code:"+251" },
+  { iso:"NG", name:"Nigeria", code:"+234" },
+  { iso:"GH", name:"Ghana", code:"+233" },
+  { iso:"CM", name:"Cameroon", code:"+237" },
+  { iso:"MG", name:"Madagascar", code:"+261" },
+  { iso:"MU", name:"Mauritius", code:"+230" },
+  { iso:"EG", name:"Egypt", code:"+20" },
+  { iso:"MA", name:"Morocco", code:"+212" },
+  { iso:"US", name:"United States", code:"+1" },
+  { iso:"CA", name:"Canada", code:"+1" },
+  { iso:"GB", name:"United Kingdom", code:"+44" },
+  { iso:"IE", name:"Ireland", code:"+353" },
+  { iso:"DE", name:"Germany", code:"+49" },
+  { iso:"FR", name:"France", code:"+33" },
+  { iso:"NL", name:"Netherlands", code:"+31" },
+  { iso:"CH", name:"Switzerland", code:"+41" },
+  { iso:"ES", name:"Spain", code:"+34" },
+  { iso:"PT", name:"Portugal", code:"+351" },
+  { iso:"IT", name:"Italy", code:"+39" },
+  { iso:"SE", name:"Sweden", code:"+46" },
+  { iso:"NO", name:"Norway", code:"+47" },
+  { iso:"AU", name:"Australia", code:"+61" },
+  { iso:"NZ", name:"New Zealand", code:"+64" },
+  { iso:"IN", name:"India", code:"+91" },
+  { iso:"PK", name:"Pakistan", code:"+92" },
+  { iso:"BD", name:"Bangladesh", code:"+880" },
+  { iso:"NP", name:"Nepal", code:"+977" },
+  { iso:"LK", name:"Sri Lanka", code:"+94" },
+  { iso:"PH", name:"Philippines", code:"+63" },
+  { iso:"ID", name:"Indonesia", code:"+62" },
+  { iso:"CN", name:"China", code:"+86" },
+  { iso:"JP", name:"Japan", code:"+81" },
+  { iso:"KR", name:"South Korea", code:"+82" },
+  { iso:"IL", name:"Israel", code:"+972" },
+  { iso:"AE", name:"United Arab Emirates", code:"+971" },
+  { iso:"TR", name:"Turkey", code:"+90" },
+  { iso:"BR", name:"Brazil", code:"+55" },
+  { iso:"MX", name:"Mexico", code:"+52" },
+  { iso:"AR", name:"Argentina", code:"+54" },
+  { iso:"CO", name:"Colombia", code:"+57" },
+  { iso:"PE", name:"Peru", code:"+51" },
+  { iso:"CL", name:"Chile", code:"+56" },
+];
+
+// Turns what the person typed into international format (+27821234567).
+// - If they typed a full number starting with "+", it is used as-is.
+// - Otherwise the leading 0 is dropped and the chosen country code is added.
+// Returns "" when the result isn't a plausible number (8–15 digits).
+const normalizePhone = (iso, raw) => {
+  const typed = String(raw || "").trim();
+  if (!typed) return "";
+  const digits = typed.replace(/\D/g, "");
+  if (!digits) return "";
+  let full;
+  if (typed.startsWith("+")) {
+    full = "+" + digits;
+  } else {
+    const entry = COUNTRY_CODES.find(c => c.iso === iso) || COUNTRY_CODES[0];
+    full = entry.code + digits.replace(/^0+/, "");
+  }
+  return /^\+\d{8,15}$/.test(full) ? full : "";
+};
 
 export default function Auth({ onLogin, onGuest }) {
   const [mode, setMode]             = useState("login");
@@ -14,22 +101,68 @@ export default function Auth({ onLogin, onGuest }) {
   const [forgotMode, setForgotMode] = useState(false);
   const [resetEmail, setResetEmail] = useState("");
 
+  // Phone + WhatsApp opt-in (sign-up only)
+  const [phoneIso, setPhoneIso]     = useState("ZA");
+  const [phoneNum, setPhoneNum]     = useState("");
+  const [waOptIn, setWaOptIn]       = useState(false); // must be ticked by the person — never pre-ticked
+
+  // Email-confirmation help
+  const [registered, setRegistered]       = useState(false); // sign-up just succeeded
+  const [needsConfirm, setNeedsConfirm]   = useState(false); // tried to sign in before confirming
+  const [resending, setResending]         = useState(false);
+  const [resendMsg, setResendMsg]         = useState("");
+  const [resendCooldown, setResendCooldown] = useState(0);
+
+  // Supabase only allows one confirmation email per 60 seconds per address.
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const t = setTimeout(() => setResendCooldown(c => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [resendCooldown]);
+
   const handleLogin = async () => {
-    if (!email || !password) { setError("Please enter your email and password."); return; }
-    setLoading(true); setError("");
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (!email.trim() || !password) { setError("Please enter your email and password."); return; }
+    setLoading(true); setError(""); setNeedsConfirm(false); setResendMsg("");
+    const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
     setLoading(false);
-    if (error) { setError(error.message); return; }
+    if (error) {
+      if (/not confirmed/i.test(error.message || "")) {
+        setNeedsConfirm(true);
+        setError("Your email address hasn't been verified yet. Open the confirmation email we sent you, or request a new one below.");
+      } else {
+        setError(error.message);
+      }
+      return;
+    }
     onLogin(data.user);
   };
 
   const handleRegister = async () => {
-    if (!name || !email || !password || !role) { setError("Please fill in all fields."); return; }
+    const cleanEmail = email.trim();
+    const cleanName  = name.trim();
+    if (!cleanName || !cleanEmail || !password || !role) { setError("Please fill in all fields."); return; }
     if (password.length < 6) { setError("Password must be at least 6 characters."); return; }
-    setLoading(true); setError("");
+
+    // Phone is optional. If one was typed it must be valid; it is saved in
+    // international format (+27...).
+    let fullPhone = "";
+    if (phoneNum.trim()) {
+      fullPhone = normalizePhone(phoneIso, phoneNum);
+      if (!fullPhone) {
+        setError("That phone number doesn't look right. Enter digits only (e.g. 82 123 4567), or the full number starting with + and the country code.");
+        return;
+      }
+    }
+
+    setLoading(true); setError(""); setResendMsg("");
     const { data, error } = await supabase.auth.signUp({
-      email, password,
-      options: { data: { full_name: name, role } }
+      email: cleanEmail, password,
+      options: { data: {
+        full_name: cleanName,
+        role,
+        whatsapp_number: fullPhone || null,
+        whatsapp_group_optin: !!(waOptIn && fullPhone),
+      } }
     });
     setLoading(false);
     if (error) { setError(error.message); return; }
@@ -42,12 +175,28 @@ export default function Auth({ onLogin, onGuest }) {
       setError("An account with this email already exists. Please sign in instead, or use \"Forgot password?\" if you don't remember your password.");
       return;
     }
-    // Note: the "profiles" row is now created automatically by a database
+    // Note: the "profiles" row is created automatically by a database
     // trigger on auth.users (handle_new_user / on_auth_user_created), server-side.
-    // We intentionally no longer insert it from the client here — signUp() doesn't
-    // return an active session when email confirmation is required, so the old
-    // client-side insert would fail RLS (auth.uid() was null at that point).
+    // We intentionally don't insert it from the client — signUp() doesn't
+    // return an active session when email confirmation is required, so a
+    // client-side insert would fail RLS (auth.uid() is null at that point).
+    // The phone number and WhatsApp opt-in travel in the sign-up metadata and
+    // are copied onto the profile by a second trigger (on_auth_user_created_whatsapp).
     setSuccess("Account created! Please check your email to verify your account.");
+    setRegistered(true);
+    setResendCooldown(60); // the first email was just sent
+  };
+
+  const handleResend = async () => {
+    const addr = email.trim();
+    if (!addr) { setError("Please enter your email address above first."); return; }
+    if (resending || resendCooldown > 0) return;
+    setResending(true); setError(""); setResendMsg("");
+    const { error } = await supabase.auth.resend({ type: "signup", email: addr });
+    setResending(false);
+    if (error) { setError(error.message); return; }
+    setResendMsg("A new confirmation email is on its way. Please check your inbox and your Spam folder.");
+    setResendCooldown(60);
   };
 
   const handleForgotPassword = async () => {
@@ -212,7 +361,7 @@ export default function Auth({ onLogin, onGuest }) {
             ].map(({ key, label }) => (
               <button
                 key={key}
-                onClick={() => { setMode(key); setError(""); setSuccess(""); }}
+                onClick={() => { setMode(key); setError(""); setSuccess(""); setRegistered(false); setNeedsConfirm(false); setResendMsg(""); }}
                 style={{
                   padding: "11px 0", borderRadius: 10, border: "none", cursor: "pointer",
                   background: mode === key
@@ -248,6 +397,36 @@ export default function Auth({ onLogin, onGuest }) {
             </div>
           )}
 
+          {/* ── Confirmation-email help (after sign-up, or sign-in before confirming) ── */}
+          {(registered || needsConfirm) && (
+            <div style={{
+              background: "rgba(232,179,75,0.08)", border: "1px solid rgba(232,179,75,0.25)",
+              borderRadius: 10, padding: "12px 14px", marginBottom: 16,
+              fontSize: 13, color: "rgba(255,255,255,0.7)", lineHeight: 1.7,
+            }}>
+              <div style={{ color: "#e8b34b", fontWeight: 700, marginBottom: 4 }}>📬 Can't find the email?</div>
+              <div>
+                Please check your <strong>Spam</strong>, <strong>Junk</strong> or <strong>Promotions</strong> folder —
+                confirmation emails often end up there. The link stays valid for {CONFIRM_LINK_HOURS} hours.
+              </div>
+              {resendMsg && <div style={{ color: "#3ecf8e", marginTop: 8 }}>✓ {resendMsg}</div>}
+              <button
+                type="button"
+                onClick={handleResend}
+                disabled={resending || resendCooldown > 0}
+                style={{
+                  marginTop: 10, width: "100%", padding: "10px 0", borderRadius: 10,
+                  border: "1px solid rgba(232,179,75,0.4)", background: "rgba(232,179,75,0.1)",
+                  color: "#e8b34b", fontWeight: 700, fontSize: 13, fontFamily: "Georgia, serif",
+                  cursor: (resending || resendCooldown > 0) ? "default" : "pointer",
+                  opacity: (resending || resendCooldown > 0) ? 0.6 : 1,
+                }}
+              >
+                {resending ? "Sending..." : resendCooldown > 0 ? `Resend available in ${resendCooldown}s` : "✉ Resend confirmation email"}
+              </button>
+            </div>
+          )}
+
           {/* ── Register-only fields ── */}
           {mode === "register" && (
             <>
@@ -274,6 +453,54 @@ export default function Auth({ onLogin, onGuest }) {
             type="email" value={email} onChange={e => setEmail(e.target.value)}
             placeholder="Email address" style={inp}
           />
+
+          {/* ── Phone with country code + WhatsApp opt-in (register only) ── */}
+          {mode === "register" && (
+            <>
+              <div style={{ display: "flex", gap: 8, marginBottom: 6 }}>
+                <select
+                  value={phoneIso} onChange={e => setPhoneIso(e.target.value)}
+                  aria-label="Country code"
+                  style={{ ...inp, flex: "1 1 50%", width: "auto", minWidth: 0, marginBottom: 0, padding: "13px 10px", fontSize: 14 }}
+                >
+                  {COUNTRY_CODES.map(c => (
+                    <option key={c.iso} value={c.iso} style={{ background: "#0c1628", color: "#eef1ff" }}>
+                      {c.name} ({c.code})
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="tel" inputMode="tel" autoComplete="tel-national"
+                  value={phoneNum} onChange={e => setPhoneNum(e.target.value)}
+                  placeholder="Phone (optional)"
+                  style={{ ...inp, flex: "1 1 50%", width: "auto", minWidth: 0, marginBottom: 0 }}
+                />
+              </div>
+              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", marginBottom: 12, lineHeight: 1.5 }}>
+                No need to type the leading 0 — e.g. 82 123 4567. Or type the full number starting with +.
+              </div>
+
+              {phoneNum.trim() && (
+                <label style={{
+                  display: "flex", gap: 10, alignItems: "flex-start", cursor: "pointer",
+                  background: "rgba(37,211,102,0.06)", border: "1px solid rgba(37,211,102,0.22)",
+                  borderRadius: 12, padding: "12px 14px", marginBottom: 12,
+                }}>
+                  <input
+                    type="checkbox" checked={waOptIn} onChange={e => setWaOptIn(e.target.checked)}
+                    style={{ width: 20, height: 20, marginTop: 2, accentColor: "#25d366", flexShrink: 0 }}
+                  />
+                  <span style={{ fontSize: 13, color: "rgba(255,255,255,0.7)", lineHeight: 1.6 }}>
+                    <strong style={{ color: "#25d366" }}>📲 Add my number to the SendMe WhatsApp group</strong>{" "}
+                    so I receive updates on my application and mission progress.
+                    <span style={{ display: "block", fontSize: 11, color: "rgba(255,255,255,0.4)", marginTop: 4 }}>
+                      Optional. Other members of the group may be able to see your number.
+                    </span>
+                  </span>
+                </label>
+              )}
+            </>
+          )}
 
           {/* ── Password with eye toggle ── */}
           <div style={{ position: "relative", marginBottom: 4 }}>
@@ -361,6 +588,16 @@ export default function Auth({ onLogin, onGuest }) {
             🔒 Your data is secure · SendMe is a non-profit platform
           </div>
         </div>
+
+        {/* ── Introduction video ── */}
+        {FEATURED_VIDEOS.missionVision && (
+          <div style={{ marginTop: 24 }}>
+            <div style={{ textAlign: "center", fontSize: 13, color: "#e8b34b", fontWeight: 700, marginBottom: 10 }}>
+              ▶ New to SendMe? Watch this short introduction
+            </div>
+            <YouTubeEmbed videoId={FEATURED_VIDEOS.missionVision} title="SendMe — Vision & Mission" />
+          </div>
+        )}
       </div>
     </div>
   );

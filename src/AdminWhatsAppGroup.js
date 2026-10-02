@@ -1,9 +1,11 @@
 // AdminWhatsAppGroup.js
 // Admin screen listing everyone who opted in to the "SendMe Global Mission
-// Fund Notification" WhatsApp group during the Welcome screen. WhatsApp has
-// no API for programmatically adding members to a group, so this screen's
-// job is simply to make it fast for admin to add each number manually —
-// a name/number list plus a one-tap "Copy all numbers" button.
+// Fund Notification" WhatsApp group — at sign-up (phone + tick-box on the
+// Create Account form) or on the Welcome screen. WhatsApp has no API for
+// programmatically adding members to a group, so this screen's job is simply
+// to make it fast for admin to add each number manually — a name/number
+// list, a one-tap "Copy" button, and a contacts file (.vcf) that saves every
+// not-yet-added person into the phone's address book in one go.
 import { useState, useEffect } from "react";
 import { supabase } from "./supabase";
 
@@ -71,6 +73,31 @@ export default function AdminWhatsAppGroup({ onBack }) {
     });
   };
 
+  // Builds a vCard file of everyone not yet added, so admin can import them
+  // into the phone's contacts in one step (WhatsApp's "add participants" list
+  // reads from the phone's contacts). Saved as "Name (SendMe)" so they're easy
+  // to find and to tidy up later.
+  const downloadVcf = () => {
+    const esc = (t) => String(t).replace(/([,;\\])/g, "\\$1").replace(/\r?\n/g, " ");
+    const cards = pending
+      .filter(r => r.whatsapp_number)
+      .map(r => {
+        const nm  = esc((r.full_name || "SendMe member").trim());
+        const tel = String(r.whatsapp_number).replace(/[^\d+]/g, "");
+        return ["BEGIN:VCARD", "VERSION:3.0", `N:;${nm} (SendMe);;;`, `FN:${nm} (SendMe)`, `TEL;TYPE=CELL:${tel}`, "END:VCARD"].join("\r\n");
+      });
+    if (cards.length === 0) return;
+    const blob = new Blob([cards.join("\r\n") + "\r\n"], { type: "text/vcard;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "sendme-whatsapp-contacts.vcf";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
   return (
     <div style={{ minHeight: "100vh", background: "#060c18", color: "#eef1ff", fontFamily: "Georgia, serif" }}>
       <div style={{ background: "#09111f", borderBottom: "1px solid rgba(255,255,255,0.07)", padding: "16px 24px", display: "flex", alignItems: "center", gap: 14, position: "sticky", top: 0, zIndex: 100 }}>
@@ -87,16 +114,20 @@ export default function AdminWhatsAppGroup({ onBack }) {
           <strong style={{ color: "#25d366" }}>📲 Reminder:</strong> WhatsApp doesn't let any app add members to a group automatically — you'll need to add each number below to your "SendMe Global Mission Fund Notification" group yourself. Once someone's in, approved missions/emergencies/helper requests can be posted with one tap from the approval screens.
         </div>
 
-        <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+        <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
           <input
             placeholder="Search by name or number..."
             value={search}
             onChange={e => setSearch(e.target.value)}
-            style={{ flex: 1, padding: "11px 14px", borderRadius: 10, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "#eef1ff", fontSize: 13, fontFamily: "Georgia, serif", outline: "none" }}
+            style={{ flex: 1, minWidth: 180, padding: "11px 14px", borderRadius: 10, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "#eef1ff", fontSize: 13, fontFamily: "Georgia, serif", outline: "none" }}
           />
           <button onClick={copyAll} disabled={pending.length === 0}
             style={{ padding: "11px 18px", borderRadius: 10, border: "1px solid rgba(37,211,102,0.35)", background: "rgba(37,211,102,0.1)", color: copied ? "#3ecf8e" : "#25d366", fontWeight: 700, cursor: pending.length === 0 ? "default" : "pointer", fontSize: 13, fontFamily: "Georgia, serif", whiteSpace: "nowrap" }}>
             {copied ? "✓ Copied!" : `Copy ${pending.length} New Number${pending.length !== 1 ? "s" : ""}`}
+          </button>
+          <button onClick={downloadVcf} disabled={pending.length === 0}
+            style={{ padding: "11px 18px", borderRadius: 10, border: "1px solid rgba(37,211,102,0.35)", background: "rgba(37,211,102,0.1)", color: "#25d366", fontWeight: 700, cursor: pending.length === 0 ? "default" : "pointer", opacity: pending.length === 0 ? 0.5 : 1, fontSize: 13, fontFamily: "Georgia, serif", whiteSpace: "nowrap" }}>
+            ⬇ Save as Contacts (.vcf)
           </button>
         </div>
 
