@@ -4,6 +4,10 @@ import { supabase } from "./supabase";
 import { ADMIN_EMAIL } from "./AdminPayouts";
 import { sendNotification } from "./notifications";
 
+
+// Opens compose in the SendMe Gmail account specifically (not the browser/OS default mail app).
+const SENDME_GMAIL = "sendmemissionfund@gmail.com";
+
 const fmt = (n) => String(Math.round(n || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 
 const timeAgo = (dateStr) => {
@@ -584,7 +588,8 @@ export default function AdminApprovals({ onBack, user }) {
                       the applicant's reply lands directly in admin's inbox. */}
                   {isPending && m.missionary_email && (
                     <a
-                      href={`mailto:${m.missionary_email}?subject=${encodeURIComponent("SendMe — a few questions about your mission application")}&body=${encodeURIComponent(`Dear ${m.missionary_name || "Brother/Sister"},\n\nThank you for applying through SendMe Global Mission Fund with "${m.title || "your mission"}". Before we can make a decision, we have a few questions:\n\n1. \n\nPlease reply to this email with your answers.\n\nGod bless,\nSendMe Global Mission Fund`)}`}
+                      href={`https://mail.google.com/mail/u/${SENDME_GMAIL}/?view=cm&fs=1&to=${encodeURIComponent(m.missionary_email)}&su=${encodeURIComponent("SendMe — a few questions about your mission application")}&body=${encodeURIComponent(`Dear ${m.missionary_name || "Brother/Sister"},\n\nThank you for applying through SendMe Global Mission Fund with "${m.title || "your mission"}". Before we can make a decision, we have a few questions:\n\n1. \n\nPlease reply to this email with your answers.\n\nGod bless,\nSendMe Global Mission Fund`)}`}
+                      target="_blank" rel="noopener noreferrer"
                       style={{ display: "block", textAlign: "center", textDecoration: "none", marginBottom: 12, padding: "11px 0", borderRadius: 10, border: "1px solid rgba(91,156,246,0.35)", background: "rgba(91,156,246,0.08)", color: "#5b9cf6", fontWeight: 700, fontSize: 13, fontFamily: "Georgia, serif" }}>
                       ✉️ Email Applicant — Ask a Question
                     </a>
