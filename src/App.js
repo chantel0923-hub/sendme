@@ -1622,6 +1622,22 @@ const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, o
   const [emergencies,setEmergencies] = useState([]);
   const [familyNeeds,setFamilyNeeds] = useState([]);
   const [loading,setLoading]     = useState(true);
+  // Pastors / org leaders who haven't registered a church yet see "Register Church"
+  // on the nav button; once registered it goes back to "My Church".
+  const [hasChurch,setHasChurch] = useState(null); // null = not checked (or check failed) → normal label
+  useEffect(()=>{
+    let cancelled = false;
+    const checkChurch = async () => {
+      if(!user?.id || !isPastor) return;
+      try{
+        const { data, error } = await supabase.from("churches").select("id").eq("user_id",user.id).maybeSingle();
+        if(error) return; // unknown — keep the normal label rather than guess
+        if(!cancelled) setHasChurch(!!data);
+      }catch(e){ /* leave as unknown */ }
+    };
+    checkChurch();
+    return ()=>{ cancelled = true; };
+  },[user?.id,isPastor]);
   useEffect(()=>{
     const fetchMissions = async () => {
       setLoading(true);
@@ -1692,7 +1708,7 @@ const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, o
           {!guest && userRole!=="donor" && <button onClick={onApply} style={{ background:"linear-gradient(135deg,#e8b34b,#c8942b)",border:"none",borderRadius:10,padding:"8px 16px",color:"#000",cursor:"pointer",fontSize:13,fontWeight:700 }}>Apply for a Mission</button>}
           {(userRole==="missionary"||isPastor) && user && <button onClick={onMilestoneProof} style={{ background:"rgba(91,156,246,0.1)",border:"1px solid rgba(91,156,246,0.3)",borderRadius:10,padding:"8px 16px",color:"#5b9cf6",cursor:"pointer",fontSize:13,fontWeight:700 }}>📋 Submit Proof</button>}
           {userRole==="missionary" && user && <button onClick={onMissionaryDashboard} style={{ background:"rgba(232,179,75,0.1)",border:"1px solid rgba(232,179,75,0.3)",borderRadius:10,padding:"8px 16px",color:"#e8b34b",cursor:"pointer",fontSize:13,fontWeight:700 }}>📊 My Dashboard</button>}
-          {isPastor && <button onClick={onMyChurch} style={{ background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"8px 16px",color:"rgba(255,255,255,0.6)",cursor:"pointer",fontSize:13 }}>{userRole==="org_leader" ? "My Organization" : "My Church"}</button>}
+          {isPastor && <button onClick={onMyChurch} style={{ background:hasChurch===false?"rgba(232,179,75,0.12)":"rgba(255,255,255,0.05)",border:hasChurch===false?"1px solid rgba(232,179,75,0.45)":"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"8px 16px",color:hasChurch===false?"#e8b34b":"rgba(255,255,255,0.6)",cursor:"pointer",fontSize:13,fontWeight:hasChurch===false?700:400 }}>{userRole==="org_leader" ? (hasChurch===false ? "Register Organization" : "My Organization") : (hasChurch===false ? "Register Church" : "My Church")}</button>}
           {isPastor && user && <PayoutsDropdown onPayout={onPayout} onPastorReview={onPastorReview} />}
           <NavDropdown
             user={user} userRole={userRole} guest={guest}
