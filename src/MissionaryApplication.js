@@ -590,31 +590,6 @@ const Step4 = ({ form, set }) => (
 );
 
 const Step5 = ({ form, set, submitted, submitting, onSubmit }) => {
-  if (blockedInfo === undefined) {
-    return (
-      <div style={{ textAlign:"center",padding:"60px 0",color:"rgba(255,255,255,0.3)" }}>Checking your account...</div>
-    );
-  }
-
-  if (blockedInfo) {
-    return (
-      <div style={{ textAlign:"center",padding:"20px 0 10px",display:"flex",flexDirection:"column",alignItems:"center",gap:20 }}>
-        <div style={{ width:80,height:80,borderRadius:"50%",background:"rgba(232,91,91,0.12)",border:"2px solid rgba(232,91,91,0.4)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:38 }}>⚠️</div>
-        <div>
-          <div style={{ fontSize:24,fontWeight:700,color:"#eef1ff",marginBottom:10 }}>New Applications Unavailable</div>
-          <div style={{ fontSize:14,color:"rgba(255,255,255,0.5)",lineHeight:1.8,maxWidth:400 }}>
-            Your account currently isn't able to submit new mission applications.<br/><br/>
-            {blockedInfo.reason
-              ? <div style={{ background:"rgba(232,91,91,0.08)",border:"1px solid rgba(232,91,91,0.2)",borderRadius:10,padding:"12px 16px",margin:"8px 0",textAlign:"left" }}><strong style={{color:"#e85b5b"}}>Reason given:</strong> {blockedInfo.reason}</div>
-              : null}
-            Please contact SendMe admin if you'd like to discuss this.
-          </div>
-        </div>
-        <button onClick={onBack} style={{ padding:"12px 28px",borderRadius:12,border:"1px solid rgba(255,255,255,0.15)",background:"transparent",color:"rgba(255,255,255,0.6)",cursor:"pointer",fontSize:14,fontFamily:"Georgia, serif" }}>Back to Home</button>
-      </div>
-    );
-  }
-
   if (submitted) {
     return (
       <div style={{ textAlign:"center",padding:"20px 0 10px",display:"flex",flexDirection:"column",alignItems:"center",gap:20 }}>
@@ -948,6 +923,38 @@ export default function MissionaryApplication({ onBack, user }) {
     }
     setSubmitting(false);
   };
+
+  // Eligibility gate screens (checked above in useEffect). Rendered here,
+  // in the main component, so a blocked applicant sees the explanation
+  // immediately instead of after filling in the whole form.
+  if (blockedInfo === undefined) {
+    return (
+      <div style={{ minHeight:"100vh",background:"#060c18",color:"rgba(255,255,255,0.3)",fontFamily:"Georgia, serif",display:"flex",alignItems:"center",justifyContent:"center" }}>
+        Checking your account...
+      </div>
+    );
+  }
+
+  if (blockedInfo) {
+    return (
+      <div style={{ minHeight:"100vh",background:"#060c18",color:"#eef1ff",fontFamily:"Georgia, serif",display:"flex",alignItems:"center",justifyContent:"center",padding:"32px 20px" }}>
+        <div style={{ textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:20,maxWidth:440 }}>
+          <div style={{ width:80,height:80,borderRadius:"50%",background:"rgba(232,91,91,0.12)",border:"2px solid rgba(232,91,91,0.4)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:38 }}>⚠️</div>
+          <div>
+            <div style={{ fontSize:24,fontWeight:700,color:"#eef1ff",marginBottom:10 }}>New Applications Unavailable</div>
+            <div style={{ fontSize:14,color:"rgba(255,255,255,0.5)",lineHeight:1.8 }}>
+              Your account currently isn't able to submit new mission applications.<br/><br/>
+              {blockedInfo.reason
+                ? <div style={{ background:"rgba(232,91,91,0.08)",border:"1px solid rgba(232,91,91,0.2)",borderRadius:10,padding:"12px 16px",margin:"8px 0",textAlign:"left" }}><strong style={{color:"#e85b5b"}}>Reason given:</strong> {blockedInfo.reason}</div>
+                : null}
+              Please contact SendMe admin if you'd like to discuss this.
+            </div>
+          </div>
+          <button onClick={onBack} style={{ padding:"12px 28px",borderRadius:12,border:"1px solid rgba(255,255,255,0.15)",background:"transparent",color:"rgba(255,255,255,0.6)",cursor:"pointer",fontSize:14,fontFamily:"Georgia, serif" }}>Back to Home</button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ minHeight:"100vh",background:"#060c18",color:"#eef1ff",fontFamily:"Georgia, serif" }}>
