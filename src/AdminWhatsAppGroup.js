@@ -4,8 +4,9 @@
 // Create Account form) or on the Welcome screen. WhatsApp has no API for
 // programmatically adding members to a group, so this screen's job is simply
 // to make it fast for admin to add each number manually — a name/number
-// list, a one-tap "Copy" button, and a contacts file (.vcf) that saves every
-// not-yet-added person into the phone's address book in one go.
+// list, a one-tap "Copy" button, a contacts file (.vcf) that saves every
+// not-yet-added person into the phone's address book in one go, and an
+// Excel/Sheets-friendly .csv of everyone (with an Added Yes/No column).
 import { useState, useEffect } from "react";
 import { supabase } from "./supabase";
 
@@ -98,6 +99,50 @@ export default function AdminWhatsAppGroup({ onBack }) {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
+  // Spreadsheet export of EVERYONE who opted in (not only the not-yet-added),
+  // with an "Added to group" Yes/No column, so admin can keep it as a master
+  // list and update it on a phone. It's a .csv, which Excel and Google Sheets
+  // open directly.
+  //  - A UTF-8 BOM is added so names with accents (e.g. Afrikaans) show correctly in Excel.
+  //  - Numbers are written as ="+27..." so Excel keeps the + and all the digits
+  //    instead of turning long numbers into 2.7E+10.
+  //  - Names/emails that begin with = + - @ are prefixed with ' so a malicious
+  //    sign-up name can never run as a spreadsheet formula.
+  const downloadCsv = () => {
+    const quote = (v) => {
+      const t = String(v ?? "");
+      return /[",\r\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
+    };
+    const safeText = (v) => {
+      const t = String(v ?? "").replace(/[\r\n]+/g, " ").trim();
+      return /^[=+\-@\t]/.test(t) ? "'" + t : t;
+    };
+    const asTextCell = (v) => {
+      const t = String(v ?? "").replace(/[\r\n]+/g, " ").trim();
+      return t ? `="${t.replace(/"/g, '""')}"` : "";
+    };
+    const ordered = [...rows].sort((a, b) => Number(!!a.whatsapp_added_to_group) - Number(!!b.whatsapp_added_to_group));
+    const lines = [["Name", "WhatsApp number", "Email", "Added to group", "Signed up"].map(quote).join(",")];
+    ordered.forEach(r => {
+      lines.push([
+        quote(safeText(r.full_name || "Unnamed")),
+        quote(asTextCell(r.whatsapp_number)),
+        quote(safeText(r.email || "")),
+        r.whatsapp_added_to_group ? "Yes" : "No",
+        r.created_at ? String(r.created_at).slice(0, 10) : "",
+      ].join(","));
+    });
+    const blob = new Blob(["\uFEFF" + lines.join("\r\n") + "\r\n"], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "sendme-whatsapp-members.csv";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
   return (
     <div style={{ minHeight: "100vh", background: "#060c18", color: "#eef1ff", fontFamily: "Georgia, serif" }}>
       <div style={{ background: "#09111f", borderBottom: "1px solid rgba(255,255,255,0.07)", padding: "16px 24px", display: "flex", alignItems: "center", gap: 14, position: "sticky", top: 0, zIndex: 100 }}>
@@ -128,6 +173,10 @@ export default function AdminWhatsAppGroup({ onBack }) {
           <button onClick={downloadVcf} disabled={pending.length === 0}
             style={{ padding: "11px 18px", borderRadius: 10, border: "1px solid rgba(37,211,102,0.35)", background: "rgba(37,211,102,0.1)", color: "#25d366", fontWeight: 700, cursor: pending.length === 0 ? "default" : "pointer", opacity: pending.length === 0 ? 0.5 : 1, fontSize: 13, fontFamily: "Georgia, serif", whiteSpace: "nowrap" }}>
             ⬇ Save as Contacts (.vcf)
+          </button>
+          <button onClick={downloadCsv} disabled={rows.length === 0}
+            style={{ padding: "11px 18px", borderRadius: 10, border: "1px solid rgba(232,179,75,0.4)", background: "rgba(232,179,75,0.1)", color: "#e8b34b", fontWeight: 700, cursor: rows.length === 0 ? "default" : "pointer", opacity: rows.length === 0 ? 0.5 : 1, fontSize: 13, fontFamily: "Georgia, serif", whiteSpace: "nowrap" }}>
+            ⬇ Excel / Sheets (.csv)
           </button>
         </div>
 

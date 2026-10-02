@@ -2,7 +2,7 @@
 // following registration. Explains what SendMe does and plays the Vision &
 // Mission video front and center. Dismissing it (or navigating away) marks
 // profiles.has_seen_welcome = true, so it never shows again for that account.
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "./supabase";
 import YouTubeEmbed from "./YouTubeEmbed";
 import { FEATURED_VIDEOS } from "./sendmeVideos";
@@ -21,18 +21,64 @@ export default function WelcomeScreen({ user, onContinue }) {
   // admin step needed on this side.
   const [joinNewsletter, setJoinNewsletter] = useState(false);
 
+  // The Create Account form can already have captured a phone number and a
+  // WhatsApp opt-in (copied onto the profile by a database trigger). Load what
+  // is on file so this screen shows the person's earlier choice and never
+  // silently overwrites it.
+  const [loaded, setLoaded] = useState(false);            // finished trying to load the profile
+  const [profileKnown, setProfileKnown] = useState(false); // ...and it succeeded
+  const [prefilledWa, setPrefilledWa] = useState(false);   // opted in to WhatsApp at sign-up
+  useEffect(() => {
+    let cancelled = false;
+    const loadProfile = async () => {
+      try {
+        if (user?.id) {
+          const { data, error } = await supabase
+            .from("profiles")
+            .select("whatsapp_group_optin, whatsapp_number, newsletter_optin")
+            .eq("id", user.id)
+            .maybeSingle();
+          if (error) throw error;
+          if (data && !cancelled) {
+            if (data.whatsapp_number) setWhatsappNumber(data.whatsapp_number);
+            if (data.whatsapp_group_optin) { setJoinGroup(true); setPrefilledWa(true); }
+            setJoinNewsletter(!!data.newsletter_optin);
+            setProfileKnown(true);
+          }
+        }
+      } catch (e) {
+        console.error("WelcomeScreen: could not load existing opt-ins", e);
+      }
+      if (!cancelled) setLoaded(true);
+    };
+    loadProfile();
+    return () => { cancelled = true; };
+  }, [user?.id]);
+
   const handleContinue = async () => {
     setSaving(true);
     try {
       if (user?.id) {
+        // Build the update so an earlier choice is never wiped:
+        //  - WhatsApp: ticked → opt in and save the number. Unticked → only
+        //    switch the opt-in off (and only if we know what was on file); a
+        //    number given at sign-up stays on file, it is never nulled here.
+        //  - Newsletter: the box starts from what is on file, so writing its
+        //    state back can't undo an earlier opt-in. If the profile couldn't
+        //    be read, only ever write "true" — never guess "false".
+        const update = { has_seen_welcome: true };
+        if (joinGroup) {
+          update.whatsapp_group_optin = true;
+          update.whatsapp_number = whatsappNumber.trim();
+        } else if (profileKnown) {
+          update.whatsapp_group_optin = false;
+        }
+        if (joinNewsletter) update.newsletter_optin = true;
+        else if (profileKnown) update.newsletter_optin = false;
+
         const { error } = await supabase
           .from("profiles")
-          .update({
-            has_seen_welcome: true,
-            whatsapp_group_optin: joinGroup,
-            whatsapp_number: joinGroup ? (whatsappNumber || null) : null,
-            newsletter_optin: joinNewsletter,
-          })
+          .update(update)
           .eq("id", user.id);
         // Same rule as everywhere else in this app: Supabase's JS client
         // does NOT throw on a failed update, so this must be checked
@@ -108,6 +154,11 @@ export default function WelcomeScreen({ user, onContinue }) {
               <div style={{ fontSize: 12.5, color: "rgba(255,255,255,0.5)", lineHeight: 1.65 }}>
                 Get every approved mission, emergency need, and helper request posted straight to a WhatsApp group — plus monthly reports and testimonies from the field.
               </div>
+              {prefilledWa && (
+                <div style={{ fontSize: 12, color: "#25d366", marginTop: 6, lineHeight: 1.5 }}>
+                  ✓ You chose this when you signed up. Untick it if you've changed your mind.
+                </div>
+              )}
             </div>
           </div>
           {joinGroup && (
@@ -159,17 +210,17 @@ export default function WelcomeScreen({ user, onContinue }) {
 
         <button
           onClick={handleContinue}
-          disabled={saving || !canContinue}
+          disabled={saving || !canContinue || !loaded}
           style={{
             padding: "14px 36px", borderRadius: 14, border: "none",
             background: "linear-gradient(135deg,#e8b34b,#c8942b)", color: "#000",
-            fontWeight: 700, cursor: (saving || !canContinue) ? "default" : "pointer",
+            fontWeight: 700, cursor: (saving || !canContinue || !loaded) ? "default" : "pointer",
             fontSize: 15, fontFamily: "Georgia, serif",
             boxShadow: "0 6px 24px rgba(232,179,75,0.4)",
-            opacity: (saving || !canContinue) ? 0.7 : 1,
+            opacity: (saving || !canContinue || !loaded) ? 0.7 : 1,
           }}
         >
-          {saving ? "One moment..." : !canContinue ? "Enter your WhatsApp number above" : "Continue to SendMe →"}
+          {saving || !loaded ? "One moment..." : !canContinue ? "Enter your WhatsApp number above" : "Continue to SendMe →"}
         </button>
 
         <div style={{ marginTop: 32, fontSize: 13, color: "#e8b34b", fontStyle: "italic" }}>
