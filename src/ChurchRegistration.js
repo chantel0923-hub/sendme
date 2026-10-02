@@ -46,6 +46,16 @@ const SIZES     = ["Under 50","50 – 100","100 – 300","300 – 500","500 – 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_RE = /^\+?[0-9\s\-()]{7,20}$/;
 
+// References are contacted by admin on WhatsApp, so each one must be a full
+// international number (+ and country code). Returns "+27821234567" style,
+// or "" if it isn't usable.
+const normalizeWhatsApp = (raw) => {
+  const t = String(raw || "").trim();
+  if (!t.startsWith("+")) return "";
+  const d = t.replace(/\D/g, "");
+  return /^\d{8,15}$/.test(d) ? "+" + d : "";
+};
+
 // Same hardcoded fallback used in MapboxMap.js — Vercel renames REACT_APP_
 // prefixed env vars, so process.env.REACT_APP_MAPBOX_TOKEN is undefined in
 // production. This caused new church registrations to always save with
@@ -216,17 +226,18 @@ const Step3 = ({ form, set, isOrg }) => (
     <div style={{ background:"rgba(232,179,75,0.07)",borderRadius:12,border:"1px solid rgba(232,179,75,0.2)",padding:"12px 16px",marginBottom:20 }}>
       <div style={{ fontSize:13,color:"rgba(255,255,255,0.5)",lineHeight:1.7 }}>
         {isOrg
-          ? <>Please provide <strong style={{color:"#e8b34b"}}>two board members</strong> who can confirm your organization's legitimacy. Admin will contact them before verifying your organization.</>
-          : <>Please provide <strong style={{color:"#e8b34b"}}>two independent Message pastor references</strong> who can confirm your church's legitimacy. Admin will contact them before verifying your church.</>}
+          ? <>Please provide <strong style={{color:"#e8b34b"}}>two board members</strong> who can confirm your organization's legitimacy. Admin will contact them <strong style={{color:"#e8b34b"}}>on WhatsApp</strong> before verifying your organization.</>
+          : <>Please provide <strong style={{color:"#e8b34b"}}>two independent Message pastor references</strong> who can confirm your church's legitimacy. Admin will contact them <strong style={{color:"#e8b34b"}}>on WhatsApp</strong> before verifying your church.</>}
       </div>
     </div>
     <div style={{ fontSize:14,fontWeight:700,color:"#e8b34b",marginBottom:12 }}>{isOrg ? "Board Member 1" : "Reference 1"}</div>
     <FInput label={isOrg ? "Board Member Name *" : "Pastor Name *"} placeholder={isOrg ? "e.g. John Adeyemi" : "e.g. Pastor Johan van der Merwe"} value={form.reference1Name} onChange={e=>set("reference1Name",e.target.value)}/>
-    <FInput label="Contact (Email or Phone) *" placeholder="e.g. name@org.org or +27 82 000 0000" value={form.reference1Contact} onChange={e=>set("reference1Contact",e.target.value)}/>
+    <FInput label="WhatsApp Number (with country code) *" type="tel" inputMode="tel" placeholder="e.g. +27 82 000 0000" value={form.reference1Contact} onChange={e=>set("reference1Contact",e.target.value)}/>
     <div style={{ height:1,background:"rgba(255,255,255,0.07)",margin:"16px 0 20px" }}/>
     <div style={{ fontSize:14,fontWeight:700,color:"#e8b34b",marginBottom:12 }}>{isOrg ? "Board Member 2" : "Reference 2"}</div>
     <FInput label={isOrg ? "Board Member Name *" : "Pastor Name *"} placeholder={isOrg ? "e.g. Ruth Adeyemi" : "e.g. Pastor Frikkie Pretorius"} value={form.reference2Name} onChange={e=>set("reference2Name",e.target.value)}/>
-    <FInput label="Contact (Email or Phone) *" placeholder="e.g. name@org.org or +27 83 000 0000" value={form.reference2Contact} onChange={e=>set("reference2Contact",e.target.value)}/>
+    <FInput label="WhatsApp Number (with country code) *" type="tel" inputMode="tel" placeholder="e.g. +27 83 000 0000" value={form.reference2Contact} onChange={e=>set("reference2Contact",e.target.value)}/>
+    <div style={{ fontSize:11,color:"rgba(255,255,255,0.35)",marginTop:-6,lineHeight:1.6 }}>Use each person's WhatsApp number and start with + and the country code (for example +27 for South Africa).</div>
   </div>
 );
 
@@ -404,9 +415,9 @@ const validate = (step, form, isOrg=false) => {
   }
   if (step===3) {
     if (!form.reference1Name.trim())    return isOrg ? "Please enter your first board member's name." : "Please enter your first reference pastor's name.";
-    if (!form.reference1Contact.trim()) return isOrg ? "Please enter your first board member's contact." : "Please enter your first reference pastor's contact.";
+    if (!normalizeWhatsApp(form.reference1Contact)) return isOrg ? "Please enter your first board member's WhatsApp number with the country code (e.g. +27 82 000 0000)." : "Please enter your first reference pastor's WhatsApp number with the country code (e.g. +27 82 000 0000).";
     if (!form.reference2Name.trim())    return isOrg ? "Please enter your second board member's name." : "Please enter your second reference pastor's name.";
-    if (!form.reference2Contact.trim()) return isOrg ? "Please enter your second board member's contact." : "Please enter your second reference pastor's contact.";
+    if (!normalizeWhatsApp(form.reference2Contact)) return isOrg ? "Please enter your second board member's WhatsApp number with the country code (e.g. +27 83 000 0000)." : "Please enter your second reference pastor's WhatsApp number with the country code (e.g. +27 83 000 0000).";
   }
   if (step===4) {
     const allChecked = ["believesMessage","believesTrinity","believesBible","believesMission","agreesEscrow","agreesAccountability"].every(k=>form[k]);
@@ -496,9 +507,9 @@ export default function ChurchRegistration({ onBack, user, userRole }) {
         can_endorse:         form.canEndorse,
         show_phone_public:   form.showPhonePublic,
         reference_1_name:    form.reference1Name,
-        reference_1_contact: form.reference1Contact,
+        reference_1_contact: normalizeWhatsApp(form.reference1Contact) || form.reference1Contact.trim(),
         reference_2_name:    form.reference2Name,
-        reference_2_contact: form.reference2Contact,
+        reference_2_contact: normalizeWhatsApp(form.reference2Contact) || form.reference2Contact.trim(),
         verified:     false,
         user_id:      user?.id || null,
         entity_type:  isOrg ? "organization" : "church",

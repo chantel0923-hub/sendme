@@ -8,6 +8,18 @@ import { sendNotification } from "./notifications";
 // Opens compose in the SendMe Gmail account specifically (not the browser/OS default mail app).
 const SENDME_GMAIL = "sendmemissionfund@gmail.com";
 
+// Digits for a wa.me link from an applicant's phone, or "" if it isn't a usable
+// international number. (Anonymous "shadow mode" applicants have no phone saved.)
+const waDigits = (raw, country) => {
+  const t = String(raw || "").trim();
+  if (!t) return "";
+  const d = t.replace(/\D/g, "");
+  if (t.startsWith("+")) return d.length >= 8 && d.length <= 15 ? d : "";
+  if (d.startsWith("00")) return d.length >= 10 ? d.slice(2) : "";
+  if (d.startsWith("0") && d.length === 10 && /south africa/i.test(country || "")) return "27" + d.slice(1);
+  return "";
+};
+
 const fmt = (n) => String(Math.round(n || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 
 const timeAgo = (dateStr) => {
@@ -592,6 +604,17 @@ export default function AdminApprovals({ onBack, user }) {
                       target="_blank" rel="noopener noreferrer"
                       style={{ display: "block", textAlign: "center", textDecoration: "none", marginBottom: 12, padding: "11px 0", borderRadius: 10, border: "1px solid rgba(91,156,246,0.35)", background: "rgba(91,156,246,0.08)", color: "#5b9cf6", fontWeight: 700, fontSize: 13, fontFamily: "Georgia, serif" }}>
                       ✉️ Email Applicant — Ask a Question
+                    </a>
+                  )}
+
+                  {/* WhatsApp Applicant — works on any device, no Gmail account needed.
+                      Opens WhatsApp with the message written; admin taps Send. */}
+                  {isPending && waDigits(m.applicant_phone, m.applicant_current_country) && (
+                    <a
+                      href={`https://wa.me/${waDigits(m.applicant_phone, m.applicant_current_country)}?text=${encodeURIComponent(`Hello ${m.missionary_name || ""}, this is SendMe Global Mission Fund about your mission application "${m.title || "your mission"}". Before we can make a decision, we have a few questions:\n\n1. \n\nPlease reply here with your answers. God bless you.`)}`}
+                      target="_blank" rel="noopener noreferrer"
+                      style={{ display: "block", textAlign: "center", textDecoration: "none", marginBottom: 12, padding: "11px 0", borderRadius: 10, border: "1px solid rgba(37,211,102,0.4)", background: "rgba(37,211,102,0.08)", color: "#25d366", fontWeight: 700, fontSize: 13, fontFamily: "Georgia, serif" }}>
+                      💬 WhatsApp Applicant — Ask a Question
                     </a>
                   )}
 

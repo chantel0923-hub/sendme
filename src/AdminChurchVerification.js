@@ -14,6 +14,44 @@ const timeAgo = (dateStr) => {
   return `${Math.floor(diff / 86400)}d ago`;
 };
 
+// ── WhatsApp reference checks ───────────────────────────────────────────────
+// References are now collected as WhatsApp numbers. The app can't send a
+// WhatsApp message by itself (WhatsApp has no free API for that), so the button
+// opens WhatsApp with the message already written and the number filled in —
+// admin just taps Send.
+//
+// Returns digits for a wa.me link, or "" if the contact isn't a usable number
+// (e.g. an email from an older registration).
+const waDigits = (contact, country) => {
+  const raw = String(contact || "").trim();
+  if (!raw || raw.includes("@")) return "";
+  const d = raw.replace(/\D/g, "");
+  if (raw.startsWith("+")) return d.length >= 8 && d.length <= 15 ? d : "";
+  if (d.startsWith("00")) return d.length >= 10 ? d.slice(2) : "";
+  // Older registrations may hold a local South African number like 082 000 0000.
+  if (d.startsWith("0") && d.length === 10 && /south africa/i.test(country || "")) return "27" + d.slice(1);
+  return "";
+};
+
+const buildReferenceMessage = (c, refName, isOrgRow) => {
+  const place = c.city ? ` in ${c.city}${c.country ? ", " + c.country : ""}` : "";
+  const leader = c.pastor_name || "the leader";
+  const entity = c.name || (isOrgRow ? "this organization" : "this church");
+  return [
+    `Hello ${refName || "there"}, greetings in the name of Jesus.`,
+    "",
+    "This is SendMe Global Mission Fund (sendmeglobalmission.org), a platform that connects Message-believing churches, missionaries and donors.",
+    "",
+    `${leader} has registered ${entity}${place} on SendMe and listed you as a ${isOrgRow ? "board member" : "pastor"} reference. Before we verify them, could you please confirm:`,
+    `1. Do you personally know ${leader}?`,
+    isOrgRow
+      ? `2. Is ${entity} a genuine organization doing the work it says it does?`
+      : `2. Is ${entity} a genuine, Message-believing church?`,
+    "",
+    "A short reply here is all we need. Thank you, and God bless you.",
+  ].join("\n");
+};
+
 // Same geocoding helper used in ChurchRegistration.js — re-run here in case
 // the original registration silently failed to get coordinates (e.g. missing
 // Mapbox token in that environment, API hiccup, etc).
@@ -216,6 +254,7 @@ export default function AdminChurchVerification({ onBack, user }) {
   };
 
   const [refEmailSent, setRefEmailSent] = useState({});
+  const [refWaSent, setRefWaSent] = useState({}); // "churchId:1" -> true once admin opened WhatsApp (this session only)
 
   const sendReferenceEmails = async (c) => {
     const refs = [
@@ -254,6 +293,35 @@ export default function AdminChurchVerification({ onBack, user }) {
     } else {
       alert(`⚠ Partial send — reached ${succeeded.join(", ")}, but failed for ${failed.map(f=>f.contact).join(", ")}.\nError: ${JSON.stringify(failed[0].error)}`);
     }
+  };
+
+  // One reference line + its WhatsApp button (or an explanation if there's no usable number).
+  const renderRefRow = (c, n, isOrgRow) => {
+    const name = c[`reference_${n}_name`];
+    const contact = c[`reference_${n}_contact`];
+    if (!name) return null;
+    const digits = waDigits(contact, c.country);
+    const isEmail = String(contact || "").includes("@");
+    const key = `${c.id}:${n}`;
+    const sent = !!refWaSent[key];
+    return (
+      <div style={{ marginBottom: 10 }}>
+        <div><strong style={{ color: "rgba(255,255,255,0.8)" }}>{isOrgRow ? "Board Member" : "Reference"} {n}:</strong> {name}{contact ? ` · ${contact}` : ""}</div>
+        {digits ? (
+          <a
+            href={`https://wa.me/${digits}?text=${encodeURIComponent(buildReferenceMessage(c, name, isOrgRow))}`}
+            target="_blank" rel="noopener noreferrer"
+            onClick={() => setRefWaSent(prev => ({ ...prev, [key]: true }))}
+            style={{ display: "inline-block", marginTop: 6, padding: "7px 14px", borderRadius: 10, border: "1px solid rgba(37,211,102,0.4)", background: sent ? "rgba(37,211,102,0.16)" : "rgba(37,211,102,0.08)", color: "#25d366", fontWeight: 700, fontSize: 12, textDecoration: "none", fontFamily: "Georgia, serif" }}>
+            {sent ? `✓ WhatsApp opened for ${name}` : `💬 WhatsApp ${name}`}
+          </a>
+        ) : (
+          <div style={{ fontSize: 11, marginTop: 4, color: isEmail ? "rgba(255,255,255,0.4)" : "#e85b5b" }}>
+            {isEmail ? "Older registration — email contact only." : "No usable WhatsApp number (it needs the country code) — contact them another way."}
+          </div>
+        )}
+      </div>
+    );
   };
 
   // Fixes churches that registered with missing lat/lng (e.g. the Mapbox
@@ -400,12 +468,9 @@ export default function AdminChurchVerification({ onBack, user }) {
                   {(c.reference_1_name || c.reference_2_name) && (
                     <div style={{ background: "rgba(232,179,75,0.07)", borderRadius: 12, border: "1px solid rgba(232,179,75,0.2)", padding: "14px 16px", marginBottom: 14, fontSize: 13, color: "rgba(255,255,255,0.6)", lineHeight: 1.9 }}>
                       <div style={{ fontSize: 12, color: "#e8b34b", fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 8 }}>{isOrgRow ? "Board Member References" : "Pastor References"}</div>
-                      {c.reference_1_name && (
-                        <div><strong style={{ color: "rgba(255,255,255,0.8)" }}>{isOrgRow ? "Board Member 1:" : "Reference 1:"}</strong> {c.reference_1_name}{c.reference_1_contact ? ` · ${c.reference_1_contact}` : ""}</div>
-                      )}
-                      {c.reference_2_name && (
-                        <div><strong style={{ color: "rgba(255,255,255,0.8)" }}>{isOrgRow ? "Board Member 2:" : "Reference 2:"}</strong> {c.reference_2_name}{c.reference_2_contact ? ` · ${c.reference_2_contact}` : ""}</div>
-                      )}
+                      {renderRefRow(c, 1, isOrgRow)}
+                      {renderRefRow(c, 2, isOrgRow)}
+                      {[c.reference_1_contact, c.reference_2_contact].some(x => String(x || "").includes("@")) && (
                       <button onClick={() => sendReferenceEmails(c)}
                         style={{ marginTop:12, padding:"9px 16px", borderRadius:10,
                           border:"1px solid rgba(232,179,75,0.4)",
@@ -414,6 +479,7 @@ export default function AdminChurchVerification({ onBack, user }) {
                           cursor:"pointer", fontSize:12, fontFamily:"Georgia, serif", fontWeight:600 }}>
                         {refEmailSent[c.id] ? "✓ Emails Sent" : "📧 Send Reference Confirmation Emails"}
                       </button>
+                      )}
                     </div>
                   )}
                   {!c.reference_1_name && !c.reference_2_name && (
