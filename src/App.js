@@ -30,6 +30,7 @@ import AdminEmergencyRequests from './AdminEmergencyRequests';
 import AdminWhatsAppGroup from './AdminWhatsAppGroup';
 import AdminMonthlyReport from './AdminMonthlyReport';
 import AdminUsers from './AdminUsers';
+import NewsletterPrompt from './NewsletterPrompt';
 import NotificationOptIn from './NotificationOptIn';
 import AddToHomeScreenPrompt from './AddToHomeScreenPrompt';
 import FamilyNeeds from './FamilyNeeds';
@@ -1705,6 +1706,7 @@ const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, o
       <div style={{ maxWidth:900,margin:"0 auto",padding:"24px 20px" }}>
         <AddToHomeScreenPrompt/>
         {user && <NotificationOptIn user={user}/>}
+        {user && <NewsletterPrompt user={user}/>}
         <div style={{ marginBottom:24 }}>
           {loading?<LoadingMap/>:<MapboxMap missions={missions} onMissionClick={onMission}/>}
         </div>
