@@ -7,6 +7,12 @@ import { FEATURED_VIDEOS } from "./sendmeVideos";
 // "Email OTP expiration" setting in Supabase (Authentication → Sign In / Providers → Email).
 const CONFIRM_LINK_HOURS = 24;
 
+// The WhatsApp number new members message when their confirmation email never
+// arrives ("Ask SendMe to activate me on WhatsApp"). Digits with the country
+// code — spaces and + are ignored, e.g. "+27 82 123 4567". While this is empty
+// the button is simply hidden.
+const SENDME_WHATSAPP_NUMBER = "+27 72 624 0395";
+
 // Dial codes for the phone field. `iso` is the unique key (the USA and Canada
 // share +1, so the code alone can't identify the selected row).
 const COUNTRY_CODES = [
@@ -113,6 +119,10 @@ export default function Auth({ onLogin, onGuest }) {
   const [resendMsg, setResendMsg]         = useState("");
   const [resendCooldown, setResendCooldown] = useState(0);
 
+  // 6-digit code from the confirmation email (an alternative to tapping the link)
+  const [otpCode, setOtpCode]     = useState("");
+  const [verifying, setVerifying] = useState(false);
+
   // Supabase only allows one confirmation email per 60 seconds per address.
   useEffect(() => {
     if (resendCooldown <= 0) return;
@@ -182,7 +192,7 @@ export default function Auth({ onLogin, onGuest }) {
     // client-side insert would fail RLS (auth.uid() is null at that point).
     // The phone number and WhatsApp opt-in travel in the sign-up metadata and
     // are copied onto the profile by a second trigger (on_auth_user_created_whatsapp).
-    setSuccess("Account created! Please check your email to verify your account.");
+    setSuccess("Account created! We've emailed you a 6-digit code. Enter it below, or tap the button in the email.");
     setRegistered(true);
     setResendCooldown(60); // the first email was just sent
   };
@@ -197,6 +207,36 @@ export default function Auth({ onLogin, onGuest }) {
     if (error) { setError(error.message); return; }
     setResendMsg("A new confirmation email is on its way. Please check your inbox and your Spam folder.");
     setResendCooldown(60);
+  };
+
+  // Confirms the account with the 6-digit code from the email, which also signs
+  // the person in. Supabase's current call is type "email"; "signup" is the older
+  // name for the same thing, so it is tried as a fallback.
+  const handleVerifyCode = async () => {
+    const addr = email.trim();
+    const code = otpCode.replace(/\D/g, "");
+    if (!addr) { setError("Please enter your email address above first."); return; }
+    if (code.length < 6) { setError("Please enter the 6-digit code from your email."); return; }
+    if (verifying) return;
+    setVerifying(true); setError("");
+    let res = await supabase.auth.verifyOtp({ email: addr, token: code, type: "email" });
+    if (res.error) res = await supabase.auth.verifyOtp({ email: addr, token: code, type: "signup" });
+    setVerifying(false);
+    if (res.error || !res.data?.user) {
+      setError("That code didn't work. Please check it and try again, or tap \"Resend\" below for a new one.");
+      return;
+    }
+    onLogin(res.data.user);
+  };
+
+  // "Ask SendMe to activate me on WhatsApp" — opens WhatsApp with the message
+  // already written. Returns "" (button hidden) until a number is set above.
+  const activationLink = () => {
+    const digits = String(SENDME_WHATSAPP_NUMBER || "").replace(/\D/g, "");
+    if (!digits) return "";
+    const who = name.trim() ? `I am ${name.trim()} and ` : "";
+    const msg = `Hello SendMe, ${who}I registered on the SendMe app with this email: ${email.trim()}. I did not get my confirmation email. Please activate my account. God bless you.`;
+    return `https://wa.me/${digits}?text=${encodeURIComponent(msg)}`;
   };
 
   const handleForgotPassword = async () => {
@@ -397,34 +437,89 @@ export default function Auth({ onLogin, onGuest }) {
             </div>
           )}
 
-          {/* ── Confirmation-email help (after sign-up, or sign-in before confirming) ── */}
+          {/* ── Confirmation help (after sign-up, or sign-in before confirming) ── */}
           {(registered || needsConfirm) && (
-            <div style={{
-              background: "rgba(232,179,75,0.08)", border: "1px solid rgba(232,179,75,0.25)",
-              borderRadius: 10, padding: "12px 14px", marginBottom: 16,
-              fontSize: 13, color: "rgba(255,255,255,0.7)", lineHeight: 1.7,
-            }}>
-              <div style={{ color: "#e8b34b", fontWeight: 700, marginBottom: 4 }}>📬 Can't find the email?</div>
-              <div>
-                Please check your <strong>Spam</strong>, <strong>Junk</strong> or <strong>Promotions</strong> folder —
-                confirmation emails often end up there. The link stays valid for {CONFIRM_LINK_HOURS} hours.
+            <>
+              {/* Option 1: type the 6-digit code from the email */}
+              <div style={{
+                background: "rgba(91,156,246,0.07)", border: "1px solid rgba(91,156,246,0.25)",
+                borderRadius: 10, padding: "12px 14px", marginBottom: 12,
+              }}>
+                <div style={{ color: "#5b9cf6", fontWeight: 700, fontSize: 13, marginBottom: 8 }}>🔢 Enter the 6-digit code from your email</div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <input
+                    type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={8}
+                    value={otpCode}
+                    onChange={e => setOtpCode(e.target.value.replace(/\D/g, ""))}
+                    onKeyDown={e => { if (e.key === "Enter") handleVerifyCode(); }}
+                    placeholder="123456"
+                    aria-label="6-digit confirmation code"
+                    style={{ ...inp, marginBottom: 0, flex: 1, minWidth: 0, letterSpacing: 4, textAlign: "center", fontSize: 18 }}
+                  />
+                  <button
+                    type="button" onClick={handleVerifyCode}
+                    disabled={verifying || otpCode.length < 6}
+                    style={{
+                      padding: "0 18px", borderRadius: 10, border: "none", fontWeight: 700, fontSize: 14,
+                      fontFamily: "Georgia, serif", background: "linear-gradient(135deg,#e8b34b,#c8942b)", color: "#000",
+                      cursor: (verifying || otpCode.length < 6) ? "default" : "pointer",
+                      opacity: (verifying || otpCode.length < 6) ? 0.6 : 1,
+                    }}
+                  >
+                    {verifying ? "Checking..." : "Verify"}
+                  </button>
+                </div>
+                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginTop: 8, lineHeight: 1.5 }}>
+                  You can also tap the button in the email instead — either one works.
+                </div>
               </div>
-              {resendMsg && <div style={{ color: "#3ecf8e", marginTop: 8 }}>✓ {resendMsg}</div>}
-              <button
-                type="button"
-                onClick={handleResend}
-                disabled={resending || resendCooldown > 0}
-                style={{
-                  marginTop: 10, width: "100%", padding: "10px 0", borderRadius: 10,
-                  border: "1px solid rgba(232,179,75,0.4)", background: "rgba(232,179,75,0.1)",
-                  color: "#e8b34b", fontWeight: 700, fontSize: 13, fontFamily: "Georgia, serif",
-                  cursor: (resending || resendCooldown > 0) ? "default" : "pointer",
-                  opacity: (resending || resendCooldown > 0) ? 0.6 : 1,
-                }}
-              >
-                {resending ? "Sending..." : resendCooldown > 0 ? `Resend available in ${resendCooldown}s` : "✉ Resend confirmation email"}
-              </button>
-            </div>
+
+              {/* Option 2: can't find it */}
+              <div style={{
+                background: "rgba(232,179,75,0.08)", border: "1px solid rgba(232,179,75,0.25)",
+                borderRadius: 10, padding: "12px 14px", marginBottom: 16,
+                fontSize: 13, color: "rgba(255,255,255,0.7)", lineHeight: 1.7,
+              }}>
+                <div style={{ color: "#e8b34b", fontWeight: 700, marginBottom: 4 }}>📬 Can't find the email?</div>
+                <div>
+                  Please check your <strong>Spam</strong>, <strong>Junk</strong> or <strong>Promotions</strong> folder —
+                  confirmation emails often end up there. The code and the button stay valid for {CONFIRM_LINK_HOURS} hours.
+                </div>
+                {resendMsg && <div style={{ color: "#3ecf8e", marginTop: 8 }}>✓ {resendMsg}</div>}
+                <button
+                  type="button"
+                  onClick={handleResend}
+                  disabled={resending || resendCooldown > 0}
+                  style={{
+                    marginTop: 10, width: "100%", padding: "10px 0", borderRadius: 10,
+                    border: "1px solid rgba(232,179,75,0.4)", background: "rgba(232,179,75,0.1)",
+                    color: "#e8b34b", fontWeight: 700, fontSize: 13, fontFamily: "Georgia, serif",
+                    cursor: (resending || resendCooldown > 0) ? "default" : "pointer",
+                    opacity: (resending || resendCooldown > 0) ? 0.6 : 1,
+                  }}
+                >
+                  {resending ? "Sending..." : resendCooldown > 0 ? `Resend available in ${resendCooldown}s` : "✉ Resend confirmation email"}
+                </button>
+                {activationLink() && (
+                  <>
+                    <a
+                      href={activationLink()} target="_blank" rel="noopener noreferrer"
+                      style={{
+                        display: "block", textAlign: "center", textDecoration: "none", marginTop: 10,
+                        padding: "10px 0", borderRadius: 10, border: "1px solid rgba(37,211,102,0.4)",
+                        background: "rgba(37,211,102,0.08)", color: "#25d366", fontWeight: 700,
+                        fontSize: 13, fontFamily: "Georgia, serif",
+                      }}
+                    >
+                      💬 Still nothing? Ask SendMe to activate me on WhatsApp
+                    </a>
+                    <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginTop: 6, lineHeight: 1.5 }}>
+                      SendMe will activate your account and message you back. Then just sign in with your email and password.
+                    </div>
+                  </>
+                )}
+              </div>
+            </>
           )}
 
           {/* ── Register-only fields ── */}

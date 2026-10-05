@@ -2,7 +2,13 @@
 // Admin-only screen listing every registered SendMe user (from `profiles`),
 // with search and a role filter. Read-only — nothing here edits a profile.
 //
-// NOTE: this depends on the "Admin can read all profiles" RLS policy on
+// It also shows a "Waiting for verification" section: members whose email was
+// never confirmed (confirmation email lost, in spam, or the link expired), each
+// with a one-tap Confirm. That goes through the admin-only `confirm-user` Edge
+// Function (it needs the service-role key, which must never reach the browser).
+// Deploy it with:  supabase functions deploy confirm-user --use-api
+//
+// NOTE: the list below depends on the "Admin can read all profiles" RLS policy on
 // `profiles`. Without it Supabase only returns the admin's own row, which is
 // why the header badge used to say "1 registered user". If the list shows
 // only one person, that policy is missing.
@@ -11,6 +17,24 @@ import { supabase } from "./supabase";
 
 const PAGE = 1000; // Supabase returns at most 1000 rows per request by default
 
+// Digits for a wa.me link, or "" if the number isn't a usable international number.
+const waDigits = (raw) => {
+  const t = String(raw || "").trim();
+  const d = t.replace(/\D/g, "");
+  if (t.startsWith("+")) return d.length >= 8 && d.length <= 15 ? d : "";
+  if (d.startsWith("00")) return d.length >= 10 ? d.slice(2) : "";
+  return "";
+};
+
+// Edge Function errors arrive wrapped; pull out the server's own message if there is one.
+const readFnError = async (e) => {
+  try {
+    const j = await e?.context?.json?.();
+    if (j?.error) return j.error;
+  } catch (_ignore) { /* not JSON */ }
+  return e?.message || "Unknown error";
+};
+
 export default function AdminUsers({ onBack }) {
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(null);
@@ -18,6 +42,14 @@ export default function AdminUsers({ onBack }) {
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
+
+  // Members waiting for email verification (from the confirm-user Edge Function)
+  const [unverified, setUnverified] = useState(null);   // null = still loading
+  const [unvError, setUnvError] = useState("");
+  const [unvKey, setUnvKey] = useState(0);               // bump to reload the list
+  const [confirmingId, setConfirmingId] = useState(null);
+  const [confirmedIds, setConfirmedIds] = useState({});  // activated during this visit
+  const [confirmError, setConfirmError] = useState("");
 
   useEffect(() => {
     const load = async () => {
@@ -43,6 +75,40 @@ export default function AdminUsers({ onBack }) {
     };
     load();
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadUnverified = async () => {
+      setUnvError("");
+      try {
+        const { data, error: err } = await supabase.functions.invoke("confirm-user", { body: { action: "list_unverified" } });
+        if (err) throw err;
+        if (data?.error) throw new Error(data.error);
+        if (!cancelled) setUnverified(data?.users || []);
+      } catch (e) {
+        const msg = await readFnError(e);
+        if (!cancelled) { setUnverified([]); setUnvError(msg); }
+      }
+    };
+    loadUnverified();
+    return () => { cancelled = true; };
+  }, [unvKey]);
+
+  const confirmUser = async (u) => {
+    const label = `${u.full_name || "this member"} (${u.email})`;
+    if (!window.confirm(`Activate ${label}?\n\nOnly do this if you know them and the email address is spelled correctly.`)) return;
+    setConfirmingId(u.id);
+    setConfirmError("");
+    try {
+      const { data, error: err } = await supabase.functions.invoke("confirm-user", { body: { action: "confirm", user_id: u.id } });
+      if (err) throw err;
+      if (data?.error) throw new Error(data.error);
+      setConfirmedIds(prev => ({ ...prev, [u.id]: true }));
+    } catch (e) {
+      setConfirmError(`Could not activate ${u.email}: ${await readFnError(e)}`);
+    }
+    setConfirmingId(null);
+  };
 
   const roles = Array.from(new Set(rows.map(r => r.role).filter(Boolean))).sort();
 
@@ -96,6 +162,78 @@ export default function AdminUsers({ onBack }) {
       </div>
 
       <div style={{ maxWidth: 760, margin: "0 auto", padding: "24px 20px 60px" }}>
+        {/* ── Waiting for verification ── */}
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: 1.4, textTransform: "uppercase", color: "#e8b34b" }}>
+              ⏳ Waiting for verification{unverified ? ` (${unverified.filter(u => !confirmedIds[u.id]).length})` : ""}
+            </div>
+            <button onClick={() => { setUnverified(null); setUnvKey(k => k + 1); }}
+              style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, padding: "5px 12px", color: "rgba(255,255,255,0.5)", cursor: "pointer", fontSize: 12, fontFamily: "Georgia, serif" }}>
+              ↻ Refresh
+            </button>
+          </div>
+
+          {unverified === null && <div style={{ fontSize: 13, color: "rgba(255,255,255,0.3)" }}>Checking...</div>}
+
+          {unvError && (
+            <div style={{ background: "rgba(240,82,82,0.1)", border: "1px solid rgba(240,82,82,0.3)", borderRadius: 10, padding: "10px 14px", fontSize: 12, color: "#f05252", lineHeight: 1.6 }}>
+              ⚠ Couldn't check for members waiting for verification. ({unvError}) If this is the first time, the <strong>confirm-user</strong> function may not be deployed yet:<br />
+              <code>supabase functions deploy confirm-user --use-api</code>
+            </div>
+          )}
+
+          {confirmError && (
+            <div style={{ background: "rgba(240,82,82,0.1)", border: "1px solid rgba(240,82,82,0.3)", borderRadius: 10, padding: "10px 14px", marginBottom: 10, fontSize: 12, color: "#f05252" }}>⚠ {confirmError}</div>
+          )}
+
+          {unverified && !unvError && unverified.length === 0 && (
+            <div style={{ fontSize: 13, color: "#3ecf8e" }}>✓ Nobody is waiting for verification.</div>
+          )}
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {(unverified || []).map(u => {
+              const p = rows.find(r => r.id === u.id);
+              const nm = u.full_name || p?.full_name || "Unnamed";
+              const digits = waDigits(p?.whatsapp_number || u.whatsapp_number);
+              const done = !!confirmedIds[u.id];
+              const first = nm.split(" ")[0];
+              const tell = `Hello ${first}, your SendMe account is now active. Please go to sendmeglobalmission.org and sign in with your email and password. God bless you.`;
+              return (
+                <div key={u.id} style={{ background: done ? "rgba(62,207,142,0.06)" : "#0c1628", borderRadius: 12, border: `1px solid ${done ? "rgba(62,207,142,0.3)" : "rgba(232,179,75,0.25)"}`, padding: "12px 14px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, flexWrap: "wrap" }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700 }}>{nm}</div>
+                      <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", marginTop: 2, wordBreak: "break-all" }}>{u.email}</div>
+                      <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", marginTop: 2 }}>
+                        {u.role ? `${u.role} · ` : ""}signed up {joined(u.created_at)}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                      {done ? (
+                        <>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: "#3ecf8e" }}>✓ Activated</span>
+                          {digits && (
+                            <a href={`https://wa.me/${digits}?text=${encodeURIComponent(tell)}`} target="_blank" rel="noopener noreferrer"
+                              style={{ padding: "7px 12px", borderRadius: 8, border: "1px solid rgba(37,211,102,0.4)", background: "rgba(37,211,102,0.08)", color: "#25d366", fontWeight: 700, fontSize: 12, textDecoration: "none", fontFamily: "Georgia, serif" }}>
+                              💬 Tell them on WhatsApp
+                            </a>
+                          )}
+                        </>
+                      ) : (
+                        <button onClick={() => confirmUser(u)} disabled={confirmingId === u.id}
+                          style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: "linear-gradient(135deg,#e8b34b,#c8942b)", color: "#000", fontWeight: 700, fontSize: 13, fontFamily: "Georgia, serif", cursor: confirmingId === u.id ? "default" : "pointer", opacity: confirmingId === u.id ? 0.6 : 1 }}>
+                          {confirmingId === u.id ? "Activating..." : "✓ Confirm account"}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
         <input
           placeholder="Search by name, email, number or country..."
           value={search}
