@@ -50,6 +50,11 @@ const buildHighRiskFeatures = (missions) =>
       },
     }));
 
+// Only missions that actually have coordinates can be drawn. A mission without them
+// (older records, or a place the lookup couldn't find) is skipped rather than being
+// pinned at 0,0 in the Atlantic.
+const hasCoords = (m) => Number.isFinite(m.lat) && Number.isFinite(m.lng);
+
 export default function MapboxMap({ missions, churches = [], onMissionClick }) {
   const mapContainer = useRef(null);
   const map          = useRef(null);
@@ -134,7 +139,7 @@ export default function MapboxMap({ missions, churches = [], onMissionClick }) {
         type: "geojson",
         data: {
           type: "FeatureCollection",
-          features: (missions || []).map(m => ({
+          features: (missions || []).filter(hasCoords).map(m => ({
             type: "Feature",
             geometry: { type: "Point", coordinates: [m.lng, m.lat] },
             properties: {
@@ -213,7 +218,7 @@ export default function MapboxMap({ missions, churches = [], onMissionClick }) {
             <div style="font-family:Georgia,serif;background:#0c1628;border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:14px 16px;min-width:200px;box-shadow:0 8px 32px rgba(0,0,0,0.5);">
               <div style="font-size:11px;color:${props.color};letter-spacing:2px;text-transform:uppercase;margin-bottom:4px">${props.role}</div>
               <div style="font-size:14px;font-weight:700;color:#eef1ff;margin-bottom:3px">${props.name}${props.riskLevel === 4 ? ' <span style="color:#e85b5b;font-size:11px;">🔴 High Risk</span>' : ""}</div>
-              <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:10px">${props.protected ? "Location Protected" : props.city + ", " + props.country}</div>
+              <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:10px">${props.protected ? "Location Protected" : [props.city, props.country].filter(Boolean).join(", ")}</div>
               <div style="font-size:12px;color:rgba(255,255,255,0.6);margin-bottom:6px">${props.title}</div>
               <div style="background:rgba(255,255,255,0.07);border-radius:999px;height:5px;overflow:hidden;margin-bottom:6px">
                 <div style="width:${pct}%;height:100%;background:${props.color};border-radius:999px"></div>

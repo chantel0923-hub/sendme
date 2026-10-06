@@ -29,6 +29,39 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// ── Admin-only email types ──────────────────────────────────────────────────
+// This function is called from the browser with the app's public key, so for most
+// types anyone could ask it to send. Types listed here carry free text typed by the
+// admin, so they are only sent when the signed-in caller is the SendMe admin.
+const ADMIN_EMAIL = (Deno.env.get("ADMIN_EMAIL") ?? "sendmemissionfund@gmail.com").trim().toLowerCase();
+const ADMIN_ONLY_TYPES = new Set(["applicant_question"]);
+
+function escapeHtml(v: unknown): string {
+  return String(v ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+// Returns null when the caller is the admin, otherwise a ready-made error Response.
+async function requireAdmin(req: Request): Promise<Response | null> {
+  const deny = (status: number, error: string) =>
+    new Response(JSON.stringify({ sent: false, error }), {
+      status,
+      headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+    });
+  const authHeader = req.headers.get("Authorization");
+  const url = Deno.env.get("SUPABASE_URL");
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+  if (!authHeader || !url || !anonKey) return deny(401, "Not signed in");
+  const res = await fetch(`${url}/auth/v1/user`, { headers: { Authorization: authHeader, apikey: anonKey } });
+  if (!res.ok) return deny(401, "Not signed in");
+  const user = await res.json();
+  if (String(user?.email ?? "").trim().toLowerCase() !== ADMIN_EMAIL) return deny(403, "Admins only");
+  return null;
+}
+
 // ── Shared email shell — dark navy/gold theme matching the app ──
 // NOTE: built with nested <table> + bgcolor attributes (not CSS background on <div>)
 // because Outlook desktop/Windows Mail render via the Word engine, which strips
@@ -272,6 +305,21 @@ const TEMPLATES: Record<string, (d: any) => { subject: string; html: string }> =
     ),
   }),
 
+  // A free-text question from the admin to an applicant — the "Email Applicant" button
+  // in Mission Approvals. ADMIN-ONLY (see ADMIN_ONLY_TYPES). The applicant's reply goes
+  // to the SendMe Gmail through the reply_to set where the email is sent below.
+  applicant_question: (d) => ({
+    subject: `A question about your SendMe application${d.missionTitle ? ` — ${String(d.missionTitle).replace(/[\r\n]+/g, " ")}` : ""}`,
+    html: wrapEmail(
+      "A Question About Your Application",
+      `Dear ${escapeHtml(d.missionaryName) || "brother/sister"},<br/><br/>
+      Thank you for applying through SendMe${d.missionTitle ? ` with <strong>${escapeHtml(d.missionTitle)}</strong>` : ""}.
+      Before we make a decision, we have a question for you:<br/><br/>
+      <div style="background:rgba(232,179,75,0.08);border:1px solid rgba(232,179,75,0.25);border-radius:10px;padding:14px 16px;color:#eef1ff;">${escapeHtml(d.message).replace(/\r?\n/g, "<br/>")}</div>
+      <br/>Please simply <strong>reply to this email</strong> with your answer. God bless you.`,
+    ),
+  }),
+
   contact_form: (d) => ({
     subject: `SendMe FAQ Contact — ${d.name || "Anonymous"}`,
     html: wrapEmail(
@@ -451,6 +499,110 @@ const TEMPLATES: Record<string, (d: any) => { subject: string; html: string }> =
       "View SendMe", SITE_URL
     ),
   }),
+  // ── Emergency Requests — submitter-facing ──────────────────────────────
+  // Previously nothing at all was sent when an emergency request was
+  // approved or rejected — the submitter (contact_email captured at
+  // submission) only found out by checking the app themselves.
+  emergency_approved: (d) => ({
+    subject: `Your emergency request is now live — "${d.title || "your request"}" 🚨`,
+    html: wrapEmail(
+      "Emergency Request Approved",
+      `Your emergency request has been reviewed and approved.<br/><br/>
+      <strong style="color:#e85b5b;">${d.title || "Your request"}</strong><br/>
+      It's now visible to donors on SendMe, and may also be shared with our WhatsApp prayer/giving group.`,
+      "View SendMe", SITE_URL
+    ),
+  }),
+
+  emergency_rejected: (d) => ({
+    subject: `Update on your emergency request`,
+    html: wrapEmail(
+      "Emergency Request Update",
+      `Thank you for submitting <strong>${d.title || "your emergency request"}</strong>. After review, we're not able to publish it at this time.<br/><br/>
+      ${d.reason ? `<div style="background:rgba(232,91,91,0.08);border:1px solid rgba(232,91,91,0.2);border-radius:10px;padding:14px 16px;margin-top:8px;"><strong style="color:#e85b5b;">Reason given:</strong> ${d.reason}</div>` : "Please reach out to SendMe support for more detail."}`,
+    ),
+  }),
+
+  // ── Family In Need — pastor-facing, filling two gaps found during audit ──
+  // Previously the decline-at-admin-stage prompt literally said "shown to
+  // the pastor" but nothing was ever sent; and marking paid only pinged
+  // admin's own WhatsApp, leaving the pastor's last update at "funded,
+  // payout coming" with nothing ever confirming it actually landed.
+  family_need_admin_declined: (d) => ({
+    subject: `Update on the family need you endorsed`,
+    html: wrapEmail(
+      "Family Need Update",
+      `Dear ${withPastorTitle(d.pastorName)},<br/><br/>
+      Thank you for endorsing the <strong>${d.category || "family"}</strong> need for a family in
+      <strong>${d.city || "your area"}</strong>. After review, SendMe admin is not able to publish it at
+      this time.<br/><br/>
+      ${d.reason ? `<div style="background:rgba(232,91,91,0.08);border:1px solid rgba(232,91,91,0.2);border-radius:10px;padding:14px 16px;margin-top:8px;"><strong style="color:#e85b5b;">Reason given:</strong> ${d.reason}</div>` : "Please reach out to SendMe admin for more detail."}`,
+    ),
+  }),
+
+  family_need_paid: (d) => ({
+    subject: `Payout sent to your church — ${d.category || "family"} need 💸`,
+    html: wrapEmail(
+      "Family Need Payout Sent",
+      `Dear ${withPastorTitle(d.pastorName)},<br/><br/>
+      The <strong style="color:#e8b34b;">$${d.amount ?? ""}</strong> raised for the
+      <strong style="color:#e8b34b;">${d.category || "family"}</strong> need in
+      <strong>${d.city || "your area"}</strong> has been sent to your church's banking details on file.
+      Please allow a few business days for it to reflect.<br/><br/>
+      Once you've used the funds to help the family, please submit proof (receipts and/or a photo) so this
+      request can be marked complete.`,
+      "View SendMe", SITE_URL
+    ),
+  }),
+  // ── Send a Worker — admin-facing email backup ──────────────────────────
+  // Previously only notifyAdmin()'s WhatsApp ping existed for these two
+  // events, unlike every other submission flow (mission_applied,
+  // church_registered, emergency_submitted) which all send both channels.
+  worker_request: (d) => ({
+    subject: `New Worker Request — ${d.title || "Untitled Request"}`,
+    html: wrapEmail(
+      "New Worker Request Posted",
+      `A church has posted a new worker request.<br/><br/>
+      <strong style="color:#e8b34b;">${d.title || "Untitled Request"}</strong><br/>
+      Church: ${d.church || "unknown"}<br/>
+      Location: ${d.city ? d.city + ", " : ""}${d.country || "unspecified"}<br/>
+      Type: ${d.type || "unspecified"}<br/><br/>
+      View it in Admin → Worker Requests.`,
+      "View in Admin", SITE_URL
+    ),
+  }),
+
+  worker_response_received: (d) => ({
+    subject: `Someone can help — ${d.requestTitle || "a worker request"} 🙌`,
+    html: wrapEmail(
+      "Someone Can Help!",
+      `Someone has responded to a worker request:<br/><br/>
+      <strong style="color:#e8b34b;">${d.requestTitle || "Untitled Request"}</strong><br/>
+      From: ${d.requestChurch || "unknown"}<br/><br/>
+      <strong style="color:#eef1ff;">They offered:</strong> ${d.commitment ? String(d.commitment).replace(/_/g," ") : "Offered to help"}<br/>
+      Contact: ${d.responderEmail || "no email"}${d.responderPhone ? " · " + d.responderPhone : ""}<br/>
+      ${d.note ? `<div style="color:rgba(255,255,255,0.6);font-style:italic;margin-top:8px;">"${d.note}"</div>` : ""}
+      <br/>Review and forward this to the requesting church in Admin → Worker Requests.`,
+      "View in Admin", SITE_URL
+    ),
+  }),
+
+  // ── Missions — cancellation ──────────────────────────────────────────────
+  // Sent from AdminApprovals.js's cancelAndReallocate() when a mission is
+  // cancelled and its raised funds (if any) moved to the General Fund or
+  // another active mission. Missionary always gets a clear reason, never
+  // just a silent status change.
+  mission_cancelled: (d) => ({
+    subject: `Update on your mission — "${d.missionTitle || "your mission"}"`,
+    html: wrapEmail(
+      "Mission Cancelled",
+      `Dear ${d.missionaryName || "brother/sister"},<br/><br/>
+      Your mission <strong style="color:#e8b34b;">${d.missionTitle || "on SendMe"}</strong> has been cancelled.<br/><br/>
+      <div style="background:rgba(232,91,91,0.08);border:1px solid rgba(232,91,91,0.2);border-radius:10px;padding:14px 16px;margin-top:8px;"><strong style="color:#e85b5b;">Reason given:</strong> ${d.reason || "Please contact SendMe admin for details."}</div>
+      ${d.raised > 0 ? `<br/>The $${d.raised} already raised toward this mission has been moved to ${d.destination || "another purpose within SendMe"}, so it continues to serve the work rather than sitting unused.` : ""}
+      <br/><br/>If you'd like to discuss this or apply again in the future, please reach out to SendMe admin.`,
+    ),
+  }),
 };
 
 serve(async (req) => {
@@ -478,6 +630,19 @@ serve(async (req) => {
         status: 400,
         headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
       });
+    }
+
+    // Admin-typed types: caller must be the admin, and the message must be present and sane.
+    if (ADMIN_ONLY_TYPES.has(type)) {
+      const blocked = await requireAdmin(req);
+      if (blocked) return blocked;
+      const message = String(data?.message ?? "").trim();
+      if (!message || message.length > 4000) {
+        return new Response(JSON.stringify({ sent: false, error: "A message of 1 to 4000 characters is required." }), {
+          status: 400,
+          headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+        });
+      }
     }
 
     const { subject, html } = template(data || {});
@@ -519,7 +684,7 @@ serve(async (req) => {
 
   } catch (err) {
     console.error("send-notification error:", err);
-    return new Response(JSON.stringify({ sent: false, error: String(err.message || err) }), {
+    return new Response(JSON.stringify({ sent: false, error: String((err as Error)?.message || err) }), {
       status: 200,
       headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
     });

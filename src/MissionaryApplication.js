@@ -3,6 +3,8 @@ import { supabase } from "./supabase";
 import { notifyAdmin } from "./notifications";
 import { FEATURED_VIDEOS } from "./sendmeVideos";
 import WatchHowLink from "./WatchHowLink";
+import { COUNTRIES, countryIso } from "./countries";
+import { geocodeMissionLocation } from "./missionGeocode";
 
 const inp = {
   width: "100%", padding: "13px 16px", borderRadius: 12, boxSizing: "border-box",
@@ -111,52 +113,19 @@ const convertToUSD = async (amount, fromCurrency) => {
   }
 };
 
-// Fix: missions never had lat/lng geocoded at all (unlike churches, which
-// got a geocoding fix earlier). A mission with no lat/lng defaults to (0,0)
-// on the map — the Gulf of Guinea near Gabon — regardless of the actual
-// target country. Same hardcoded Mapbox token fallback used in MapboxMap.js
-// and AdminChurchVerification.js — Vercel renames REACT_APP_ prefixed env
-// vars, so process.env.REACT_APP_MAPBOX_TOKEN is undefined in production.
-const MAPBOX_TOKEN = process.env.REACT_APP_MAPBOX_TOKEN ||
-  "pk.eyJ1Ijoic2VuZG1lMDkyMyIsImEiOiJjbXI1anZpOGcwYXJvMzFyMHo2aDU2YnI2In0.CutnKCVEf1SzDpddacdekg";
+// Map lookup (area/city/country -> coordinates) lives in missionGeocode.js, shared with
+// the admin Edit Mission screen. The country now comes from a fixed list, so the lookup
+// searches only inside the chosen country.
 
-const geocodeMissionLocation = async (area, country) => {
-  try {
-    const token = MAPBOX_TOKEN;
-    if (!token || !country) return { lat: null, lng: null };
-    const parts = [area, country].filter(Boolean).join(", ");
-    const query = encodeURIComponent(parts.trim());
-    const res = await fetch(
-      `https://api.mapbox.com/geocoding/v5/mapbox.places/${query}.json?access_token=${token}&limit=1`
-    );
-    if (!res.ok) return { lat: null, lng: null };
-    const data = await res.json();
-    if (data?.features?.length > 0) {
-      const feature = data.features[0];
-      const [lng, lat] = feature.center;
-
-      // Sanity check against country (missions don't have a province field
-      // like churches do, but country is just as reliable a cross-check).
-      // If it doesn't match, leave coordinates blank rather than silently
-      // saving a wrong pin — same pattern used for church geocoding.
-      const countryCtx = (feature.context || []).find(c => c.id?.startsWith("country"));
-      const countryText = (countryCtx?.text || feature.place_name || "").toLowerCase();
-      const enteredCountry = country.toLowerCase();
-      const matches = countryText && (
-        countryText.includes(enteredCountry) || enteredCountry.includes(countryText)
-      );
-      if (!matches) {
-        console.warn(`Mission geocode mismatch: expected country "${country}" but got "${countryText}" for query "${parts}". Leaving coordinates blank.`);
-        return { lat: null, lng: null };
-      }
-
-      return { lat, lng };
-    }
-    return { lat: null, lng: null };
-  } catch (e) {
-    console.warn("Mission geocoding failed:", e);
-    return { lat: null, lng: null };
-  }
+// One line per church in the "sending church" list:
+//   Church name (Pastor Name) — City, Country
+// The pastor's name is shown so people can tell churches with similar names apart.
+// Blank parts are skipped (no stray commas), and a title already typed into the
+// name ("Pastor John…") is not doubled up.
+const churchOptionLabel = (c) => {
+  const pastor = String(c.pastor_name || "").trim().replace(/^(pastor|ps\.?|pr\.?)\s+/i, "");
+  const place  = [c.city, c.country].map(v => String(v || "").trim()).filter(Boolean).join(", ");
+  return `${String(c.name || "").trim()}${pastor ? ` (Pastor ${pastor})` : ""}${place ? ` — ${place}` : ""}`;
 };
 
 const ROLES   = ["Missionary","Evangelist","Pastor","Church Planter","Bible Distributor","Medical Missionary","Children's Minister","Other"];
@@ -369,7 +338,7 @@ const Step3 = ({ form, set, churches, churchesLoading }) => {
               <option value="" style={{background:"#0c1628"}}>— Select your church —</option>
               {churches.map(c => (
                 <option key={c.id} value={c.id} style={{background:"#0c1628"}}>
-                  {c.name} — {c.city}, {c.country}
+                  {churchOptionLabel(c)}
                 </option>
               ))}
             </select>
@@ -506,10 +475,15 @@ const Step4 = ({ form, set }) => (
       <option value="" style={{background:"#0c1628"}}>Select region...</option>
       {REGIONS.map(r=><option key={r} value={r} style={{background:"#0c1628"}}>{r}</option>)}
     </FSelect>
+    <FSelect label="Target Country *" value={form.targetCountry} onChange={e=>set("targetCountry",e.target.value)}>
+      <option value="" style={{background:"#0c1628"}}>Select country...</option>
+      {COUNTRIES.map(c=><option key={c.iso} value={c.name} style={{background:"#0c1628"}}>{c.name}</option>)}
+    </FSelect>
     <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-      <FInput label="Target Country *" placeholder="e.g. Ethiopia" value={form.targetCountry} onChange={e=>set("targetCountry",e.target.value)}/>
-      <FInput label="Specific Area / District" placeholder="e.g. Merkato District" value={form.targetArea} onChange={e=>set("targetArea",e.target.value)}/>
+      <FInput label="City / Town" placeholder="e.g. Alberton" value={form.targetCity} onChange={e=>set("targetCity",e.target.value)}/>
+      <FInput label="Specific Area / District" placeholder="e.g. Eden Park" value={form.targetArea} onChange={e=>set("targetArea",e.target.value)}/>
     </div>
+    <div style={{ fontSize:12, color:"rgba(255,255,255,0.35)", margin:"-6px 0 14px", lineHeight:1.5 }}>Choose the <strong>country</strong> from the list. Put the province, city or suburb in the boxes above — this is what places your mission on the world map.</div>
     <div style={{ marginBottom:14 }}>
       <label style={label}>Field Access / Conditions *</label>
       <select value={form.riskLevel} onChange={e=>set("riskLevel",e.target.value)}
@@ -623,6 +597,7 @@ const Step5 = ({ form, set, submitted, submitting, onSubmit }) => {
     ["Pastor email",   form.pastorEmail],
     ["Mission title",  form.missionTitle],
     ["Target country", form.targetCountry],
+    ["City / area",    [form.targetCity, form.targetArea].map(v=>(v||"").trim()).filter(Boolean).join(", ")],
     ["Your funding goal", (form.localCurrency!=="USD" && form.localAmount) ? `${Number(form.localAmount).toLocaleString()} ${form.localCurrency}` : null],
     ["Funding goal",   form.fundingGoal?`$${Number(form.fundingGoal).toLocaleString()} USD`:null],
     ["Platform surcharge (10%)", form.fundingGoal?`$${Math.round(Number(form.fundingGoal)*0.1).toLocaleString()}`:null],
@@ -707,7 +682,7 @@ const validate = (step, form) => {
   if (step===4) {
     if (!form.missionTitle.trim())       return "Please enter a mission title.";
     if (!form.targetRegion)              return "Please select a target region.";
-    if (!form.targetCountry.trim())      return "Please enter the target country.";
+    if (!countryIso(form.targetCountry))  return "Please choose the target country from the list (provinces and cities go in the City / Area boxes).";
     if (!form.riskLevel)                 return "Please select the field access/conditions level.";
     if (!form.missionDescription.trim()) return "Please describe your mission.";
     if (!form.fundingGoal||Number(form.fundingGoal)<100) return "Please enter a funding goal equivalent to at least $100 USD, and wait for the conversion to complete if using a local currency.";
@@ -758,7 +733,7 @@ export default function MissionaryApplication({ onBack, user }) {
     churchCity:"", churchCountry:"", churchWebsite:"",
     churchNotOnSendMe: false, churchVerified: false,
     // Mission fields
-    missionTitle:"", targetRegion:"", targetCountry:"", targetArea:"", riskLevel:"",
+    missionTitle:"", targetRegion:"", targetCountry:"", targetCity:"", targetArea:"", riskLevel:"",
     missionDescription:"", fundingGoal:"", localAmount:"", localCurrency:"USD",
     startDate:"", duration:"",
     milestone1:"", milestone2:"", milestone3:"", surchargeAcknowledged:false,
@@ -831,7 +806,7 @@ export default function MissionaryApplication({ onBack, user }) {
       const platformSurcharge = Math.round(goal * 0.1);
       const collectionTarget = goal + platformSurcharge;
 
-      const { lat, lng } = await geocodeMissionLocation(form.targetArea, form.targetCountry);
+      const { lat, lng } = await geocodeMissionLocation(form.targetArea, form.targetCity, form.targetCountry);
 
       const { data, error: dbError } = await supabase.from("missions").insert({
         missionary_name:  form.shadowMode ? null : form.fullName,
@@ -853,6 +828,7 @@ export default function MissionaryApplication({ onBack, user }) {
         title:            form.missionTitle,
         region:           form.targetRegion,
         country:          form.targetCountry,
+        city:             form.targetCity ? form.targetCity.trim() : null,
         area:             form.targetArea,
         risk_level:       Number(form.riskLevel) || 1,
         lat:              lat,

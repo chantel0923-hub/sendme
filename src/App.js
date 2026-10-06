@@ -43,6 +43,17 @@ import AdminGeneralFund from './AdminGeneralFund';
 const COLORS = ["#e8b34b","#4caf7d","#5b9cf6","#e85b5b","#b06cf5","#f5a44a","#3ecf8e","#f06292"];
 const getColor = (id) => COLORS[id % COLORS.length];
 
+// Location text for a mission: skips blank parts and repeats, so a mission with no city
+// no longer shows ", South Africa" or "Eden Park, , Gauteng".
+const placeLine = (m) => {
+  const seen = new Set();
+  return [m.area, m.city, m.country]
+    .map(v => String(v || "").trim())
+    .filter(v => { const k = v.toLowerCase(); if (!v || seen.has(k)) return false; seen.add(k); return true; })
+    .join(", ");
+};
+const shortPlace = (m) => [m.city || m.area, m.country].map(v => String(v || "").trim()).filter(Boolean).join(", ");
+
 const mapRow = (row, i) => ({
   id:row.id,
   name: [row.full_name, row.name, row.pastor_name, row.title].find(v => v && String(v).trim().toLowerCase() !== "null") ||
@@ -50,7 +61,13 @@ const mapRow = (row, i) => ({
   role:row.missionary_role||"Missionary",
   church:row.church_name||"", city:row.city||"", country:row.country||"",
   area:row.area||"", region:row.region||"Africa",
-  lat:parseFloat(row.lat)||0, lng:parseFloat(row.lng)||0,
+  // A mission with no coordinates stays unplaced (null) instead of being drawn at 0,0 —
+  // which is the Gulf of Guinea in the Atlantic. The map simply skips unplaced missions.
+  ...(() => {
+    const la = parseFloat(row.lat), ln = parseFloat(row.lng);
+    const placed = Number.isFinite(la) && Number.isFinite(ln) && !(la === 0 && ln === 0);
+    return { lat: placed ? la : null, lng: placed ? ln : null };
+  })(),
   title:row.title||"Untitled Mission", blurb:row.blurb||row.description||"",
   raised:row.raised||0, goal:row.goal||1000,
   // Fully-funded/progress calculations use this, not `goal` — donors need to
@@ -890,7 +907,7 @@ const MissionDetail = ({ mission: m, onBack, onDonate, onLedger, user, userRole,
             <div style={{ flex:1 }}>
               <div style={{ fontSize:11,color:m.color,letterSpacing:2,textTransform:"uppercase",marginBottom:3 }}>{m.role} · {m.church}</div>
               <div style={{ fontSize:22,fontWeight:700,color:"#eef1ff",lineHeight:1.2 }}>{m.protected?"Protected "+m.role:m.name}</div>
-              <div style={{ fontSize:13,color:"rgba(255,255,255,0.35)",marginTop:4 }}>📍 {m.protected?`${m.region} (Location Protected)`:`${m.area}, ${m.city}, ${m.country}`}</div>
+              <div style={{ fontSize:13,color:"rgba(255,255,255,0.35)",marginTop:4 }}>📍 {m.protected?`${m.region} (Location Protected)`:placeLine(m)}</div>
             </div>
           </div>
           <div style={{ fontSize:18,fontWeight:700,color:"#eef1ff",marginBottom:8 }}>{m.title}</div>
@@ -1890,7 +1907,7 @@ const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, o
                     <div>
                       <div style={{ fontSize:10,color:m.color,letterSpacing:2,textTransform:"uppercase",marginBottom:2 }}>{m.role}</div>
                       <div style={{ fontSize:16,fontWeight:700,color:"#eef1ff" }}>{m.protected?"Protected Mission":m.name}</div>
-                      <div style={{ fontSize:12,color:"rgba(255,255,255,0.35)",marginTop:2 }}>📍 {m.protected?m.region+" (Protected)":`${m.city}, ${m.country}`}</div>
+                      <div style={{ fontSize:12,color:"rgba(255,255,255,0.35)",marginTop:2 }}>📍 {m.protected?m.region+" (Protected)":shortPlace(m)}</div>
                     </div>
                   </div>
                   <div style={{ display:"flex",flexDirection:"column",gap:5,alignItems:"flex-end" }}>
