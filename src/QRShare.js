@@ -17,6 +17,7 @@ const SHARE_TYPES = [
   { key:"apply",    label:"Apply as Missionary", desc:"For believers called to the mission field",          url:"https://sendmeglobalmission.org/apply" },
   { key:"church",   label:"Register Your Church",desc:"For Message churches wanting to endorse missionaries",url:"https://sendmeglobalmission.org/register-church" },
   { key:"emergency",label:"Emergency Requests",  desc:"For urgent mission needs requiring quick response",  url:"https://sendmeglobalmission.org/emergency" },
+  { key:"worker",   label:"Worker Requests",     desc:"For churches needing a worker, and believers ready to help", url:"https://sendmeglobalmission.org/worker-requests" },
 ];
 
 export default function QRShare({ missions = [], onBack }) {
