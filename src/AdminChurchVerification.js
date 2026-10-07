@@ -168,6 +168,14 @@ export default function AdminChurchVerification({ onBack, user }) {
   };
 
   const verify = async (church) => {
+    // Soft check, never a block: warn if the two references haven't both been marked Confirmed.
+    const answers = [church.reference_1_status, church.reference_2_status];
+    const confirmedCount = answers.filter(a => a === "confirmed").length;
+    const declinedCount = answers.filter(a => a === "declined").length;
+    if (confirmedCount < 2) {
+      const detail = declinedCount > 0 ? ` (${declinedCount} declined)` : "";
+      if (!window.confirm(`Only ${confirmedCount} of 2 references are marked Confirmed${detail}.\n\nVerify this church anyway?`)) return;
+    }
     setActing(church.id);
     setError("");
     try {
@@ -255,6 +263,7 @@ export default function AdminChurchVerification({ onBack, user }) {
 
   const [refEmailSent, setRefEmailSent] = useState({});
   const [refWaSent, setRefWaSent] = useState({}); // "churchId:1" -> true once admin opened WhatsApp (this session only)
+  const [refSaving, setRefSaving] = useState(null); // "churchId:1" while the reference's answer is being saved
 
   const sendReferenceEmails = async (c) => {
     const refs = [
@@ -295,6 +304,29 @@ export default function AdminChurchVerification({ onBack, user }) {
     }
   };
 
+  // Records what a reference said after the admin messaged them: "confirmed" or "declined".
+  // Stored on the church as reference_1_status / reference_2_status. Tapping the button that is
+  // already active clears it again (e.g. pressed by mistake).
+  const markReference = async (c, n, value) => {
+    const col = `reference_${n}_status`;
+    const next = c[col] === value ? null : value;
+    setRefSaving(`${c.id}:${n}`);
+    setError("");
+    try {
+      const { data, error: err } = await supabase.from("churches").update({ [col]: next }).eq("id", c.id).select("id").maybeSingle();
+      if (err) throw err;
+      // supabase-js doesn't throw when the database silently blocks an update — it returns no row
+      if (!data) throw new Error("nothing was saved — the database may have blocked it");
+      setChurches(prev => prev.map(x => (x.id === c.id ? { ...x, [col]: next } : x)));
+    } catch (e) {
+      const msg = e.message || "";
+      setError(/column|schema cache/i.test(msg)
+        ? "The reference answer columns aren't set up yet. Run the reference_1_status / reference_2_status SQL in Supabase first."
+        : "Could not save the reference's answer. (" + msg + ")");
+    }
+    setRefSaving(null);
+  };
+
   // One reference line + its WhatsApp button (or an explanation if there's no usable number).
   const renderRefRow = (c, n, isOrgRow) => {
     const name = c[`reference_${n}_name`];
@@ -304,9 +336,22 @@ export default function AdminChurchVerification({ onBack, user }) {
     const isEmail = String(contact || "").includes("@");
     const key = `${c.id}:${n}`;
     const sent = !!refWaSent[key];
+    const status = c[`reference_${n}_status`] || null;   // "confirmed" | "declined" | null
+    const saving = refSaving === key;
+    const answerBtn = (value, label, color, bg) => (
+      <button type="button" onClick={() => markReference(c, n, value)} disabled={saving}
+        style={{ padding: "6px 14px", borderRadius: 9, fontSize: 12, fontWeight: 700, fontFamily: "Georgia, serif", cursor: saving ? "default" : "pointer",
+          border: `1px solid ${color}`, background: status === value ? bg : "transparent", color: status === value ? "#fff" : color, opacity: saving ? 0.6 : 1 }}>
+        {label}
+      </button>
+    );
     return (
       <div style={{ marginBottom: 10 }}>
-        <div><strong style={{ color: "rgba(255,255,255,0.8)" }}>{isOrgRow ? "Board Member" : "Reference"} {n}:</strong> {name}{contact ? ` · ${contact}` : ""}</div>
+        <div>
+          <strong style={{ color: "rgba(255,255,255,0.8)" }}>{isOrgRow ? "Board Member" : "Reference"} {n}:</strong> {name}{contact ? ` · ${contact}` : ""}
+          {status === "confirmed" && <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 700, color: "#3ecf8e" }}>✓ Confirmed</span>}
+          {status === "declined" && <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 700, color: "#e85b5b" }}>✗ Declined</span>}
+        </div>
         {digits ? (
           <a
             href={`https://wa.me/${digits}?text=${encodeURIComponent(buildReferenceMessage(c, name, isOrgRow))}`}
@@ -320,6 +365,11 @@ export default function AdminChurchVerification({ onBack, user }) {
             {isEmail ? "Older registration — email contact only." : "No usable WhatsApp number (it needs the country code) — contact them another way."}
           </div>
         )}
+        <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <span style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>Their answer:</span>
+          {answerBtn("confirmed", "✓ Confirmed", "#3ecf8e", "#1f9e6b")}
+          {answerBtn("declined", "✗ Declined", "#e85b5b", "#b8383a")}
+        </div>
       </div>
     );
   };

@@ -134,7 +134,40 @@ const mapGeneralFundToTestimony = (row, i) => ({
   missionRow:  null,
 });
 
-export default function TestimonyEngine({ onBack, onMission, user }) {
+// Map an admin_testimonies row (written on the admin Testimonies screen) to the same
+// testimony shape. Photos are uploaded images, the video is a link (YouTube embeds a
+// player). Stats are only shown when the admin actually entered them — otherwise a
+// stand-alone testimony would display "0 souls, 0 Bibles".
+const photosOf = (row) => (Array.isArray(row.photo_urls) ? row.photo_urls.filter(Boolean) : []);
+const hasStats = (row) => [row.souls, row.bibles, row.churches].some(v => v !== null && v !== undefined);
+const mapAdminToTestimony = (row, i) => ({
+  id:          `at-${row.id}`,
+  isAdminTestimony: true,
+  mission:     row.title || "Testimony",
+  missionary:  row.missionary || "SendMe",
+  country:     row.country || "",
+  region:      row.region  || "",
+  completed:   row.created_at,
+  souls:       row.souls    || 0,
+  bibles:      row.bibles   || 0,
+  churches:    row.churches || 0,
+  hideStats:   !hasStats(row),
+  raised:      0,
+  duration:    "",
+  color:       getColor(i),
+  story:       row.story || "",
+  beforeText:  row.before_text || "",
+  afterText:   row.after_text  || "",
+  mediaUrl:    row.video_url || "",
+  allMediaUrls: photosOf(row),
+  tags:        [row.region, row.country].filter(Boolean),
+  impact:      "",
+  hasExtra:    true,
+  missionRow:  null,
+  linkedMissionId: row.mission_id || null,
+});
+
+export default function TestimonyEngine({ onBack, onMission, user, onAddTestimony }) {
   const [testimonies, setTestimonies] = useState([]);
   const [loading, setLoading]         = useState(true);
   const [selected, setSelected]       = useState(null);
@@ -149,26 +182,56 @@ export default function TestimonyEngine({ onBack, onMission, user }) {
   const [submitForm, setSubmitForm]   = useState({ story:"", before_text:"", after_text:"", media_url:"" });
   const [submitting, setSubmitting]   = useState(false);
   const [submitDone, setSubmitDone]   = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
   useEffect(() => {
     const load = async () => {
       setLoading(true);
       try {
-        const [{ data: mData, error: mErr }, { data: eData }, { data: gfData }] = await Promise.all([
+        const [{ data: mData, error: mErr }, { data: eData }, { data: gfData }, { data: aData }] = await Promise.all([
           supabase.from("missions").select("*").eq("status","complete").order("created_at",{ ascending:false }),
           supabase.from("testimony_extras").select("*"),
           // Public RLS on general_fund_log only exposes type='disbursement'
           // rows (see the migration) — donation rows never reach this page.
           supabase.from("general_fund_log").select("*").eq("type","disbursement").order("created_at",{ ascending:false }),
+          // Testimonies written by the admin (Admin → Testimonies). Published ones only. If that
+          // table doesn't exist yet this simply returns nothing and the page works as before.
+          supabase.from("admin_testimonies").select("*").eq("published", true).order("created_at",{ ascending:false }),
         ]);
         if (mErr) throw mErr;
         const extrasMap = {};
         (eData || []).forEach(e => { extrasMap[e.mission_id] = e; });
-        const missionTestimonies = (mData || []).map((row, i) => mapMissionToTestimony(row, i, extrasMap));
+        // The newest admin testimony linked to a COMPLETED mission enriches that mission's own
+        // card (story, before/after, stats, photos, video). Any other admin testimony — not
+        // linked to a mission, linked to a mission that isn't marked complete, or an extra one
+        // for the same mission — appears as its own card.
+        const adminRows = aData || [];
+        const enrichFor = {};
+        adminRows.forEach(a => { if (a.mission_id && !enrichFor[a.mission_id]) enrichFor[a.mission_id] = a; });
+        const usedAdminIds = new Set();
+        const missionTestimonies = (mData || []).map((row, i) => {
+          const base = mapMissionToTestimony(row, i, extrasMap);
+          const a = enrichFor[row.id];
+          if (!a) return base;
+          usedAdminIds.add(a.id);
+          return {
+            ...base,
+            story:        a.story       || base.story,
+            beforeText:   a.before_text || base.beforeText,
+            afterText:    a.after_text  || base.afterText,
+            mediaUrl:     a.video_url   || base.mediaUrl,
+            allMediaUrls: photosOf(a),
+            souls:        a.souls    ?? base.souls,
+            bibles:       a.bibles   ?? base.bibles,
+            churches:     a.churches ?? base.churches,
+            hasExtra:     true,
+          };
+        });
         const generalFundTestimonies = (gfData || []).map((row, i) => mapGeneralFundToTestimony(row, i));
-        // Merge and sort by date so General Fund stories appear interleaved
+        const adminTestimonies = adminRows.filter(a => !usedAdminIds.has(a.id)).map((a, i) => mapAdminToTestimony(a, i));
+        // Merge and sort by date so General Fund and admin stories appear interleaved
         // with mission testimonies by recency, not bolted on at the end.
-        const merged = [...missionTestimonies, ...generalFundTestimonies]
+        const merged = [...missionTestimonies, ...generalFundTestimonies, ...adminTestimonies]
           .sort((a,b) => new Date(b.completed) - new Date(a.completed));
         setTestimonies(merged);
       } catch (e) {
@@ -203,7 +266,7 @@ export default function TestimonyEngine({ onBack, onMission, user }) {
     const text = encodeURIComponent(
       `Praise Report from ${t.country}!\n\n` +
       `${t.mission} — COMPLETED\n` +
-      `${t.souls} souls reached | ${t.bibles} Bibles | ${t.churches} churches planted\n\n` +
+      (t.hideStats ? "" : `${t.souls} souls reached | ${t.bibles} Bibles | ${t.churches} churches planted\n\n`) +
       `"${t.story.slice(0, 150)}..."\n\n` +
       `See the full testimony — SendMe Global Mission Fund\nhttps://sendmeglobalmission.org`
     );
@@ -213,8 +276,11 @@ export default function TestimonyEngine({ onBack, onMission, user }) {
   const handleSubmitTestimony = async () => {
     if (!submitForm.story.trim()) return;
     setSubmitting(true);
+    setSubmitError("");
     try {
-      await supabase.from("testimony_extras").upsert({
+      // supabase-js returns { error } rather than throwing, so it has to be checked —
+      // previously a refused save was reported to the person as "✓ Testimony Submitted".
+      const { error } = await supabase.from("testimony_extras").upsert({
         mission_id:   submitFor,
         story:        submitForm.story,
         before_text:  submitForm.before_text,
@@ -222,10 +288,11 @@ export default function TestimonyEngine({ onBack, onMission, user }) {
         media_url:    submitForm.media_url,
         submitted_by: user?.email || "anonymous",
       }, { onConflict: "mission_id" });
+      if (error) throw error;
       setSubmitDone(true);
     } catch (e) {
       console.log("Testimony submit error:", e);
-      setSubmitDone(true);
+      setSubmitError("Couldn't save your testimony. (" + (e.message || "unknown error") + ")");
     }
     setSubmitting(false);
   };
@@ -254,7 +321,7 @@ export default function TestimonyEngine({ onBack, onMission, user }) {
           {/* Header card */}
           <div style={{ background:`linear-gradient(135deg,${t.color}18,${t.color}06)`, borderRadius:20, border:`1px solid ${t.color}33`, padding:24, marginBottom:20 }}>
             <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:12 }}>
-              <span style={{ padding:"3px 12px", borderRadius:999, fontSize:12, background:"rgba(62,207,142,0.12)", color:"#3ecf8e", border:"1px solid rgba(62,207,142,0.25)", fontWeight:600 }}>{t.isGeneralFund ? "🌐 General Fund" : "Completed"}</span>
+              <span style={{ padding:"3px 12px", borderRadius:999, fontSize:12, background:"rgba(62,207,142,0.12)", color:"#3ecf8e", border:"1px solid rgba(62,207,142,0.25)", fontWeight:600 }}>{t.isGeneralFund ? "🌐 General Fund" : t.isAdminTestimony ? "✝ Testimony" : "Completed"}</span>
               {!t.isGeneralFund && <span style={{ padding:"3px 12px", borderRadius:999, fontSize:12, background:`${t.color}18`, color:t.color, border:`1px solid ${t.color}33` }}>📍 {t.country}</span>}
               {t.duration && <span style={{ padding:"3px 12px", borderRadius:999, fontSize:12, background:"rgba(255,255,255,0.06)", color:"rgba(255,255,255,0.4)" }}>{t.duration}</span>}
             </div>
@@ -265,7 +332,7 @@ export default function TestimonyEngine({ onBack, onMission, user }) {
           {/* Stats — doesn't apply to General Fund entries (no souls/
               bibles/churches counts), so hidden rather than shown as
               zeroes. */}
-          {!t.isGeneralFund && (
+          {!t.isGeneralFund && !t.hideStats && (
           <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12, marginBottom:20 }}>
             {[["🙏",t.souls,"Souls Reached",t.color],["📖",t.bibles,"Bibles Given","#5b9cf6"],["⛪",t.churches,"Churches Planted","#3ecf8e"]].map(([icon,val,label,c])=>(
               <div key={label} style={{ background:"rgba(255,255,255,0.03)", borderRadius:14, border:"1px solid rgba(255,255,255,0.07)", padding:"14px 10px", textAlign:"center" }}>
@@ -282,7 +349,7 @@ export default function TestimonyEngine({ onBack, onMission, user }) {
             <div style={{ background:"#0c1628", borderRadius:16, border:"1px solid rgba(255,255,255,0.08)", padding:20, marginBottom:16 }}>
               <div style={{ fontSize:14, fontWeight:700, color:"#eef1ff", marginBottom:12 }}>The Story</div>
               <div style={{ fontSize:14, color:"rgba(255,255,255,0.65)", lineHeight:1.85 }}>{t.story}</div>
-              {t.isGeneralFund && t.allMediaUrls?.length > 0 ? (
+              {t.allMediaUrls?.length > 0 && (
                 <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginTop:14 }}>
                   {t.allMediaUrls.map((url,i) => (
                     <a key={i} href={url} target="_blank" rel="noopener noreferrer">
@@ -290,9 +357,8 @@ export default function TestimonyEngine({ onBack, onMission, user }) {
                     </a>
                   ))}
                 </div>
-              ) : (
-                <MediaEmbed url={t.mediaUrl} />
               )}
+              {!t.isGeneralFund && <MediaEmbed url={t.mediaUrl} />}
             </div>
           ) : (
             <div style={{ background:"rgba(255,255,255,0.03)", borderRadius:14, border:"1px solid rgba(255,255,255,0.07)", padding:20, marginBottom:16, textAlign:"center" }}>
@@ -401,6 +467,9 @@ export default function TestimonyEngine({ onBack, onMission, user }) {
                   <input placeholder="Before — what was the situation before the mission?" value={submitForm.before_text} onChange={e=>setSubmitForm(f=>({...f,before_text:e.target.value}))} style={inp}/>
                   <input placeholder="After — what changed as a result?" value={submitForm.after_text} onChange={e=>setSubmitForm(f=>({...f,after_text:e.target.value}))} style={inp}/>
                   <input placeholder="Photo / video URL (optional — YouTube link or direct image URL embeds inline; Google Drive/Dropbox folder links show as a click-through)" value={submitForm.media_url} onChange={e=>setSubmitForm(f=>({...f,media_url:e.target.value}))} style={inp}/>
+                  {submitError && (
+                    <div style={{ background:"rgba(232,91,91,0.1)", border:"1px solid rgba(232,91,91,0.3)", borderRadius:10, padding:"10px 12px", marginBottom:12, fontSize:12, color:"#e85b5b", lineHeight:1.5 }}>⚠ {submitError}</div>
+                  )}
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
                     <button onClick={()=>setShowSubmit(false)} style={{ padding:"12px 0", borderRadius:12, border:"1px solid rgba(255,255,255,0.1)", background:"transparent", color:"rgba(255,255,255,0.4)", fontWeight:700, cursor:"pointer", fontSize:14, fontFamily:"Georgia, serif" }}>Cancel</button>
                     <button onClick={handleSubmitTestimony} disabled={submitting||!submitForm.story.trim()}
@@ -426,6 +495,12 @@ export default function TestimonyEngine({ onBack, onMission, user }) {
           <div style={{ fontSize:18, fontWeight:700 }}>Mission Testimonies</div>
           <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", letterSpacing:2, marginTop:2 }}>COMPLETED MISSIONS — GOD'S FAITHFULNESS</div>
         </div>
+        {onAddTestimony && (
+          <button onClick={onAddTestimony}
+            style={{ marginLeft:"auto", padding:"8px 14px", borderRadius:10, border:"1px solid rgba(232,179,75,0.4)", background:"rgba(232,179,75,0.1)", color:"#e8b34b", fontWeight:700, fontSize:12, fontFamily:"Georgia, serif", cursor:"pointer", whiteSpace:"nowrap" }}>
+            ＋ Add / manage testimonies
+          </button>
+        )}
       </div>
 
       <div style={{ maxWidth:700, margin:"0 auto", padding:"28px 20px 60px" }}>
@@ -471,7 +546,7 @@ export default function TestimonyEngine({ onBack, onMission, user }) {
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:10 }}>
                 <div style={{ flex:1 }}>
                   <div style={{ display:"flex", gap:8, marginBottom:6, flexWrap:"wrap" }}>
-                    <span style={{ padding:"3px 10px", borderRadius:999, fontSize:11, background:"rgba(62,207,142,0.12)", color:"#3ecf8e", border:"1px solid rgba(62,207,142,0.25)" }}>{t.isGeneralFund ? "🌐 General Fund" : "Completed"}</span>
+                    <span style={{ padding:"3px 10px", borderRadius:999, fontSize:11, background:"rgba(62,207,142,0.12)", color:"#3ecf8e", border:"1px solid rgba(62,207,142,0.25)" }}>{t.isGeneralFund ? "🌐 General Fund" : t.isAdminTestimony ? "✝ Testimony" : "Completed"}</span>
                     {!t.isGeneralFund && <span style={{ fontSize:11, color:"rgba(255,255,255,0.3)" }}>📍 {t.country}</span>}
                     {t.hasExtra && <span style={{ padding:"3px 10px", borderRadius:999, fontSize:11, background:"rgba(232,179,75,0.1)", color:"#e8b34b", border:"1px solid rgba(232,179,75,0.25)" }}>✍ Story Added</span>}
                   </div>
@@ -482,7 +557,7 @@ export default function TestimonyEngine({ onBack, onMission, user }) {
               {t.story && <div style={{ fontSize:13, color:"rgba(255,255,255,0.55)", lineHeight:1.7, marginBottom:14 }}>{t.story.slice(0,120)}...</div>}
               {t.isGeneralFund ? (
                 <div style={{ marginBottom:14, fontSize:13, fontWeight:700, color:"#3ecf8e" }}>${fmt(t.raised)} given</div>
-              ) : (
+              ) : t.hideStats ? null : (
               <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8, marginBottom:14 }}>
                 {[["🙏",fmt(t.souls),"Souls"],["📖",fmt(t.bibles),"Bibles"],["⛪",t.churches,"Churches"]].map(([icon,val,label])=>(
                   <div key={label} style={{ background:"rgba(255,255,255,0.03)", borderRadius:10, padding:"8px 6px", textAlign:"center" }}>

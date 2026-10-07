@@ -40,6 +40,12 @@ const waDigits = (contact, country) => {
   return "";
 };
 
+// What a reference answered when the admin messaged them (set on Verify Churches)
+const refTag = (status) =>
+  status === "confirmed" ? <span style={{ marginLeft: 8, fontWeight: 700, color: "#3ecf8e" }}>✓ Confirmed</span>
+  : status === "declined" ? <span style={{ marginLeft: 8, fontWeight: 700, color: "#e85b5b" }}>✗ Declined</span>
+  : null;
+
 const day = (iso) => (iso ? String(iso).slice(0, 10) : "—");
 const yn = (v) => (v ? "Yes" : "No");
 const pretty = (k) => k.replace(/_/g, " ").replace(/\b\w/g, m => m.toUpperCase());
@@ -50,6 +56,7 @@ const SHOWN_KEYS = new Set([
   "id", "user_id", "name", "street", "city", "province", "country", "phone", "email", "size", "website",
   "pastor_name", "pastor_email", "pastor_phone", "can_endorse", "show_phone_public",
   "reference_1_name", "reference_1_contact", "reference_2_name", "reference_2_contact",
+  "reference_1_status", "reference_2_status",
   "verified", "rejected", "rejection_reason", "created_at", "lat", "lng", "entity_type",
 ]);
 
@@ -207,10 +214,10 @@ export default function AdminPastors({ onBack }) {
 
         <Section title={isOrg ? "Board member references" : "Pastor references"}>
           <Field label={isOrg ? "Board member 1" : "Reference 1"}>
-            {c.reference_1_name ? <>{c.reference_1_name}{c.reference_1_contact ? ` · ${c.reference_1_contact}` : ""}{chatLink(c.reference_1_contact, c.country)}</> : "—"}
+            {c.reference_1_name ? <>{c.reference_1_name}{c.reference_1_contact ? ` · ${c.reference_1_contact}` : ""}{chatLink(c.reference_1_contact, c.country)}{refTag(c.reference_1_status)}</> : "—"}
           </Field>
           <Field label={isOrg ? "Board member 2" : "Reference 2"}>
-            {c.reference_2_name ? <>{c.reference_2_name}{c.reference_2_contact ? ` · ${c.reference_2_contact}` : ""}{chatLink(c.reference_2_contact, c.country)}</> : "—"}
+            {c.reference_2_name ? <>{c.reference_2_name}{c.reference_2_contact ? ` · ${c.reference_2_contact}` : ""}{chatLink(c.reference_2_contact, c.country)}{refTag(c.reference_2_status)}</> : "—"}
           </Field>
         </Section>
 
