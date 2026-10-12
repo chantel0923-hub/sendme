@@ -1694,6 +1694,22 @@ const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, o
     checkChurch();
     return ()=>{ cancelled = true; };
   },[user?.id,isPastor]);
+
+  // Applications SendMe sent back for changes: shown as a banner at the top so the person can't miss it
+  // (pastor-type accounts don't get the missionary dashboard shortcut, so they'd never find it otherwise).
+  const [changesCount,setChangesCount] = useState(0);
+  useEffect(()=>{
+    let cancelled = false;
+    const checkSentBack = async () => {
+      if(!user?.id) return;
+      try{
+        const { data, error } = await supabase.from("missions").select("id").eq("missionary_id",user.id).eq("status","changes_requested");
+        if(!error && !cancelled) setChangesCount((data||[]).length);
+      }catch(e){ /* leave the banner hidden */ }
+    };
+    checkSentBack();
+    return ()=>{ cancelled = true; };
+  },[user?.id]);
   useEffect(()=>{
     const fetchMissions = async () => {
       setLoading(true);
@@ -1779,6 +1795,83 @@ const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, o
         <AddToHomeScreenPrompt/>
         {user && <NotificationOptIn user={user}/>}
         {user && <NewsletterPrompt user={user}/>}
+        {changesCount>0 && (
+          <div onClick={onMissionaryDashboard} style={{ background:"rgba(232,179,75,0.12)",border:"1px solid rgba(232,179,75,0.45)",borderRadius:14,padding:"14px 18px",marginBottom:16,cursor:"pointer",display:"flex",gap:14,alignItems:"center" }}>
+            <div style={{ fontSize:26 }}>✏️</div>
+            <div style={{ flex:1 }}>
+              <div style={{ fontSize:14,fontWeight:700,color:"#e8b34b" }}>SendMe asked for changes to your application</div>
+              <div style={{ fontSize:12,color:"rgba(255,255,255,0.55)",marginTop:2,lineHeight:1.5 }}>Tap here to see what to fix, then resubmit — your answers are saved.</div>
+            </div>
+            <span style={{ color:"#e8b34b",fontSize:18 }}>→</span>
+          </div>
+        )}
+        {/* Active Missions first — on a phone the map used to fill the whole first screen and
+            the missions were at the very bottom of the page, so people never saw them. The region
+            filter travels with the list it filters; the General Fund banner follows the list
+            ("give here when nothing specific is listed"); the map comes right after. */}
+        <div style={{ marginBottom:28 }}>
+        <div style={{ fontSize:18,fontWeight:700,color:"#eef1ff",marginBottom:16 }}>✝ Active Missions</div>
+        <div style={{ display:"flex",gap:8,marginBottom:20,flexWrap:"wrap" }}>
+          {REGIONS.map(r=>(
+            <button key={r} onClick={()=>setRegion(r)} style={{ padding:"7px 16px",borderRadius:999,border:`1px solid ${region===r?"#e8b34b":"rgba(255,255,255,0.1)"}`,background:region===r?"rgba(232,179,75,0.15)":"rgba(255,255,255,0.03)",color:region===r?"#e8b34b":"rgba(255,255,255,0.5)",cursor:"pointer",fontSize:13,fontWeight:600,transition:"all .15s" }}>{r}</button>
+          ))}
+        </div>
+        {loading?(
+          <div style={{ textAlign:"center",padding:"40px 0",color:"rgba(255,255,255,0.3)",fontSize:14 }}>Loading missions...</div>
+        ):visible.length===0?(
+          <div style={{ textAlign:"center",padding:"48px 20px",color:"rgba(255,255,255,0.3)",fontSize:14,background:"rgba(255,255,255,0.02)",borderRadius:16,border:"1px solid rgba(255,255,255,0.06)" }}>
+            {region==="All"
+              ? "No active missions yet — check back soon as new missions are approved!"
+              : `No active missions in ${region} yet — try a different region or check back soon.`}
+          </div>
+        ):(
+          <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
+            {visible.map(m=>(
+              <div key={m.id} onClick={()=>onMission(m)} style={{ background:"#0c1628",borderRadius:18,border:`1px solid ${m.color}22`,padding:20,cursor:"pointer",borderLeft:`3px solid ${m.color}`,transition:"transform .15s, box-shadow .15s" }}
+                onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow=`0 8px 32px ${m.color}22`;}}
+                onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="";}}>
+                <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10 }}>
+                  <div style={{ display:"flex",gap:12,alignItems:"flex-start" }}>
+                    <div style={{ width:48,height:48,borderRadius:14,background:`${m.color}22`,border:`1.5px solid ${m.color}44`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0 }}>✝</div>
+                    <div>
+                      <div style={{ fontSize:10,color:m.color,letterSpacing:2,textTransform:"uppercase",marginBottom:2 }}>{m.role}</div>
+                      <div style={{ fontSize:16,fontWeight:700,color:"#eef1ff" }}>{m.protected?"Protected Mission":m.name}</div>
+                      <div style={{ fontSize:12,color:"rgba(255,255,255,0.35)",marginTop:2 }}>📍 {m.protected?m.region+" (Protected)":shortPlace(m)}</div>
+                    </div>
+                  </div>
+                  <div style={{ display:"flex",flexDirection:"column",gap:5,alignItems:"flex-end" }}>
+                    <span style={{ padding:"3px 10px",borderRadius:999,fontSize:11,background:m.status==="complete"?"rgba(62,207,142,0.15)":`${m.color}18`,color:m.status==="complete"?"#3ecf8e":m.color,border:`1px solid ${m.status==="complete"?"#3ecf8e33":m.color+"33"}`,whiteSpace:"nowrap" }}>{m.status==="complete"?"Done":"Active"}</span>
+                    <div style={{ display:"flex",gap:5 }}>
+                      <RiskBadge level={m.riskLevel||1}/>
+                      <TrustBadge level={m.trustLevel||1}/>
+                    </div>
+                  </div>
+                </div>
+                <div style={{ fontSize:14,fontWeight:600,color:"rgba(238,241,255,0.8)",marginBottom:10 }}>{m.title}</div>
+                <Bar raised={m.raised} goal={m.fundingTarget} color={m.color}/>
+                <div style={{ display:"flex",justifyContent:"space-between",margin:"8px 0 14px" }}>
+                  <span style={{ fontSize:13,color:m.color,fontWeight:700 }}>${fmt(m.raised)} raised</span>
+                  <span style={{ fontSize:12,color:"rgba(255,255,255,0.3)" }}>{pct(m.raised,m.fundingTarget)}% of ${fmt(m.fundingTarget)}</span>
+                </div>
+                <button onClick={e=>{e.stopPropagation();onMission(m);}} style={{ width:"100%",padding:"12px 0",borderRadius:12,border:"none",background:`linear-gradient(135deg,${m.color},${m.color}cc)`,color:"#000",fontWeight:700,cursor:"pointer",fontSize:14,boxShadow:`0 4px 20px ${m.color}44` }}>View Mission & Donate</button>
+              </div>
+            ))}
+          </div>
+        )}
+        <div style={{ height:16 }}/>
+        {/* General Fund — always visible, unlike the two banners above,
+            since this fund never has an "empty" state to hide behind (no
+            list of items, no active/inactive check) — it's meant to be the
+            permanent "give here when nothing else is open" option. */}
+        <div onClick={onGeneralFund} style={{ background:"linear-gradient(135deg,rgba(62,207,142,0.1),rgba(62,207,142,0.03))", borderRadius:16, border:"1px solid rgba(62,207,142,0.3)", padding:"18px 20px", marginBottom:28, cursor:"pointer", display:"flex", alignItems:"center", gap:16 }}>
+          <div style={{ fontSize:28 }}>🌐</div>
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:15, fontWeight:700, color:"#eef1ff", marginBottom:4 }}>SendMe General Fund</div>
+            <div style={{ fontSize:12.5, color:"rgba(255,255,255,0.5)", lineHeight:1.6 }}>Always open — give here anytime, especially when nothing specific is listed. SendMe puts it where it's needed most.</div>
+          </div>
+          <div style={{ fontSize:13, color:"#3ecf8e", fontWeight:700, whiteSpace:"nowrap" }}>Give Now →</div>
+        </div>
+        </div>
         <div style={{ marginBottom:24 }}>
           {loading?<LoadingMap/>:<MapboxMap missions={missions} onMissionClick={onMission}/>}
         </div>
@@ -1810,11 +1903,6 @@ const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, o
             </div>
           </div>
         )}
-        <div style={{ display:"flex",gap:8,marginBottom:20,flexWrap:"wrap" }}>
-          {REGIONS.map(r=>(
-            <button key={r} onClick={()=>setRegion(r)} style={{ padding:"7px 16px",borderRadius:999,border:`1px solid ${region===r?"#e8b34b":"rgba(255,255,255,0.1)"}`,background:region===r?"rgba(232,179,75,0.15)":"rgba(255,255,255,0.03)",color:region===r?"#e8b34b":"rgba(255,255,255,0.5)",cursor:"pointer",fontSize:13,fontWeight:600,transition:"all .15s" }}>{r}</button>
-          ))}
-        </div>
         <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:28 }}>
           {[["✝",activeCount,"Active Missions","#e8b34b"],["💝","$"+fmt(totalRaised),"Total Raised","#3ecf8e"],["👥",fmt(missions.reduce((acc,m)=>acc+(m.prayers||0),0)),"Prayers","#5b9cf6"],["🌍",countryCount,"Countries","#b06cf5"]].map(([icon,val,label,c])=>(
             <div key={label} style={{ background:"rgba(255,255,255,0.03)",borderRadius:14,border:"1px solid rgba(255,255,255,0.07)",padding:"16px 12px",textAlign:"center" }}>
@@ -1910,62 +1998,6 @@ const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, o
           </div>
         )}
 
-        {/* General Fund — always visible, unlike the two banners above,
-            since this fund never has an "empty" state to hide behind (no
-            list of items, no active/inactive check) — it's meant to be the
-            permanent "give here when nothing else is open" option. */}
-        <div onClick={onGeneralFund} style={{ background:"linear-gradient(135deg,rgba(62,207,142,0.1),rgba(62,207,142,0.03))", borderRadius:16, border:"1px solid rgba(62,207,142,0.3)", padding:"18px 20px", marginBottom:28, cursor:"pointer", display:"flex", alignItems:"center", gap:16 }}>
-          <div style={{ fontSize:28 }}>🌐</div>
-          <div style={{ flex:1 }}>
-            <div style={{ fontSize:15, fontWeight:700, color:"#eef1ff", marginBottom:4 }}>SendMe General Fund</div>
-            <div style={{ fontSize:12.5, color:"rgba(255,255,255,0.5)", lineHeight:1.6 }}>Always open — give here anytime, especially when nothing specific is listed. SendMe puts it where it's needed most.</div>
-          </div>
-          <div style={{ fontSize:13, color:"#3ecf8e", fontWeight:700, whiteSpace:"nowrap" }}>Give Now →</div>
-        </div>
-
-        <div style={{ fontSize:18,fontWeight:700,color:"#eef1ff",marginBottom:16 }}>✝ Active Missions</div>
-        {loading?(
-          <div style={{ textAlign:"center",padding:"40px 0",color:"rgba(255,255,255,0.3)",fontSize:14 }}>Loading missions...</div>
-        ):visible.length===0?(
-          <div style={{ textAlign:"center",padding:"48px 20px",color:"rgba(255,255,255,0.3)",fontSize:14,background:"rgba(255,255,255,0.02)",borderRadius:16,border:"1px solid rgba(255,255,255,0.06)" }}>
-            {region==="All"
-              ? "No active missions yet — check back soon as new missions are approved!"
-              : `No active missions in ${region} yet — try a different region or check back soon.`}
-          </div>
-        ):(
-          <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
-            {visible.map(m=>(
-              <div key={m.id} onClick={()=>onMission(m)} style={{ background:"#0c1628",borderRadius:18,border:`1px solid ${m.color}22`,padding:20,cursor:"pointer",borderLeft:`3px solid ${m.color}`,transition:"transform .15s, box-shadow .15s" }}
-                onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow=`0 8px 32px ${m.color}22`;}}
-                onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="";}}>
-                <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10 }}>
-                  <div style={{ display:"flex",gap:12,alignItems:"flex-start" }}>
-                    <div style={{ width:48,height:48,borderRadius:14,background:`${m.color}22`,border:`1.5px solid ${m.color}44`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0 }}>✝</div>
-                    <div>
-                      <div style={{ fontSize:10,color:m.color,letterSpacing:2,textTransform:"uppercase",marginBottom:2 }}>{m.role}</div>
-                      <div style={{ fontSize:16,fontWeight:700,color:"#eef1ff" }}>{m.protected?"Protected Mission":m.name}</div>
-                      <div style={{ fontSize:12,color:"rgba(255,255,255,0.35)",marginTop:2 }}>📍 {m.protected?m.region+" (Protected)":shortPlace(m)}</div>
-                    </div>
-                  </div>
-                  <div style={{ display:"flex",flexDirection:"column",gap:5,alignItems:"flex-end" }}>
-                    <span style={{ padding:"3px 10px",borderRadius:999,fontSize:11,background:m.status==="complete"?"rgba(62,207,142,0.15)":`${m.color}18`,color:m.status==="complete"?"#3ecf8e":m.color,border:`1px solid ${m.status==="complete"?"#3ecf8e33":m.color+"33"}`,whiteSpace:"nowrap" }}>{m.status==="complete"?"Done":"Active"}</span>
-                    <div style={{ display:"flex",gap:5 }}>
-                      <RiskBadge level={m.riskLevel||1}/>
-                      <TrustBadge level={m.trustLevel||1}/>
-                    </div>
-                  </div>
-                </div>
-                <div style={{ fontSize:14,fontWeight:600,color:"rgba(238,241,255,0.8)",marginBottom:10 }}>{m.title}</div>
-                <Bar raised={m.raised} goal={m.fundingTarget} color={m.color}/>
-                <div style={{ display:"flex",justifyContent:"space-between",margin:"8px 0 14px" }}>
-                  <span style={{ fontSize:13,color:m.color,fontWeight:700 }}>${fmt(m.raised)} raised</span>
-                  <span style={{ fontSize:12,color:"rgba(255,255,255,0.3)" }}>{pct(m.raised,m.fundingTarget)}% of ${fmt(m.fundingTarget)}</span>
-                </div>
-                <button onClick={e=>{e.stopPropagation();onMission(m);}} style={{ width:"100%",padding:"12px 0",borderRadius:12,border:"none",background:`linear-gradient(135deg,${m.color},${m.color}cc)`,color:"#000",fontWeight:700,cursor:"pointer",fontSize:14,boxShadow:`0 4px 20px ${m.color}44` }}>View Mission & Donate</button>
-              </div>
-            ))}
-          </div>
-        )}
         <div style={{ textAlign:"center",padding:"40px 0 20px",borderTop:"1px solid rgba(255,255,255,0.06)",marginTop:32 }}>
           <div style={{ fontSize:14,color:"rgba(255,255,255,0.3)",marginBottom:6 }}>✝ SendMe — For Message Believers Worldwide</div>
           <div style={{ fontSize:13,color:"#e8b34b",fontStyle:"italic" }}>"Here am I Lord, send me." — Isaiah 6:8</div>
@@ -2293,6 +2325,7 @@ export default function App() {
   const [authReady,setAuthReady]               = useState(false);
   const [screen,setScreen]                     = useState("home");
   const [selectedMission,setSelectedMission]   = useState(null);
+  const [editingMission,setEditingMission]       = useState(null); // an application SendMe sent back, being fixed & resubmitted
   // Set when a specific emergency card on Home is clicked, so the
   // Emergency Requests screen can jump straight into that one's
   // donate/respond modal instead of landing on the general list.
@@ -2366,6 +2399,7 @@ export default function App() {
       "/register-church":"church",
       "/emergency":"emergency",
       "/worker-requests":"worker",
+      "/dashboard":"missionary-dashboard",
       "/family-in-need":"family-needs",
       "/pastor-review":"pastor-review",
       "/testimonies":"testimonies",
@@ -2426,7 +2460,7 @@ export default function App() {
   if(screen==="admin-pipeline")   return isAdminUser ? <AdminPipeline onBack={()=>setScreen("home")} onAdminChurchVerification={()=>setScreen("admin-church-verification")} onAdminApprovals={()=>setScreen("admin-approvals")} onAdminPayouts={()=>setScreen("admin-payouts")} onAdminEmergency={()=>setScreen("admin-emergency")}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
   if(screen==="pray")             return <PrayerWall missions={liveMissions} onBack={()=>setScreen("home")} filterMissionId={prayerWallFilterMissionId}/>;
   if(screen==="churches")         return <ChurchesTab onBack={()=>setScreen("home")}/>;
-  if(screen==="apply")            return guest ? <GuestBlocked title="Registration Required" message="Applying as a missionary requires a SendMe account so your application can be tracked and your church can endorse you. Please sign in or register to continue." onBack={()=>setScreen("home")} onRegister={()=>{setGuest(false);setScreen("home");}}/> : userRole==="donor" ? <GuestBlocked title="Not Available for Donors" message="Applying as a missionary isn't available on a Donor/Supporter account. If you're called to the mission field, please register a separate missionary account, or contact admin to update your role." onBack={()=>setScreen("home")} primaryLabel="Back to Home" onPrimary={()=>setScreen("home")}/> : <MissionaryApplication onBack={()=>setScreen("home")} user={user}/>;
+  if(screen==="apply")            return guest ? <GuestBlocked title="Registration Required" message="Applying as a missionary requires a SendMe account so your application can be tracked and your church can endorse you. Please sign in or register to continue." onBack={()=>setScreen("home")} onRegister={()=>{setGuest(false);setScreen("home");}}/> : userRole==="donor" ? <GuestBlocked title="Not Available for Donors" message="Applying as a missionary isn't available on a Donor/Supporter account. If you're called to the mission field, please register a separate missionary account, or contact admin to update your role." onBack={()=>setScreen("home")} primaryLabel="Back to Home" onPrimary={()=>setScreen("home")}/> : <MissionaryApplication key={editingMission ? editingMission.id : "new"} onBack={()=>{ setEditingMission(null); setScreen(editingMission ? "missionary-dashboard" : "home"); }} user={user} editMission={editingMission}/>;
   if(screen==="church")           return (isPastor||isAdminUser) ? <ChurchRegistration onBack={()=>setScreen("home")} user={user} userRole={userRole}/> : null;
   if(screen==="my-church")        return (isPastor||isAdminUser) ? <MyChurch onBack={()=>setScreen("home")} user={user} userRole={userRole} onPayout={()=>setScreen("payout")}/> : null;
   if(screen==="profile")          return <DonorProfile user={user} onBack={()=>setScreen("home")} userRole={userRole} isAdmin={isAdminUser}/>;
@@ -2437,7 +2471,7 @@ export default function App() {
   if(screen==="qr")               return <QRShare missions={liveMissions} onBack={()=>setScreen("home")}/>;
   if(screen==="milestone-proof")  return <ProofCenter onBack={()=>setScreen("home")} user={user} isAdmin={isAdminUser} isPastor={isPastor} initialTab="submit"/>;
   if(screen==="pastor-review")    return (isPastor||isAdminUser) ? <ProofCenter onBack={()=>setScreen("home")} user={user} isAdmin={isAdminUser} isPastor={true} initialTab="approve"/> : <FAQScreen onBack={()=>setScreen("home")}/>;
-  if(screen==="missionary-dashboard") return <MissionaryDashboard onBack={()=>setScreen("home")} user={user} onSubmitProof={()=>setScreen("milestone-proof")}/>;
+  if(screen==="missionary-dashboard") return <MissionaryDashboard onBack={()=>setScreen("home")} user={user} onSubmitProof={()=>setScreen("milestone-proof")} onFixApplication={(m)=>{ setEditingMission(m); setScreen("apply"); }}/>;
   if(screen==="admin-approvals")  return isAdminUser ? <AdminApprovals onBack={()=>setScreen("home")} user={user}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
   if(screen==="admin-church-verification") return isAdminUser ? <AdminChurchVerification onBack={()=>setScreen("home")} user={user}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
   if(screen==="admin-workers")        return isAdminUser ? <AdminWorkerRequests onBack={()=>setScreen("home")}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
@@ -2458,7 +2492,7 @@ export default function App() {
   return(
     <HomeScreen
       onMission={openMission} user={user} userRole={userRole} onSignOut={signOut}
-      onApply={()=>setScreen("apply")} onChurch={()=>setScreen("church")}
+      onApply={()=>{ setEditingMission(null); setScreen("apply"); }} onChurch={()=>setScreen("church")}
       onMyChurch={()=>setScreen("my-church")}
       onChurches={()=>setScreen("churches")} onProfile={()=>setScreen("profile")}
       onEmergency={()=>setScreen("emergency")} onEmergencyDetail={(id)=>{ setSelectedEmergencyId(id); setScreen("emergency"); }} onFamilyNeed={()=>setScreen("family-needs")} onGeneralFund={()=>setScreen("general-fund")} onMatching={()=>setScreen("matching")}

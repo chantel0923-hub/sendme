@@ -24,6 +24,7 @@ const timeAgo = (dateStr) => {
 // Used both for the summary strip counts and to decide default collapse state.
 const missionBucket = (m, proofs) => {
   const currentMilestone = m.current_milestone || m.milestone || 1;
+  if (m.status === "changes_requested") return "needsChanges";
   if (m.status === "rejected") return "rejected";
   if (m.status === "complete") return "complete";
   if (m.status !== "active") return "awaitingApproval";
@@ -33,6 +34,7 @@ const missionBucket = (m, proofs) => {
 };
 
 const BUCKET_META = {
+  needsChanges:     { icon: "✏️", color: "#e8b34b", label: n => `${n} need${n===1?"s":""} your changes` },
   needsProof:       { icon: "📋", color: "#5b9cf6", label: n => `${n} need${n===1?"s":""} your proof` },
   awaitingPastor:   { icon: "⏳", color: "#e8b34b", label: n => `${n} awaiting pastor review` },
   awaitingApproval: { icon: "🕊", color: "#e8b34b", label: n => `${n} awaiting approval` },
@@ -40,7 +42,7 @@ const BUCKET_META = {
   complete:         { icon: "🏆", color: "#3ecf8e", label: n => `${n} complete` },
   rejected:         { icon: "❌", color: "#e85b5b", label: n => `${n} not approved` },
 };
-const BUCKET_ORDER = ["needsProof", "awaitingPastor", "allDone", "awaitingApproval", "complete", "rejected"];
+const BUCKET_ORDER = ["needsChanges", "needsProof", "awaitingPastor", "allDone", "awaitingApproval", "complete", "rejected"];
 
 // A mission card collapses to just its header by default once it's finished
 // (complete or rejected) — nothing more for the missionary to act on there.
@@ -88,7 +90,7 @@ const ProofEntry = ({ p, expanded, onToggle }) => {
   );
 };
 
-export default function MissionaryDashboard({ onBack, user, onSubmitProof }) {
+export default function MissionaryDashboard({ onBack, user, onSubmitProof, onFixApplication }) {
   const [missions, setMissions]     = useState([]);
   const [proofsByMission, setProofsByMission] = useState({});
   const [loading, setLoading]       = useState(true);
@@ -306,7 +308,22 @@ export default function MissionaryDashboard({ onBack, user, onSubmitProof }) {
                   {!isCollapsed && (
                     <>
                       {/* Milestone status */}
-                      {m.status === "rejected" ? (
+                      {m.status === "changes_requested" ? (
+                        <div style={{ padding: "16px 22px", background: "rgba(232,179,75,0.08)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: "#e8b34b" }}>✏️ SendMe asked for a few changes</div>
+                          <div style={{ fontSize: 13, color: "rgba(255,255,255,0.8)", marginTop: 8, lineHeight: 1.7, whiteSpace: "pre-wrap" }}>
+                            {m.rejection_reason || "Please review your application, update it and resubmit."}
+                          </div>
+                          <button
+                            onClick={() => onFixApplication && onFixApplication(m)}
+                            style={{ marginTop: 14, width: "100%", padding: "13px 0", borderRadius: 12, border: "none", background: "linear-gradient(135deg,#e8b34b,#c8942b)", color: "#000", fontWeight: 700, fontSize: 14, fontFamily: "Georgia, serif", cursor: "pointer" }}>
+                            ✏️ Fix &amp; Resubmit
+                          </button>
+                          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: 8, lineHeight: 1.6 }}>
+                            Everything you entered is saved — you only need to update what is mentioned above, then send it back for approval.
+                          </div>
+                        </div>
+                      ) : m.status === "rejected" ? (
                         <div style={{ padding: "16px 22px", background: "rgba(232,91,91,0.06)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
                           <div style={{ fontSize: 13, fontWeight: 700, color: "#e85b5b" }}>❌ Application Not Approved</div>
                           <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginTop: 4 }}>

@@ -34,7 +34,11 @@ const CORS_HEADERS = {
 // types anyone could ask it to send. Types listed here carry free text typed by the
 // admin, so they are only sent when the signed-in caller is the SendMe admin.
 const ADMIN_EMAIL = (Deno.env.get("ADMIN_EMAIL") ?? "sendmemissionfund@gmail.com").trim().toLowerCase();
-const ADMIN_ONLY_TYPES = new Set(["applicant_question"]);
+// type -> the data field holding the text the admin typed (must be present, 1-4000 characters)
+const ADMIN_ONLY_FIELDS = new Map<string, string>([
+  ["applicant_question", "message"],
+  ["application_changes_requested", "note"],
+]);
 
 function escapeHtml(v: unknown): string {
   return String(v ?? "")
@@ -317,6 +321,23 @@ const TEMPLATES: Record<string, (d: any) => { subject: string; html: string }> =
       Before we make a decision, we have a question for you:<br/><br/>
       <div style="background:rgba(232,179,75,0.08);border:1px solid rgba(232,179,75,0.25);border-radius:10px;padding:14px 16px;color:#eef1ff;">${escapeHtml(d.message).replace(/\r?\n/g, "<br/>")}</div>
       <br/>Please simply <strong>reply to this email</strong> with your answer. God bless you.`,
+    ),
+  }),
+
+  // Sent when the admin SENDS BACK an application for changes instead of rejecting it.
+  // ADMIN-ONLY (see ADMIN_ONLY_FIELDS) — the note is typed by the admin. The applicant fixes
+  // and resubmits from their dashboard (Fix & Resubmit), so nothing needs to be re-typed.
+  application_changes_requested: (d) => ({
+    subject: `Your SendMe application needs a few changes${d.missionTitle ? ` — ${String(d.missionTitle).replace(/[\r\n]+/g, " ")}` : ""}`,
+    html: wrapEmail(
+      "A Few Changes Needed",
+      `Dear ${escapeHtml(d.missionaryName) || "brother/sister"},<br/><br/>
+      Thank you for applying through SendMe${d.missionTitle ? ` with <strong style="color:#e8b34b;">${escapeHtml(d.missionTitle)}</strong>` : ""}.
+      We are not able to approve it just yet — we need a few changes first:<br/><br/>
+      <div style="background:rgba(232,179,75,0.08);border:1px solid rgba(232,179,75,0.25);border-radius:10px;padding:14px 16px;color:#eef1ff;">${escapeHtml(d.note).replace(/\r?\n/g, "<br/>")}</div>
+      <br/>Please sign in to SendMe, open your dashboard and tap <strong>Fix &amp; Resubmit</strong>.
+      Everything you already entered is saved, so you only need to update what is mentioned above and send it back for approval.`,
+      "Fix & Resubmit", d.dashboardUrl || SITE_URL
     ),
   }),
 
@@ -633,10 +654,10 @@ serve(async (req) => {
     }
 
     // Admin-typed types: caller must be the admin, and the message must be present and sane.
-    if (ADMIN_ONLY_TYPES.has(type)) {
+    if (ADMIN_ONLY_FIELDS.has(type)) {
       const blocked = await requireAdmin(req);
       if (blocked) return blocked;
-      const message = String(data?.message ?? "").trim();
+      const message = String(data?.[ADMIN_ONLY_FIELDS.get(type) as string] ?? "").trim();
       if (!message || message.length > 4000) {
         return new Response(JSON.stringify({ sent: false, error: "A message of 1 to 4000 characters is required." }), {
           status: 400,

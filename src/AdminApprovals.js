@@ -3,10 +3,8 @@ import { useState, useEffect } from "react";
 import { supabase } from "./supabase";
 import { ADMIN_EMAIL } from "./AdminPayouts";
 import { sendNotification } from "./notifications";
+import AdminMissionEditor from "./AdminMissionEditor";
 
-
-// Opens compose in the SendMe Gmail account specifically (not the browser/OS default mail app).
-const SENDME_GMAIL = "sendmemissionfund@gmail.com";
 
 // Digits for a wa.me link from an applicant's phone, or "" if it isn't a usable
 // international number. (Anonymous "shadow mode" applicants have no phone saved.)
@@ -52,6 +50,14 @@ export default function AdminApprovals({ onBack, user }) {
   // admin manually unblocks (no automated deadline — pure judgment call).
   const [flagging, setFlagging]     = useState(null);   // mission id showing the flag UI
   const [flagReason, setFlagReason] = useState({});       // { [missionId]: string }
+  // Edit Mission (fix/add to a mission after it's posted)
+  const [editingId, setEditingId]     = useState(null);   // mission id whose editor is open
+  const [savedNotice, setSavedNotice] = useState(null);   // mission id flashing "✓ updated"
+  // Email Applicant — in-app question to the applicant
+  const [askOpen, setAskOpen]         = useState({});     // { [missionId]: bool }
+  const [askText, setAskText]         = useState({});     // { [missionId]: string }
+  const [askSending, setAskSending]   = useState(null);   // mission id being sent
+  const [askStatus, setAskStatus]     = useState({});     // { [missionId]: { ok, text } }
   const [blockedProfiles, setBlockedProfiles] = useState([]);
   const loadBlockedProfiles = async () => {
     const { data } = await supabase
@@ -85,6 +91,29 @@ export default function AdminApprovals({ onBack, user }) {
       setMissions([]);
     }
     setLoading(false);
+  };
+
+  // Sends the admin's question to the applicant from SendMe (reply-to is the SendMe Gmail).
+  // Goes through the admin-only "applicant_question" email type, so it works on any
+  // device and doesn't depend on which Google account the browser is signed into.
+  const sendAsk = async (m) => {
+    const msg = (askText[m.id] || "").trim();
+    if (!msg) { setAskStatus(p => ({ ...p, [m.id]: { ok: false, text: "Please type your question first." } })); return; }
+    setAskSending(m.id);
+    setAskStatus(p => ({ ...p, [m.id]: null }));
+    const res = await sendNotification("applicant_question", m.missionary_email, {
+      missionaryName: m.missionary_name || "",
+      missionTitle: m.title || "",
+      message: msg,
+    });
+    setAskSending(null);
+    if (res && res.sent === true) {
+      setAskStatus(p => ({ ...p, [m.id]: { ok: true, text: "✓ Sent. Their reply will arrive in the SendMe Gmail inbox." } }));
+      setAskText(p => ({ ...p, [m.id]: "" }));
+      setAskOpen(p => ({ ...p, [m.id]: false }));
+    } else {
+      setAskStatus(p => ({ ...p, [m.id]: { ok: false, text: "Couldn't send the email. Please try again, or use the WhatsApp button." } }));
+    }
   };
 
   const approve = async (m) => {
@@ -288,6 +317,51 @@ export default function AdminApprovals({ onBack, user }) {
     setActing(null);
   };
 
+  // SEND BACK FOR CHANGES — instead of a final rejection, the applicant is asked to fix specific
+  // things and resubmit the SAME application from their dashboard (nothing is re-typed). The note
+  // is required: it is exactly what the applicant sees. It is kept in rejection_reason and the
+  // status becomes 'changes_requested'. The applicant's resubmit goes through the
+  // resubmit_mission() database function, which puts it back in the approval queue.
+  const sendBack = async (m) => {
+    const note = (reasons[m.id] || "").trim();
+    if (!note) { setError("Please type what needs to change in the note box first — the applicant will see it."); return; }
+    setActing(m.id);
+    setError("");
+    try {
+      const { data, error } = await supabase
+        .from("missions")
+        .update({
+          status: "changes_requested",
+          reviewed_at: new Date().toISOString(),
+          reviewed_by: user.email,
+          rejection_reason: note,
+        })
+        .eq("id", m.id)
+        .select("id")
+        .maybeSingle();
+      if (error) throw error;
+      // supabase-js doesn't throw when the database silently blocks an update — it returns no row
+      if (!data) throw new Error("nothing was saved — the database may have blocked it");
+      const res = await sendNotification("application_changes_requested", m.missionary_email, {
+        missionaryName: m.missionary_name,
+        missionTitle: m.title,
+        note,
+        dashboardUrl: "https://sendmeglobalmission.org/dashboard",
+      });
+      setReasons(r => ({ ...r, [m.id]: "" }));
+      await load();
+      if (!res || res.sent !== true) {
+        setError("Sent back, but the email to the applicant could not be sent. Use the WhatsApp button on their card instead.");
+      }
+    } catch (e) {
+      const msg = e.message || "";
+      setError(/check constraint|violates/i.test(msg)
+        ? "The database doesn't allow the status 'changes_requested' yet. Run the status SQL from the hand-over message first."
+        : "Could not send the application back. (" + msg + ")");
+    }
+    setActing(null);
+  };
+
   if (!isAdmin) {
     return (
       <div style={{ minHeight: "100vh", background: "#060c18", color: "#eef1ff", fontFamily: "Georgia, serif", display: "flex", alignItems: "center", justifyContent: "center", padding: 32 }}>
@@ -305,8 +379,10 @@ export default function AdminApprovals({ onBack, user }) {
     if (filter === "pending") return pendingStatuses.includes(m.status);
     if (filter === "active")  return m.status === "active";
     if (filter === "rejected") return m.status === "rejected";
+    if (filter === "changes")  return m.status === "changes_requested";
     return true; // all
   });
+  const sentBackCount = missions.filter(m => m.status === "changes_requested").length;
   const pendingCount = missions.filter(m => pendingStatuses.includes(m.status)).length;
 
   return (
@@ -363,10 +439,10 @@ export default function AdminApprovals({ onBack, user }) {
 
         {/* Filter tabs */}
         <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
-          {[["pending", "Pending"], ["active", "Active"], ["rejected", "Rejected"], ["all", "All"]].map(([key, label]) => (
+          {[["pending", "Pending"], ["changes", "Sent back"], ["active", "Active"], ["rejected", "Rejected"], ["all", "All"]].map(([key, label]) => (
             <button key={key} onClick={() => setFilter(key)}
               style={{ padding: "7px 18px", borderRadius: 999, border: `1px solid ${filter === key ? "#e8b34b" : "rgba(255,255,255,0.1)"}`, background: filter === key ? "rgba(232,179,75,0.15)" : "rgba(255,255,255,0.03)", color: filter === key ? "#e8b34b" : "rgba(255,255,255,0.4)", cursor: "pointer", fontSize: 13, fontWeight: 600, fontFamily: "Georgia, serif" }}>
-              {label}
+              {key === "changes" && sentBackCount > 0 ? `${label} (${sentBackCount})` : label}
             </button>
           ))}
         </div>
@@ -408,7 +484,7 @@ export default function AdminApprovals({ onBack, user }) {
                       background: m.status === "active" ? "rgba(62,207,142,0.12)" : m.status === "rejected" ? "rgba(232,91,91,0.12)" : m.status === "cancelled" ? "rgba(255,255,255,0.08)" : "rgba(232,179,75,0.12)",
                       color: m.status === "active" ? "#3ecf8e" : m.status === "rejected" ? "#e85b5b" : m.status === "cancelled" ? "rgba(255,255,255,0.5)" : "#e8b34b",
                       border: `1px solid ${m.status === "active" ? "rgba(62,207,142,0.3)" : m.status === "rejected" ? "rgba(232,91,91,0.3)" : m.status === "cancelled" ? "rgba(255,255,255,0.15)" : "rgba(232,179,75,0.3)"}` }}>
-                      {m.status === "pending_church" ? "pending (church)" : (m.status || "pending")}
+                      {m.status === "pending_church" ? "pending (church)" : m.status === "changes_requested" ? "sent back for changes" : (m.status || "pending")}
                     </span>
                   </div>
 
@@ -478,6 +554,22 @@ export default function AdminApprovals({ onBack, user }) {
                   {blockedNotice === m.id && (
                     <div style={{ background: "rgba(232,91,91,0.12)", border: "1px solid rgba(232,91,91,0.4)", borderRadius: 10, padding: "10px 14px", marginBottom: 14, fontSize: 13, color: "#e85b5b" }}>
                       ⚠️ Cannot approve — this mission's church is not verified yet. Ask the missionary to select a registered church, or wait for their church to complete registration.
+                    </div>
+                  )}
+
+                  {/* Sent back for changes: the note the applicant sees, plus a WhatsApp nudge */}
+                  {m.status === "changes_requested" && (
+                    <div style={{ background: "rgba(232,179,75,0.06)", borderRadius: 10, border: "1px solid rgba(232,179,75,0.25)", padding: "12px 14px", marginBottom: 14, fontSize: 13, color: "rgba(255,255,255,0.7)", lineHeight: 1.6 }}>
+                      <div style={{ color: "#e8b34b", fontWeight: 700, fontSize: 12, marginBottom: 4 }}>↩️ Waiting for {m.missionary_name || "the applicant"} to fix and resubmit</div>
+                      <div style={{ whiteSpace: "pre-wrap" }}><span style={{ color: "rgba(255,255,255,0.35)", fontSize: 11 }}>Your note: </span>{m.rejection_reason}</div>
+                      {waDigits(m.applicant_phone, m.applicant_current_country) && (
+                        <a
+                          href={`https://wa.me/${waDigits(m.applicant_phone, m.applicant_current_country)}?text=${encodeURIComponent(`Hello ${m.missionary_name || ""}, we asked for a few changes to your SendMe application "${m.title || "your mission"}":\n\n${m.rejection_reason || ""}\n\nPlease sign in to SendMe and tap Fix & Resubmit on your dashboard (sendmeglobalmission.org/dashboard). God bless you.`)}`}
+                          target="_blank" rel="noopener noreferrer"
+                          style={{ display: "inline-block", marginTop: 10, padding: "8px 14px", borderRadius: 9, border: "1px solid rgba(37,211,102,0.4)", background: "rgba(37,211,102,0.08)", color: "#25d366", fontWeight: 700, fontSize: 12, textDecoration: "none", fontFamily: "Georgia, serif" }}>
+                          💬 Remind them on WhatsApp
+                        </a>
+                      )}
                     </div>
                   )}
 
@@ -561,6 +653,29 @@ export default function AdminApprovals({ onBack, user }) {
                     )
                   )}
 
+                  {/* Edit Mission — fix or add to a mission after it's posted: text, location,
+                      map pin, dates. Never money (see AdminMissionEditor.js). */}
+                  {editingId === m.id ? (
+                    <AdminMissionEditor
+                      mission={m}
+                      onCancel={() => setEditingId(null)}
+                      onSaved={(row) => {
+                        setMissions(prev => prev.map(x => (x.id === row.id ? { ...x, ...row } : x)));
+                        setEditingId(null);
+                        setSavedNotice(m.id);
+                        setTimeout(() => setSavedNotice(null), 4000);
+                      }}
+                    />
+                  ) : (
+                    <button onClick={() => setEditingId(m.id)}
+                      style={{ display: "block", width: "100%", textAlign: "center", marginBottom: 12, padding: "11px 0", borderRadius: 10, border: "1px solid rgba(232,179,75,0.35)", background: "rgba(232,179,75,0.08)", color: "#e8b34b", fontWeight: 700, fontSize: 13, fontFamily: "Georgia, serif", cursor: "pointer" }}>
+                      ✏️ Edit Mission Details
+                    </button>
+                  )}
+                  {savedNotice === m.id && (
+                    <div style={{ fontSize: 12, color: "#3ecf8e", marginBottom: 12 }}>✓ Mission updated.</div>
+                  )}
+
                   {/* Flag Missionary — shown regardless of mission status
                       (active, complete, or cancelled), since admin may
                       judge this well after the mission itself is resolved.
@@ -595,16 +710,44 @@ export default function AdminApprovals({ onBack, user }) {
                     )
                   )}
 
-                  {/* Email Applicant — lets admin ask questions before deciding.
-                      A prefilled mailto: opens in admin's own mail app, so
-                      the applicant's reply lands directly in admin's inbox. */}
+                  {/* Email Applicant — in-app. The admin types a question and the app emails it
+                      from SendMe (notifications@sendmeglobalmission.org) with Reply-To set to the
+                      SendMe Gmail, so the applicant's reply lands in the SendMe inbox. */}
                   {isPending && m.missionary_email && (
-                    <a
-                      href={`https://mail.google.com/mail/u/${SENDME_GMAIL}/?tf=cm&to=${encodeURIComponent(m.missionary_email)}&su=${encodeURIComponent("SendMe — a few questions about your mission application")}&body=${encodeURIComponent(`Dear ${m.missionary_name || "Brother/Sister"},\n\nThank you for applying through SendMe Global Mission Fund with "${m.title || "your mission"}". Before we can make a decision, we have a few questions:\n\n1. \n\nPlease reply to this email with your answers.\n\nGod bless,\nSendMe Global Mission Fund`)}`}
-                      target="_blank" rel="noopener noreferrer"
-                      style={{ display: "block", textAlign: "center", textDecoration: "none", marginBottom: 12, padding: "11px 0", borderRadius: 10, border: "1px solid rgba(91,156,246,0.35)", background: "rgba(91,156,246,0.08)", color: "#5b9cf6", fontWeight: 700, fontSize: 13, fontFamily: "Georgia, serif" }}>
-                      ✉️ Email Applicant — Ask a Question
-                    </a>
+                    <div style={{ marginBottom: 12 }}>
+                      {askOpen[m.id] ? (
+                        <div style={{ background: "rgba(91,156,246,0.06)", border: "1px solid rgba(91,156,246,0.3)", borderRadius: 12, padding: "12px 14px" }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: "#5b9cf6", marginBottom: 4 }}>✉️ Question for {m.missionary_name || "the applicant"}</div>
+                          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginBottom: 8, lineHeight: 1.5 }}>
+                            Sent to {m.missionary_email} from SendMe. Their reply comes to the SendMe Gmail inbox.
+                          </div>
+                          <textarea
+                            value={askText[m.id] || ""}
+                            onChange={e => setAskText(p => ({ ...p, [m.id]: e.target.value }))}
+                            placeholder="e.g. Please tell us more about how the funds will be used for the tent meetings."
+                            style={{ width: "100%", boxSizing: "border-box", minHeight: 90, padding: "10px 12px", borderRadius: 10, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)", color: "#eef1ff", fontSize: 13, fontFamily: "Georgia, serif", outline: "none", resize: "vertical" }}
+                          />
+                          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                            <button onClick={() => sendAsk(m)} disabled={askSending === m.id}
+                              style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "none", background: "linear-gradient(135deg,#5b9cf6,#3d7fd9)", color: "#fff", fontWeight: 700, fontSize: 13, fontFamily: "Georgia, serif", cursor: askSending === m.id ? "default" : "pointer", opacity: askSending === m.id ? 0.7 : 1 }}>
+                              {askSending === m.id ? "Sending..." : "Send question"}
+                            </button>
+                            <button onClick={() => setAskOpen(p => ({ ...p, [m.id]: false }))} disabled={askSending === m.id}
+                              style={{ padding: "10px 16px", borderRadius: 10, border: "1px solid rgba(255,255,255,0.15)", background: "transparent", color: "rgba(255,255,255,0.55)", fontWeight: 600, fontSize: 13, fontFamily: "Georgia, serif", cursor: "pointer" }}>
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button onClick={() => setAskOpen(p => ({ ...p, [m.id]: true }))}
+                          style={{ display: "block", width: "100%", textAlign: "center", padding: "11px 0", borderRadius: 10, border: "1px solid rgba(91,156,246,0.35)", background: "rgba(91,156,246,0.08)", color: "#5b9cf6", fontWeight: 700, fontSize: 13, fontFamily: "Georgia, serif", cursor: "pointer" }}>
+                          ✉️ Email Applicant — Ask a Question
+                        </button>
+                      )}
+                      {askStatus[m.id] && (
+                        <div style={{ fontSize: 12, marginTop: 6, color: askStatus[m.id].ok ? "#3ecf8e" : "#e85b5b", lineHeight: 1.5 }}>{askStatus[m.id].text}</div>
+                      )}
+                    </div>
                   )}
 
                   {/* WhatsApp Applicant — works on any device, no Gmail account needed.
@@ -621,7 +764,7 @@ export default function AdminApprovals({ onBack, user }) {
                   {/* Action area — only for pending */}
                   {isPending && (
                     <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 16 }}>
-                      <div style={{ fontSize: 13, color: "rgba(255,255,255,0.35)", marginBottom: 8 }}>Rejection reason (only needed if rejecting)</div>
+                      <div style={{ fontSize: 13, color: "rgba(255,255,255,0.35)", marginBottom: 8 }}>Note to the applicant (needed to reject, or to send back for changes)</div>
                       <textarea
                         value={reasons[m.id] || ""}
                         onChange={e => setReasons(r => ({ ...r, [m.id]: e.target.value }))}
@@ -645,6 +788,19 @@ export default function AdminApprovals({ onBack, user }) {
                           style={{ padding: "13px 0", borderRadius: 12, border: "1px solid rgba(232,91,91,0.4)", background: "rgba(232,91,91,0.08)", color: "#e85b5b", fontWeight: 700, cursor: isActing ? "default" : "pointer", fontSize: 14, fontFamily: "Georgia, serif", transition: "all .2s" }}>
                           {isActing ? "Saving..." : "❌ Reject"}
                         </button>
+                      </div>
+                      <button
+                        onClick={() => sendBack(m)}
+                        disabled={isActing || !(reasons[m.id] || "").trim()}
+                        style={{ marginTop: 10, width: "100%", padding: "12px 0", borderRadius: 12, fontWeight: 700, fontSize: 14, fontFamily: "Georgia, serif",
+                          border: "1px solid rgba(232,179,75,0.45)",
+                          background: (reasons[m.id] || "").trim() ? "rgba(232,179,75,0.12)" : "rgba(232,179,75,0.04)",
+                          color: (reasons[m.id] || "").trim() ? "#e8b34b" : "rgba(232,179,75,0.4)",
+                          cursor: (isActing || !(reasons[m.id] || "").trim()) ? "default" : "pointer" }}>
+                        ↩️ Send Back for Changes
+                      </button>
+                      <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: 6, lineHeight: 1.5 }}>
+                        Not a final no: the applicant gets your note by email, fixes it on their dashboard and resubmits the same application.
                       </div>
                     </div>
                   )}

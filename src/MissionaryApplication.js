@@ -563,13 +563,13 @@ const Step4 = ({ form, set }) => (
   </div>
 );
 
-const Step5 = ({ form, set, submitted, submitting, onSubmit }) => {
+const Step5 = ({ form, set, submitted, submitting, onSubmit, resubmit }) => {
   if (submitted) {
     return (
       <div style={{ textAlign:"center",padding:"20px 0 10px",display:"flex",flexDirection:"column",alignItems:"center",gap:20 }}>
         <div style={{ width:80,height:80,borderRadius:"50%",background:"rgba(62,207,142,0.12)",border:"2px solid rgba(62,207,142,0.4)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:38 }}>🙏</div>
         <div>
-          <div style={{ fontSize:26,fontWeight:700,color:"#eef1ff",marginBottom:10 }}>Application Submitted</div>
+          <div style={{ fontSize:26,fontWeight:700,color:"#eef1ff",marginBottom:10 }}>{resubmit ? "Application Resubmitted" : "Application Submitted"}</div>
           <div style={{ fontSize:14,color:"rgba(255,255,255,0.5)",lineHeight:1.8,maxWidth:380 }}>
             Thank you, <strong style={{color:"#e8b34b"}}>{form.fullName}</strong>. Your application has been received.<br/><br/>
             {form.churchVerified
@@ -657,7 +657,7 @@ const Step5 = ({ form, set, submitted, submitting, onSubmit }) => {
           color:submitting||!form.surchargeAcknowledged?"rgba(255,255,255,0.25)":"#000",fontWeight:700,
           cursor:submitting||!form.surchargeAcknowledged?"default":"pointer",fontSize:16,fontFamily:"Georgia, serif",
           boxShadow:submitting||!form.surchargeAcknowledged?"none":"0 6px 28px rgba(232,179,75,0.44)",transition:"all .2s" }}>
-        {submitting?"Submitting...":!form.surchargeAcknowledged?"Please acknowledge the surcharge above":"Submit My Application"}
+        {submitting?"Submitting...":!form.surchargeAcknowledged?"Please acknowledge the surcharge above":(resubmit ? "Resubmit My Application" : "Submit My Application")}
       </button>
     </div>
   );
@@ -693,7 +693,52 @@ const validate = (step, form) => {
   return null;
 };
 
-export default function MissionaryApplication({ onBack, user }) {
+// FIX & RESUBMIT ─────────────────────────────────────────────────────────────
+// Columns an applicant may change when fixing an application that SendMe sent back. This list
+// mirrors the allowlist inside the resubmit_mission() database function, which is what actually
+// enforces it (money fields, status and ownership are never taken from the browser).
+const RESUBMIT_FIELDS = [
+  "missionary_name", "missionary_role", "applicant_phone", "applicant_birth_country",
+  "applicant_current_country", "applicant_home_address", "church_name", "church_id",
+  "pastor_name", "pastor_email", "title", "region", "country", "city", "area", "risk_level",
+  "lat", "lng", "blurb", "goal", "local_amount", "local_currency", "surcharge_acknowledged",
+  "requires_full_funding", "start_date", "duration_months", "milestone_1_detail",
+  "milestone_2_detail", "milestone_3_detail", "years_as_believer", "calling_testimony",
+  "personal_testimony", "previous_experience", "protected",
+];
+
+// Turns a saved application (a row from the missions table) back into the form's fields, so the
+// applicant only has to change what was asked for. A country that isn't in the list (e.g. a
+// province typed by mistake) is left blank so the form makes them choose a real one.
+const formFromMission = (m, user) => ({
+  fullName: m.missionary_name || user?.user_metadata?.full_name || "", email: m.missionary_email || user?.email || "",
+  phone: m.applicant_phone || "", birthCountry: m.applicant_birth_country || "", currentCountry: m.applicant_current_country || "",
+  address: m.applicant_home_address || "", role: m.missionary_role || "",
+  yearsBeliever: m.years_as_believer != null ? String(m.years_as_believer) : "", calling: m.calling_testimony || "",
+  testimony: m.personal_testimony || "", experience: m.previous_experience || "", shadowMode: !!m.protected,
+  churchId: m.church_id || "", churchName: m.church_name || "", pastorName: m.pastor_name || "", pastorEmail: m.pastor_email || "", pastorPhone: "",
+  churchCity: "", churchCountry: "", churchWebsite: "",
+  churchNotOnSendMe: !m.church_id && !!m.church_name, churchVerified: !!m.church_verified,
+  missionTitle: m.title || "", targetRegion: m.region || "", targetCountry: countryIso(m.country) ? m.country : "",
+  targetCity: m.city || "", targetArea: m.area || "", riskLevel: m.risk_level ? String(m.risk_level) : "",
+  missionDescription: m.blurb || "", fundingGoal: m.goal != null ? String(m.goal) : "",
+  // For a USD goal the form keeps the amount in "localAmount" too (and a USD application is saved with
+  // local_amount empty), so load the goal back into it — otherwise the form's goal calculator sees an
+  // empty amount and blanks the goal. For another currency, the saved local amount is loaded and the
+  // USD goal is recalculated from it exactly as when the application was first filled in.
+  localAmount: (m.local_currency && m.local_currency !== "USD")
+    ? (m.local_amount != null ? String(m.local_amount) : "")
+    : (m.goal != null ? String(m.goal) : ""),
+  localCurrency: m.local_currency || "USD",
+  startDate: m.start_date ? String(m.start_date).slice(0, 10) : "", duration: m.duration_months != null ? String(m.duration_months) : "",
+  milestone1: m.milestone_1_detail || "", milestone2: m.milestone_2_detail || "", milestone3: m.milestone_3_detail || "",
+  surchargeAcknowledged: !!m.surcharge_acknowledged, requiresFullFunding: !!m.requires_full_funding,
+});
+
+// `editMission` (optional): the saved application to fix. When present this screen becomes
+// "Fix & Resubmit": the form starts filled in, and submitting updates the SAME application
+// instead of creating a new one.
+export default function MissionaryApplication({ onBack, user, editMission }) {
   const [step, setStep]             = useState(1);
   const [error, setError]           = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -724,7 +769,7 @@ export default function MissionaryApplication({ onBack, user }) {
     checkBlocked();
   }, [user]);
 
-  const [form, setForm] = useState({
+  const [form, setForm] = useState(() => editMission ? formFromMission(editMission, user) : {
     fullName: user?.user_metadata?.full_name||"", email: user?.email||"",
     phone:"", birthCountry:"", currentCountry:"", address:"", role:"",
     yearsBeliever:"", calling:"", testimony:"", experience:"", shadowMode:false,
@@ -763,7 +808,7 @@ export default function MissionaryApplication({ onBack, user }) {
   // pure friction. Church and Mission steps are left blank, since those
   // are always specific to the new application.
   useEffect(() => {
-    if (!user?.id) return;
+    if (!user?.id || editMission) return;   // fixing a saved application: it is already filled in
     (async () => {
       const { data } = await supabase
         .from("missions")
@@ -788,7 +833,7 @@ export default function MissionaryApplication({ onBack, user }) {
         setPrefilledFromPrevious(true);
       }
     })();
-  }, [user?.id]);
+  }, [user?.id, editMission]);
 
   const nextStep = () => {
     const err = validate(step, form);
@@ -808,7 +853,7 @@ export default function MissionaryApplication({ onBack, user }) {
 
       const { lat, lng } = await geocodeMissionLocation(form.targetArea, form.targetCity, form.targetCountry);
 
-      const { data, error: dbError } = await supabase.from("missions").insert({
+      const row = {
         missionary_name:  form.shadowMode ? null : form.fullName,
         missionary_email: form.email,
         missionary_role:  form.role,
@@ -870,15 +915,30 @@ export default function MissionaryApplication({ onBack, user }) {
         churches:         0,
         protected:        form.shadowMode,
         missionary_id:    user?.id || null,
-      }).select("id").single();
-      if (dbError) throw dbError;
-      // Safety net: if the insert silently produced no row (e.g. a DB-side
+      };
+
+      let saved;
+      if (editMission) {
+        // FIX & RESUBMIT: update the same application. Only the applicant-editable columns are sent;
+        // the resubmit_mission() database function checks it is theirs and was sent back, recalculates
+        // the totals itself and decides the new status (back into the approval queue).
+        const fields = Object.fromEntries(Object.entries(row).filter(([k]) => RESUBMIT_FIELDS.includes(k)));
+        if (lat === null) { delete fields.lat; delete fields.lng; }   // nothing found: keep the existing pin
+        const { data: newStatus, error: rpcError } = await supabase.rpc("resubmit_mission", { p_mission_id: editMission.id, p_payload: fields });
+        if (rpcError) throw rpcError;
+        saved = !!newStatus;
+      } else {
+        const { data, error: dbError } = await supabase.from("missions").insert(row).select("id").single();
+        if (dbError) throw dbError;
+        saved = !!data?.id;
+      }
+      // Safety net: if the save silently produced no row (e.g. a DB-side
       // trigger swallowing it without raising an error), don't show the
       // success screen — surface it as a real, visible error instead.
-      if (!data?.id) throw new Error("Your application could not be saved. Please try again or contact support.");
+      if (!saved) throw new Error("Your application could not be saved. Please try again or contact support.");
       setSubmitted(true);
       const notifyData = {
-        missionTitle: form.missionTitle,
+        missionTitle: form.missionTitle + (editMission ? " (resubmitted after changes)" : ""),
         missionaryName: form.shadowMode ? "Anonymous (shadow mode)" : (form.fullName || user?.email || "Unknown"),
         country: form.targetCountry,
         churchName: form.churchName || "unregistered",
@@ -937,13 +997,20 @@ export default function MissionaryApplication({ onBack, user }) {
       <div style={{ background:"#09111f",borderBottom:"1px solid rgba(255,255,255,0.07)",padding:"16px 24px",display:"flex",alignItems:"center",gap:14,position:"sticky",top:0,zIndex:100 }}>
         <button onClick={onBack} style={{ background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"8px 16px",color:"rgba(255,255,255,0.6)",cursor:"pointer",fontSize:14,fontFamily:"Georgia, serif" }}>Back</button>
         <div>
-          <div style={{ fontSize:18,fontWeight:700 }}>Missionary Application</div>
+          <div style={{ fontSize:18,fontWeight:700 }}>{editMission ? "Fix & Resubmit" : "Missionary Application"}</div>
           <div style={{ fontSize:11,color:"rgba(255,255,255,0.3)",letterSpacing:2,marginTop:2 }}>SENDME GLOBAL MISSION FUND</div>
         </div>
         <div style={{ marginLeft:"auto",fontSize:13,color:"rgba(255,255,255,0.3)" }}>Step {step} of 5</div>
       </div>
       <div style={{ maxWidth:640,margin:"0 auto",padding:"32px 20px 80px" }}>
         <StepBar current={step}/>
+          {editMission && (
+            <div style={{ background:"rgba(232,179,75,0.08)", border:"1px solid rgba(232,179,75,0.3)", borderRadius:14, padding:"14px 16px", margin:"0 0 20px" }}>
+              <div style={{ fontSize:13, fontWeight:700, color:"#e8b34b", marginBottom:6 }}>✏️ SendMe asked for a few changes</div>
+              <div style={{ fontSize:13, color:"rgba(255,255,255,0.8)", lineHeight:1.6, whiteSpace:"pre-wrap" }}>{editMission.rejection_reason || "Please review your application, update it and resubmit."}</div>
+              <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)", marginTop:8, lineHeight:1.6 }}>Everything you entered before is filled in. Change what is needed, then go to the last step and resubmit.</div>
+            </div>
+          )}
         {error && (
           <div style={{ background:"rgba(240,82,82,0.1)",border:"1px solid rgba(240,82,82,0.3)",borderRadius:10,padding:"10px 16px",marginBottom:20,fontSize:13,color:"#f05252" }}>
             {error}
@@ -954,7 +1021,7 @@ export default function MissionaryApplication({ onBack, user }) {
           {step===2 && <Step2 form={form} set={set} prefilledFromPrevious={prefilledFromPrevious}/>}
           {step===3 && <Step3 form={form} set={set} churches={churches} churchesLoading={churchesLoading}/>}
           {step===4 && <Step4 form={form} set={set}/>}
-          {step===5 && <Step5 form={form} set={set} submitted={submitted} submitting={submitting} onSubmit={handleSubmit}/>}
+          {step===5 && <Step5 form={form} set={set} submitted={submitted} submitting={submitting} onSubmit={handleSubmit} resubmit={!!editMission}/>}
         </div>
         {!submitted && (
           <div style={{ display:"grid",gridTemplateColumns:step>1?"1fr 1fr":"1fr",gap:12 }}>
