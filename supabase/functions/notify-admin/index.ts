@@ -23,6 +23,70 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+// ── Who is calling? (hardening) ─────────────────────────────────────────────
+// These functions are reachable from the internet with the app's public key, so each one
+// checks the caller itself: the SendMe admin (signed in), any signed-in user, a server
+// holding the service-role key, or nobody.
+const ADMIN_EMAIL = (Deno.env.get("ADMIN_EMAIL") ?? "sendmemissionfund@gmail.com").trim().toLowerCase();
+type Caller = { kind: "service" | "user" | "anon"; email: string; id: string };
+async function getCaller(req: Request): Promise<Caller> {
+  const anon: Caller = { kind: "anon", email: "", id: "" };
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader) return anon;
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (serviceKey && authHeader === `Bearer ${serviceKey}`) return { kind: "service", email: "", id: "service" };
+  const url = Deno.env.get("SUPABASE_URL");
+  const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+  if (!url || !anonKey) return anon;
+  try {
+    const res = await fetch(`${url}/auth/v1/user`, { headers: { Authorization: authHeader, apikey: anonKey } });
+    if (!res.ok) return anon;
+    const user = await res.json();
+    if (!user?.id) return anon;
+    return { kind: "user", email: String(user.email ?? "").trim().toLowerCase(), id: String(user.id) };
+  } catch (_e) {
+    return anon;
+  }
+}
+function jsonRes(status: number, body: unknown): Response {
+  return new Response(JSON.stringify(body), { status, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } });
+}
+// Best-effort limiter (in memory, per function instance — a speed bump, not a wall).
+const hits = new Map<string, number[]>();
+function overLimit(key: string, max: number, windowMs: number): boolean {
+  const now = Date.now();
+  const recent = (hits.get(key) ?? []).filter((t) => now - t < windowMs);
+  if (recent.length >= max) { hits.set(key, recent); return true; }
+  recent.push(now); hits.set(key, recent);
+  if (hits.size > 5000) for (const [k, v] of hits) if (!v.some((t) => now - t < windowMs)) hits.delete(k);
+  return false;
+}
+
+// Who may trigger which WhatsApp ping to the admin:
+//  - donation_received: ONLY the server (the Paystack webhook). A fake "donation received"
+//    ping could make the admin believe money arrived, so no browser may send it.
+//  - support_contact: the FAQ contact form, which guests can use.
+//  - everything else: a signed-in SendMe user (or the server).
+const SERVICE_ONLY_TYPES = new Set<string>(["donation_received"]);
+const GUEST_ALLOWED_TYPES = new Set<string>(["support_contact"]);
+const LIMIT_PER_CALLER_PER_MIN = 15;
+const LIMIT_ALL_BROWSER_PER_HOUR = 120; // protects the CallMeBot quota from a flood
+
+// Keep caller text short and free of control characters before it goes into a WhatsApp message.
+function cleanData(v: unknown, depth = 0): unknown {
+  if (depth > 3) return undefined;
+  if (typeof v === "string") return v.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "").slice(0, 400);
+  if (typeof v === "number" || typeof v === "boolean" || v === null || v === undefined) return v;
+  if (Array.isArray(v)) return v.slice(0, 20).map((x) => cleanData(x, depth + 1));
+  if (typeof v === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, val] of Object.entries(v as Record<string, unknown>).slice(0, 60)) out[k] = cleanData(val, depth + 1);
+    return out;
+  }
+  return undefined;
+}
+
 const TEMPLATES: Record<string, (d: any) => string> = {
   church_registered: (d) => 
     `✝ SendMe — New Church Registration\n\n` +
@@ -117,15 +181,34 @@ serve(async (req) => {
         headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
       });
     }
-    const { type, data } = await req.json();
-    const templateFn = TEMPLATES[type];
+    let body: any;
+    try { body = await req.json(); } catch (_e) { return jsonRes(400, { sent: false, error: "Invalid request body" }); }
+    const type = typeof body?.type === "string" ? body.type : "";
+    const data = (body?.data && typeof body.data === "object" && !Array.isArray(body.data)) ? body.data : {};
+    const templateFn = Object.prototype.hasOwnProperty.call(TEMPLATES, type) ? TEMPLATES[type] : undefined;
     if (!templateFn) {
       return new Response(JSON.stringify({ sent: false, error: `Unknown type: ${type}` }), {
         status: 200,
         headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
       });
     }
-    const message = templateFn(data || {});
+
+    // ── Who is calling? ──
+    const caller = await getCaller(req);
+    if (SERVICE_ONLY_TYPES.has(type)) {
+      if (caller.kind !== "service") return jsonRes(403, { sent: false, error: "Not allowed" });
+    } else if (caller.kind === "anon" && !GUEST_ALLOWED_TYPES.has(type)) {
+      return jsonRes(401, { sent: false, error: "Not signed in" });
+    }
+    if (caller.kind !== "service") {
+      const ip = (req.headers.get("x-forwarded-for") ?? "").split(",")[0].trim() || "unknown-ip";
+      const key = `c:${caller.kind === "user" ? caller.id : ip}`;
+      if (overLimit(key, LIMIT_PER_CALLER_PER_MIN, 60_000) || overLimit("all-browser", LIMIT_ALL_BROWSER_PER_HOUR, 3_600_000)) {
+        return jsonRes(429, { sent: false, error: "Too many requests — please wait a bit." });
+      }
+    }
+
+    const message = templateFn(cleanData(data) as any);
     const encoded = encodeURIComponent(message);
     const url = `https://api.callmebot.com/whatsapp.php?phone=${CALLMEBOT_PHONE}&text=${encoded}&apikey=${CALLMEBOT_APIKEY}`;
     const res = await fetch(url);

@@ -29,41 +29,125 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// ── Admin-only email types ──────────────────────────────────────────────────
-// This function is called from the browser with the app's public key, so for most
-// types anyone could ask it to send. Types listed here carry free text typed by the
-// admin, so they are only sent when the signed-in caller is the SendMe admin.
+// ── Security model ──────────────────────────────────────────────────────────
+// This function is called from the browser with the app's public key, so it must never
+// trust the caller about WHO an email goes to or WHAT HTML it contains.
+//
+//  1. ADMIN_BOUND_TYPES  — emails meant only for the SendMe admin. The recipient is forced
+//     server-side; whatever "to" the caller sends is ignored.
+//  2. ADMIN_ONLY_FIELDS  — emails carrying free text typed by the admin. Only the signed-in
+//     admin may send them (checked server-side from the caller's login).
+//  3. Every other type goes to a person (applicant, pastor, donor…). The caller must be a
+//     signed-in SendMe user (or a server holding the service-role key), unless the type is
+//     listed in GUEST_ALLOWED_TYPES.
+//  4. Every value inserted into an email is HTML-escaped; subjects have line breaks removed.
+//  5. Best-effort rate limits per caller and per recipient.
 const ADMIN_EMAIL = (Deno.env.get("ADMIN_EMAIL") ?? "sendmemissionfund@gmail.com").trim().toLowerCase();
+
 // type -> the data field holding the text the admin typed (must be present, 1-4000 characters)
 const ADMIN_ONLY_FIELDS = new Map<string, string>([
   ["applicant_question", "message"],
   ["application_changes_requested", "note"],
 ]);
 
+// Emails that only ever go to the admin: recipient is forced to ADMIN_EMAIL.
+const ADMIN_BOUND_TYPES = new Set<string>([
+  "contact_form",
+  "church_registered",
+  "mission_applied",
+  "emergency_submitted",
+  "family_need_submitted",
+  "worker_request",
+  "worker_response_received",
+  "admin_proof_submitted",
+]);
+
+// Person-bound types that may legitimately be triggered with no signed-in user.
+// Currently none: the Paystack webhook sends donation_received with the service-role key,
+// which is accepted separately. Add a type here only if a guest flow truly needs it.
+const GUEST_ALLOWED_TYPES = new Set<string>([]);
+
+// Best-effort limits (kept in memory per function instance, so they reset on cold start
+// and are not shared between instances — a speed bump, not a wall).
+const LIMIT_PER_CALLER_PER_MIN = 20;
+const LIMIT_PER_RECIPIENT_PER_HOUR = 6;
+const hits = new Map<string, number[]>();
+function overLimit(key: string, max: number, windowMs: number): boolean {
+  const now = Date.now();
+  const recent = (hits.get(key) ?? []).filter((t) => now - t < windowMs);
+  if (recent.length >= max) { hits.set(key, recent); return true; }
+  recent.push(now);
+  hits.set(key, recent);
+  if (hits.size > 5000) { // keep memory bounded
+    for (const [k, v] of hits) if (!v.some((t) => now - t < windowMs)) hits.delete(k);
+  }
+  return false;
+}
+
 function escapeHtml(v: unknown): string {
   return String(v ?? "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
-// Returns null when the caller is the admin, otherwise a ready-made error Response.
-async function requireAdmin(req: Request): Promise<Response | null> {
-  const deny = (status: number, error: string) =>
-    new Response(JSON.stringify({ sent: false, error }), {
-      status,
-      headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
-    });
+// Returns a copy of the caller's data with every string HTML-escaped. Keys ending in "url"
+// are links: only http(s) addresses are kept, anything else falls back to the site address.
+function escapeData(v: unknown, key = "", depth = 0): unknown {
+  if (depth > 4) return undefined;
+  if (typeof v === "string") {
+    const s = v.length > 5000 ? v.slice(0, 5000) : v;
+    if (/url$/i.test(key)) return /^https?:\/\//i.test(s.trim()) ? escapeHtml(s.trim()) : SITE_URL;
+    return escapeHtml(s);
+  }
+  if (typeof v === "number" || typeof v === "boolean" || v === null || v === undefined) return v;
+  if (Array.isArray(v)) return v.slice(0, 50).map((x) => escapeData(x, key, depth + 1));
+  if (typeof v === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, val] of Object.entries(v as Record<string, unknown>).slice(0, 80)) {
+      out[k] = escapeData(val, k, depth + 1);
+    }
+    return out;
+  }
+  return undefined;
+}
+
+function cleanSubject(s: string): string {
+  return String(s ?? "").replace(/[\r\n\u2028\u2029]+/g, " ").trim().slice(0, 200);
+}
+
+const EMAIL_RE = /^[^\s@,;<>()"]+@[^\s@,;<>()"]+\.[^\s@,;<>()"]+$/;
+
+type Caller = { kind: "service" | "user" | "anon"; email: string; id: string };
+
+// Works out who is calling: the server (service-role key), a signed-in user, or nobody.
+async function getCaller(req: Request): Promise<Caller> {
+  const anon: Caller = { kind: "anon", email: "", id: "" };
   const authHeader = req.headers.get("Authorization");
+  if (!authHeader) return anon;
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (serviceKey && authHeader === `Bearer ${serviceKey}`) return { kind: "service", email: "", id: "service" };
   const url = Deno.env.get("SUPABASE_URL");
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
-  if (!authHeader || !url || !anonKey) return deny(401, "Not signed in");
-  const res = await fetch(`${url}/auth/v1/user`, { headers: { Authorization: authHeader, apikey: anonKey } });
-  if (!res.ok) return deny(401, "Not signed in");
-  const user = await res.json();
-  if (String(user?.email ?? "").trim().toLowerCase() !== ADMIN_EMAIL) return deny(403, "Admins only");
-  return null;
+  if (!url || !anonKey) return anon;
+  try {
+    const res = await fetch(`${url}/auth/v1/user`, { headers: { Authorization: authHeader, apikey: anonKey } });
+    if (!res.ok) return anon;
+    const user = await res.json();
+    if (!user?.id) return anon;
+    return { kind: "user", email: String(user.email ?? "").trim().toLowerCase(), id: String(user.id) };
+  } catch (_e) {
+    return anon;
+  }
+}
+
+function json(status: number, body: unknown): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+  });
 }
 
 // ── Shared email shell — dark navy/gold theme matching the app ──
@@ -636,37 +720,62 @@ serve(async (req) => {
       throw new Error("RESEND_API_KEY secret is not set. Run: supabase secrets set RESEND_API_KEY=re_xxxx");
     }
 
-    const { type, to, data } = await req.json();
+    let body: any;
+    try { body = await req.json(); } catch (_e) { return json(400, { sent: false, error: "Invalid request body" }); }
+    const type = typeof body?.type === "string" ? body.type : "";
+    const requestedTo = body?.to;
+    const rawData = (body?.data && typeof body.data === "object" && !Array.isArray(body.data)) ? body.data : {};
 
-    if (!type || !to) {
-      return new Response(JSON.stringify({ error: "Missing required fields: type, to" }), {
-        status: 400,
-        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
-      });
-    }
+    if (!type) return json(400, { sent: false, error: "Missing required field: type" });
 
-    const template = TEMPLATES[type];
-    if (!template) {
-      return new Response(JSON.stringify({ error: `Unknown notification type: ${type}` }), {
-        status: 400,
-        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
-      });
-    }
+    const template = Object.prototype.hasOwnProperty.call(TEMPLATES, type) ? TEMPLATES[type] : undefined;
+    if (!template) return json(400, { sent: false, error: `Unknown notification type: ${type}` });
+
+    // ── Who is calling? ──
+    const caller = await getCaller(req);
+    const isAdmin = caller.kind === "user" && caller.email === ADMIN_EMAIL;
+    const isServer = caller.kind === "service";
 
     // Admin-typed types: caller must be the admin, and the message must be present and sane.
     if (ADMIN_ONLY_FIELDS.has(type)) {
-      const blocked = await requireAdmin(req);
-      if (blocked) return blocked;
-      const message = String(data?.[ADMIN_ONLY_FIELDS.get(type) as string] ?? "").trim();
+      if (caller.kind === "anon") return json(401, { sent: false, error: "Not signed in" });
+      if (!isAdmin && !isServer) return json(403, { sent: false, error: "Admins only" });
+      const message = String(rawData?.[ADMIN_ONLY_FIELDS.get(type) as string] ?? "").trim();
       if (!message || message.length > 4000) {
-        return new Response(JSON.stringify({ sent: false, error: "A message of 1 to 4000 characters is required." }), {
-          status: 400,
-          headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
-        });
+        return json(400, { sent: false, error: "A message of 1 to 4000 characters is required." });
       }
+    } else if (!ADMIN_BOUND_TYPES.has(type) && !GUEST_ALLOWED_TYPES.has(type) && caller.kind === "anon") {
+      // Person-bound email: needs a signed-in user (or the server itself).
+      return json(401, { sent: false, error: "Not signed in" });
     }
 
-    const { subject, html } = template(data || {});
+    // ── Who does it go to? ──
+    let to: string;
+    if (ADMIN_BOUND_TYPES.has(type)) {
+      to = ADMIN_EMAIL; // forced — the caller's "to" is ignored
+    } else {
+      if (typeof requestedTo !== "string") return json(400, { sent: false, error: "Missing or invalid recipient" });
+      to = requestedTo.trim().toLowerCase();
+      if (to.length > 254 || !EMAIL_RE.test(to)) return json(400, { sent: false, error: "Invalid recipient address" });
+    }
+
+    // ── Rate limits (the admin and the server are exempt from the per-caller limit) ──
+    if (!isAdmin && !isServer) {
+      const ip = (req.headers.get("x-forwarded-for") ?? "").split(",")[0].trim() || "unknown-ip";
+      const callerKey = `c:${caller.kind === "user" ? caller.id : ip}`;
+      if (overLimit(callerKey, LIMIT_PER_CALLER_PER_MIN, 60_000)) {
+        return json(429, { sent: false, error: "Too many requests — please wait a minute." });
+      }
+    }
+    if (!isServer && to !== ADMIN_EMAIL && overLimit(`r:${to}`, LIMIT_PER_RECIPIENT_PER_HOUR, 3_600_000)) {
+      return json(429, { sent: false, error: "Too many emails to this address — please try again later." });
+    }
+
+    // ── Build the email ──
+    // Subject: plain text (no HTML), so it is built from the raw values with line breaks removed.
+    // Body: HTML, so it is built from the escaped copy of the data.
+    const subject = cleanSubject(template(rawData).subject);
+    const { html } = template(escapeData(rawData) as Record<string, unknown>);
 
     const resendRes = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -677,11 +786,7 @@ serve(async (req) => {
       body: JSON.stringify({
         from: FROM_ADDRESS,
         to: [to],
-        // Without this, a reply defaults to FROM_ADDRESS
-        // (notifications@sendmeglobalmission.org) — a sending-only address
-        // that isn't actively monitored. This routes replies to the actual
-        // Gmail inbox Br Donald checks, same as the admin email destination
-        // used elsewhere (church_registered, contact_form, etc).
+        // Replies go to the Gmail inbox Br Donald checks, not the sending-only address.
         reply_to: "sendmemissionfund@gmail.com",
         subject,
         html,
@@ -692,22 +797,13 @@ serve(async (req) => {
 
     if (!resendRes.ok) {
       console.error("Resend error:", resendData);
-      return new Response(JSON.stringify({ sent: false, error: resendData }), {
-        status: 200,
-        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
-      });
+      return json(200, { sent: false, error: resendData });
     }
 
-    return new Response(JSON.stringify({ sent: true, id: resendData.id }), {
-      status: 200,
-      headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
-    });
+    return json(200, { sent: true, id: resendData.id });
 
   } catch (err) {
     console.error("send-notification error:", err);
-    return new Response(JSON.stringify({ sent: false, error: String((err as Error)?.message || err) }), {
-      status: 200,
-      headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
-    });
+    return json(200, { sent: false, error: String((err as Error)?.message || err) });
   }
 });
