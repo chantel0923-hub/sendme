@@ -266,7 +266,7 @@ export default function TestimonyEngine({ onBack, onMission, user, onAddTestimon
     const text = encodeURIComponent(
       `Praise Report from ${t.country}!\n\n` +
       `${t.mission} — COMPLETED\n` +
-      (t.hideStats ? "" : `${t.souls} souls reached | ${t.bibles} Bibles | ${t.churches} churches planted\n\n`) +
+      (t.hideStats ? "" : `${t.souls} souls reached | ${t.bibles} Bibles-Message Books | ${t.churches} churches planted\n\n`) +
       `"${t.story.slice(0, 150)}..."\n\n` +
       `See the full testimony — SendMe Global Mission Fund\nhttps://sendmeglobalmission.org`
     );
@@ -334,7 +334,7 @@ export default function TestimonyEngine({ onBack, onMission, user, onAddTestimon
               zeroes. */}
           {!t.isGeneralFund && !t.hideStats && (
           <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12, marginBottom:20 }}>
-            {[["🙏",t.souls,"Souls Reached",t.color],["📖",t.bibles,"Bibles Given","#5b9cf6"],["⛪",t.churches,"Churches Planted","#3ecf8e"]].map(([icon,val,label,c])=>(
+            {[["🙏",t.souls,"Souls Reached",t.color],["📖",t.bibles,"Bibles-Message Books Given","#5b9cf6"],["⛪",t.churches,"Churches Planted","#3ecf8e"]].map(([icon,val,label,c])=>(
               <div key={label} style={{ background:"rgba(255,255,255,0.03)", borderRadius:14, border:"1px solid rgba(255,255,255,0.07)", padding:"14px 10px", textAlign:"center" }}>
                 <div style={{ fontSize:22 }}>{icon}</div>
                 <div style={{ fontSize:22, fontWeight:700, color:c, marginTop:4 }}>{fmt(val)}</div>
@@ -559,7 +559,7 @@ export default function TestimonyEngine({ onBack, onMission, user, onAddTestimon
                 <div style={{ marginBottom:14, fontSize:13, fontWeight:700, color:"#3ecf8e" }}>${fmt(t.raised)} given</div>
               ) : t.hideStats ? null : (
               <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8, marginBottom:14 }}>
-                {[["🙏",fmt(t.souls),"Souls"],["📖",fmt(t.bibles),"Bibles"],["⛪",t.churches,"Churches"]].map(([icon,val,label])=>(
+                {[["🙏",fmt(t.souls),"Souls"],["📖",fmt(t.bibles),"Bibles-Message Books"],["⛪",t.churches,"Churches"]].map(([icon,val,label])=>(
                   <div key={label} style={{ background:"rgba(255,255,255,0.03)", borderRadius:10, padding:"8px 6px", textAlign:"center" }}>
                     <div style={{ fontSize:14 }}>{icon}</div>
                     <div style={{ fontSize:14, fontWeight:700, color:t.color }}>{val}</div>

@@ -97,6 +97,11 @@ const inp = {
   background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)",
   color: "#eef1ff", fontSize: 14, fontFamily: "Georgia, serif", outline: "none", marginBottom: 12,
 };
+// The mission picker's drop-down list is drawn by the browser; without these it opens white with
+// pale text that can't be read. colorScheme + explicit option colours keep it dark.
+const selectStyle = { ...inp, colorScheme: "dark" };
+const optStyle = { background: "#0c1628", color: "#eef1ff" };
+const groupStyle = { background: "#0c1628", color: "#e8b34b" };
 const lbl = { fontSize: 11, color: "rgba(255,255,255,0.45)", letterSpacing: 1, textTransform: "uppercase", marginBottom: 5, display: "block" };
 
 const EMPTY = {
@@ -186,7 +191,7 @@ export default function AdminTestimonies({ onBack }) {
     if (!form.title.trim()) { setFormError("Please give the testimony a title."); return; }
     if (form.story.trim().length < 20) { setFormError("Please write the story (at least a couple of sentences)."); return; }
     const souls = wholeNum(form.souls), bibles = wholeNum(form.bibles), churches = wholeNum(form.churches);
-    if ([souls, bibles, churches].some(Number.isNaN)) { setFormError("Souls, Bibles and churches must be whole numbers (or left blank)."); return; }
+    if ([souls, bibles, churches].some(Number.isNaN)) { setFormError("Souls, Bibles-Message Books and churches must be whole numbers (or left blank)."); return; }
     const video = form.videoUrl.trim();
     if (video && !/^https?:\/\//i.test(video)) { setFormError("The video link must start with https:// (a YouTube link works best)."); return; }
 
@@ -276,10 +281,10 @@ export default function AdminTestimonies({ onBack }) {
           </div>
 
           <label style={lbl}>Mission (optional)</label>
-          <select style={inp} value={form.missionId} onChange={e => chooseMission(e.target.value)}>
-            <option value="">— Not linked to a mission —</option>
-            {completed.length > 0 && <optgroup label="Completed missions">{completed.map(m => <option key={m.id} value={m.id}>{optLabel(m)}</option>)}</optgroup>}
-            {others.length > 0 && <optgroup label="Other missions">{others.map(m => <option key={m.id} value={m.id}>{optLabel(m)} ({m.status})</option>)}</optgroup>}
+          <select style={selectStyle} value={form.missionId} onChange={e => chooseMission(e.target.value)}>
+            <option style={optStyle} value="">— Not linked to a mission —</option>
+            {completed.length > 0 && <optgroup style={groupStyle} label="Completed missions">{completed.map(m => <option style={optStyle} key={m.id} value={m.id}>{optLabel(m)}</option>)}</optgroup>}
+            {others.length > 0 && <optgroup style={groupStyle} label="Other missions">{others.map(m => <option style={optStyle} key={m.id} value={m.id}>{optLabel(m)} ({m.status})</option>)}</optgroup>}
           </select>
 
           <label style={lbl}>Title *</label>
@@ -302,7 +307,7 @@ export default function AdminTestimonies({ onBack }) {
           <label style={lbl}>Impact numbers (optional — leave blank if not known)</label>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
             <input style={inp} inputMode="numeric" placeholder="Souls" value={form.souls} onChange={e => set("souls", e.target.value)} />
-            <input style={inp} inputMode="numeric" placeholder="Bibles" value={form.bibles} onChange={e => set("bibles", e.target.value)} />
+            <input style={inp} inputMode="numeric" placeholder="Bibles-Message Books" value={form.bibles} onChange={e => set("bibles", e.target.value)} />
             <input style={inp} inputMode="numeric" placeholder="Churches" value={form.churches} onChange={e => set("churches", e.target.value)} />
           </div>
 

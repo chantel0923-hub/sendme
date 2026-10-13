@@ -960,7 +960,7 @@ const MissionDetail = ({ mission: m, onBack, onDonate, onLedger, user, userRole,
             <span style={{ fontSize:13,color:"rgba(255,255,255,0.3)" }}>{pct(m.raised,m.fundingTarget)}% of ${fmt(m.fundingTarget)}</span>
           </div>
           <div style={{ display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginTop:20 }}>
-            {[["🙏",m.souls,"Souls",m.color],["📖",m.bibles,"Bibles","#5b9cf6"],["⛪",m.churches,"Churches","#3ecf8e"]].map(([icon,val,label,c])=>(
+            {[["🙏",m.souls,"Souls",m.color],["📖",m.bibles,"Bibles-Message Books","#5b9cf6"],["⛪",m.churches,"Churches","#3ecf8e"]].map(([icon,val,label,c])=>(
               <div key={label} style={{ background:"rgba(255,255,255,0.03)",borderRadius:14,border:"1px solid rgba(255,255,255,0.07)",padding:"14px 10px",textAlign:"center" }}>
                 <div style={{ fontSize:22 }}>{icon}</div>
                 <div style={{ fontSize:20,fontWeight:700,color:c,marginTop:4 }}>{fmt(val)}</div>
@@ -1675,6 +1675,9 @@ if (typeof document !== "undefined" && !document.getElementById(_navStyleId)) {
 const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, onMyChurch, onChurches, onProfile, onEmergency, onEmergencyDetail, onFamilyNeed, onGeneralFund, onMatching, onPray, onTestimonies, onWorker, onQR, onFaq, onPayout, onAdminPayouts, isAdmin, isPastor, onMilestoneProof, onPastorReview, onMissionaryDashboard, onAdminApprovals, onAdminChurchVerification, guest, onSignIn, onDonate, onAdminWorkers, onAdminEmergency, onAdminFamilyNeeds, onAdminGeneralFund, onAdminPipeline, onAdminWhatsAppGroup, onAdminMonthlyReport, onAdminUsers, onAdminPastors, onAdminTestimonies }) => {
   const [region,setRegion]       = useState("All");
   const [missions,setMissions]   = useState([]);
+  // Completed missions are NOT part of the Active Missions list, but they stay pinned on the
+  // world map so visitors can see what has been done. Kept in their own list for that reason.
+  const [completedMissions,setCompletedMissions] = useState([]);
   const [emergencies,setEmergencies] = useState([]);
   const [familyNeeds,setFamilyNeeds] = useState([]);
   const [loading,setLoading]     = useState(true);
@@ -1718,6 +1721,12 @@ const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, o
         if(error) throw error;
         setMissions(data ? data.map((row,i)=>mapRow(row,i)) : []);
       } catch{ setMissions([]); }
+      // Completed missions for the map only — a failure here must never affect the active list.
+      try {
+        const {data:doneData,error:doneError} = await supabase.from("missions").select("*").eq("status","complete").order("created_at",{ascending:false});
+        if(doneError) throw doneError;
+        setCompletedMissions(doneData ? doneData.map((row,i)=>mapRow(row,i)) : []);
+      } catch{ setCompletedMissions([]); }
       setLoading(false);
     };
     fetchMissions();
@@ -1873,7 +1882,7 @@ const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, o
         </div>
         </div>
         <div style={{ marginBottom:24 }}>
-          {loading?<LoadingMap/>:<MapboxMap missions={missions} onMissionClick={onMission}/>}
+          {loading?<LoadingMap/>:<MapboxMap missions={[...missions, ...completedMissions]} onMissionClick={onMission}/>}
         </div>
         {userRole==="missionary"&&user&&(
           <div onClick={onMissionaryDashboard} style={{ background:"rgba(232,179,75,0.08)",borderRadius:14,border:"1px solid rgba(232,179,75,0.25)",padding:"14px 18px",marginBottom:16,display:"flex",gap:14,alignItems:"center",cursor:"pointer",transition:"background .15s" }}

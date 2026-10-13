@@ -216,7 +216,7 @@ export default function MapboxMap({ missions, churches = [], onMissionClick }) {
           .setLngLat(coords)
           .setHTML(`
             <div style="font-family:Georgia,serif;background:#0c1628;border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:14px 16px;min-width:200px;box-shadow:0 8px 32px rgba(0,0,0,0.5);">
-              <div style="font-size:11px;color:${props.color};letter-spacing:2px;text-transform:uppercase;margin-bottom:4px">${props.role}</div>
+              <div style="font-size:11px;color:${props.color};letter-spacing:2px;text-transform:uppercase;margin-bottom:4px">${props.role}${props.status === "complete" ? ' <span style="color:#3ecf8e;letter-spacing:1px;">· ✓ Completed</span>' : ""}</div>
               <div style="font-size:14px;font-weight:700;color:#eef1ff;margin-bottom:3px">${props.name}${props.riskLevel === 4 ? ' <span style="color:#e85b5b;font-size:11px;">🔴 High Risk</span>' : ""}</div>
               <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:10px">${props.protected ? "Location Protected" : [props.city, props.country].filter(Boolean).join(", ")}</div>
               <div style="font-size:12px;color:rgba(255,255,255,0.6);margin-bottom:6px">${props.title}</div>
@@ -301,7 +301,8 @@ export default function MapboxMap({ missions, churches = [], onMissionClick }) {
         border:"1px solid rgba(232,179,75,0.25)", padding:"8px 14px", backdropFilter:"blur(8px)" }}>
         <div style={{ fontSize:12, fontWeight:700, color:"#e8b34b", letterSpacing:2, fontFamily:"Georgia, serif" }}>WORLD MISSION MAP</div>
         <div style={{ fontSize:10, color:"rgba(255,255,255,0.35)", marginTop:2 }}>
-          {missions?.length || 0} active missions · click a pin to explore
+          {(missions || []).filter(x => x.status !== "complete").length} active
+          {(missions || []).some(x => x.status === "complete") ? ` · ${(missions || []).filter(x => x.status === "complete").length} completed` : ""} · click a pin to explore
         </div>
       </div>
     </div>
