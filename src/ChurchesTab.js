@@ -1,9 +1,15 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { supabase } from "./supabase";
 
 const fmt = (n) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 
 const CONTINENTS = ["All","Africa","Asia","Europe","Americas","Oceania"];
+
+// Map popups are built as HTML text, and church details are typed by the people who register
+// them — so every value is escaped before it goes into a popup.
+const esc = (v) => String(v ?? "")
+  .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+  .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
 const regionFor = (country) => {
   const africa   = ["South Africa","Nigeria","Kenya","Ghana","Ethiopia","Uganda","Tanzania","Zambia","Zimbabwe","Mozambique","Eswatini","Malawi","Rwanda","Cameroon"];
@@ -20,10 +26,62 @@ const regionFor = (country) => {
 };
 
 // ── CHURCHES MAP (Leaflet — no Mapbox WebWorker issues) ─────────────────────
-const ChurchesMap = ({ churches, onChurchClick }) => {
+const ChurchesMap = ({ churches, onChurchClick, focus }) => {
   const mapContainer = useRef(null);
   const mapRef = useRef(null);
   const markersRef = useRef([]);
+  const [zoomedIn, setZoomedIn] = useState(false);
+  // The click handler passed in by the parent is a new function on every render. Keeping it in a
+  // ref means the pins are only rebuilt when the list of churches changes — not on every
+  // re-render — so a highlighted pin and its open popup are not wiped out.
+  const clickRef = useRef(onChurchClick);
+  clickRef.current = onChurchClick;
+  const activeIdRef = useRef(null);
+
+  const clearActivePin = () => {
+    const L = window.L;
+    if (!L) return;
+    markersRef.current.forEach(m => {
+      const el = m.getElement && m.getElement();
+      if (el) L.DomUtil.removeClass(el, "sendme-pin-active");
+      m.setZIndexOffset(0);
+    });
+  };
+
+  // A "Show on map" tap in the list arrives here as a new `focus` ({ id, n } — n changes on
+  // every tap so tapping the same church twice zooms again). Fly to that church's pin,
+  // highlight it and open its popup.
+  useEffect(() => {
+    if (!focus || !mapRef.current || !window.L) return;
+    const marker = markersRef.current.find(m => m.churchId === focus.id);
+    if (!marker) return;
+    const L = window.L;
+    clearActivePin();
+    activeIdRef.current = focus.id;
+    const el = marker.getElement && marker.getElement();
+    if (el) L.DomUtil.addClass(el, "sendme-pin-active");
+    marker.setZIndexOffset(1000);
+    setZoomedIn(true);
+    const map = mapRef.current;
+    const openIt = () => marker.openPopup();
+    map.once("moveend", openIt);
+    map.flyTo(marker.getLatLng(), 15, { duration: 1.2 });
+    const t = setTimeout(openIt, 1600); // in case the map was already there and never "moves"
+    return () => clearTimeout(t);
+  }, [focus]);
+
+  const showAll = () => {
+    const L = window.L, map = mapRef.current;
+    if (!L || !map) return;
+    clearActivePin();
+    activeIdRef.current = null;
+    map.closePopup();
+    const pts = markersRef.current.map(m => m.getLatLng());
+    if (pts.length > 1) map.flyToBounds(L.latLngBounds(pts), { padding: [50, 50], maxZoom: 10, duration: 1.2 });
+    else if (pts.length === 1) map.flyTo(pts[0], 12, { duration: 1.2 });
+    else map.setView([10, 10], 2);
+    setZoomedIn(false);
+  };
 
   useEffect(() => {
     if (!mapContainer.current || mapRef.current) return;
@@ -64,6 +122,7 @@ const ChurchesMap = ({ churches, onChurchClick }) => {
         .leaflet-control-zoom a { background:#0c1628 !important; color:#e8b34b !important; border-color:rgba(232,179,75,0.2) !important; }
         .leaflet-control-attribution { background:rgba(6,12,24,0.7) !important; color:rgba(255,255,255,0.3) !important; }
         .leaflet-control-attribution a { color:rgba(255,255,255,0.4) !important; }
+        .sendme-pin-active > div { transform: scale(1.5); box-shadow: 0 0 0 6px rgba(232,179,75,0.35), 0 0 24px rgba(232,179,75,0.9) !important; transition: transform .25s; }
       `;
       document.head.appendChild(style);
 
@@ -113,11 +172,11 @@ const ChurchesMap = ({ churches, onChurchClick }) => {
         const popupHtml = `
           <div style="font-family:Georgia,serif; min-width:190px; padding:14px 16px;">
             <div style="font-size:10px; color:#e8b34b; letter-spacing:1.5px; font-weight:700; margin-bottom:6px; text-transform:uppercase;">⛪ Verified Church</div>
-            <div style="font-weight:700; font-size:14px; color:#eef1ff; margin-bottom:4px; line-height:1.3;">${c.name}</div>
-            <div style="font-size:12px; color:rgba(255,255,255,0.5); margin-bottom:6px;">📍 ${c.city}, ${c.country}</div>
-            <div style="font-size:12px; color:#e8b34b; margin-bottom:3px;">✝ ${c.pastor_name || ""}</div>
-            ${c.size ? `<div style="font-size:11px; color:rgba(255,255,255,0.35); margin-top:3px;">👥 ${c.size} members</div>` : ""}
-            ${c.website ? `<div style="font-size:11px; color:#5b9cf6; margin-top:4px;">🌐 ${c.website}</div>` : ""}
+            <div style="font-weight:700; font-size:14px; color:#eef1ff; margin-bottom:4px; line-height:1.3;">${esc(c.name)}</div>
+            <div style="font-size:12px; color:rgba(255,255,255,0.5); margin-bottom:6px;">📍 ${esc(c.city)}, ${esc(c.country)}</div>
+            <div style="font-size:12px; color:#e8b34b; margin-bottom:3px;">✝ ${esc(c.pastor_name || "")}</div>
+            ${c.size ? `<div style="font-size:11px; color:rgba(255,255,255,0.35); margin-top:3px;">👥 ${esc(c.size)} members</div>` : ""}
+            ${c.website ? `<div style="font-size:11px; color:#5b9cf6; margin-top:4px;">🌐 ${esc(c.website)}</div>` : ""}
           </div>`;
 
         const marker = L.marker([c.lat, c.lng], { icon })
@@ -127,9 +186,10 @@ const ChurchesMap = ({ churches, onChurchClick }) => {
         marker.on("mouseover", () => marker.openPopup());
         marker.on("mouseout", () => marker.closePopup());
         marker.on("click", () => {
-          if (onChurchClick) onChurchClick(c.id);
+          if (clickRef.current) clickRef.current(c.id);
         });
 
+        marker.churchId = c.id;
         markersRef.current.push(marker);
       });
     });
@@ -152,20 +212,33 @@ const ChurchesMap = ({ churches, onChurchClick }) => {
         html: `<div style="width:20px;height:20px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#f5d07a,#c8942b);border:2px solid #060c18;box-shadow:0 0 10px rgba(232,179,75,0.8);cursor:pointer;"></div>`,
         iconSize: [20,20], iconAnchor: [10,10], popupAnchor: [0,-14],
       });
-      const popupHtml = `<div style="font-family:Georgia,serif;min-width:190px;padding:14px 16px;"><div style="font-size:10px;color:#e8b34b;letter-spacing:1.5px;font-weight:700;margin-bottom:6px;text-transform:uppercase;">⛪ Verified Church</div><div style="font-weight:700;font-size:14px;color:#eef1ff;margin-bottom:4px;">${c.name}</div><div style="font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:6px;">📍 ${c.city}, ${c.country}</div><div style="font-size:12px;color:#e8b34b;">✝ ${c.pastor_name || ""}</div>${c.size?`<div style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:3px;">👥 ${c.size} members</div>`:""}</div>`;
+      const popupHtml = `<div style="font-family:Georgia,serif;min-width:190px;padding:14px 16px;"><div style="font-size:10px;color:#e8b34b;letter-spacing:1.5px;font-weight:700;margin-bottom:6px;text-transform:uppercase;">⛪ Verified Church</div><div style="font-weight:700;font-size:14px;color:#eef1ff;margin-bottom:4px;">${esc(c.name)}</div><div style="font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:6px;">📍 ${esc(c.city)}, ${esc(c.country)}</div><div style="font-size:12px;color:#e8b34b;">✝ ${esc(c.pastor_name || "")}</div>${c.size?`<div style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:3px;">👥 ${esc(c.size)} members</div>`:""}</div>`;
       const marker = L.marker([c.lat, c.lng], { icon })
         .bindPopup(popupHtml, { className:"sendme-popup", maxWidth:240 })
         .addTo(mapRef.current);
       marker.on("mouseover", () => marker.openPopup());
       marker.on("mouseout", () => marker.closePopup());
-      marker.on("click", () => { if (onChurchClick) onChurchClick(c.id); });
+      marker.on("click", () => { if (clickRef.current) clickRef.current(c.id); });
+      marker.churchId = c.id;
       markersRef.current.push(marker);
     });
-  }, [churches, onChurchClick]);
+    // keep the "zoomed to this church" highlight if the pins were rebuilt (e.g. by a search filter)
+    if (activeIdRef.current) {
+      const keep = markersRef.current.find(m => m.churchId === activeIdRef.current);
+      const el = keep && keep.getElement && keep.getElement();
+      if (el) { L.DomUtil.addClass(el, "sendme-pin-active"); keep.setZIndexOffset(1000); }
+    }
+  }, [churches]);
 
   return (
-    <div style={{ position:"relative", borderRadius:18, overflow:"hidden", border:"1px solid rgba(232,179,75,0.2)", marginBottom:24, boxShadow:"0 8px 40px rgba(0,0,0,0.5)" }}>
+    <div id="churches-map" style={{ position:"relative", borderRadius:18, overflow:"hidden", border:"1px solid rgba(232,179,75,0.2)", marginBottom:24, boxShadow:"0 8px 40px rgba(0,0,0,0.5)", scrollMarginTop:92 }}>
       <div ref={mapContainer} style={{ width:"100%", height:420 }} />
+      {zoomedIn && (
+        <button onClick={showAll}
+          style={{ position:"absolute", bottom:22, left:14, zIndex:1000, background:"rgba(6,12,24,0.92)", border:"1px solid rgba(232,179,75,0.4)", borderRadius:10, padding:"8px 14px", color:"#e8b34b", fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"Georgia, serif" }}>
+          🌍 Show all churches
+        </button>
+      )}
       <div style={{
         position:"absolute", top:14, left:14, zIndex:1000,
         background:"rgba(6,12,24,0.88)", borderRadius:10,
@@ -188,6 +261,14 @@ export default function ChurchesTab({ onBack }) {
   const [continent, setContinent] = useState("All");
   const [search, setSearch]       = useState("");
   const [expanded, setExpanded]   = useState(null);
+  const [mapFocus, setMapFocus]   = useState(null);
+
+  // "Show on map" on a list item: scroll up to the map, then zoom to that church's pin.
+  const showOnMap = (c) => {
+    const el = document.getElementById("churches-map");
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    setTimeout(() => setMapFocus(prev => ({ id: c.id, n: (prev?.n || 0) + 1 })), 300);
+  };
 
   useEffect(() => {
     const load = async () => {
@@ -210,7 +291,9 @@ export default function ChurchesTab({ onBack }) {
     load();
   }, []);
 
-  const visible = churches.filter(c => {
+  // memoised so the map gets the same list between renders and only rebuilds its pins when the
+  // filter or the churches actually change
+  const visible = useMemo(() => churches.filter(c => {
     const matchRegion = continent === "All" || regionFor(c.country) === continent;
     const q = search.toLowerCase();
     const matchSearch = !q ||
@@ -219,7 +302,7 @@ export default function ChurchesTab({ onBack }) {
       c.country?.toLowerCase().includes(q) ||
       c.pastor_name?.toLowerCase().includes(q);
     return matchRegion && matchSearch;
-  });
+  }), [churches, continent, search]);
 
   const countryCount = new Set(churches.map(c => c.country)).size;
 
@@ -246,6 +329,7 @@ export default function ChurchesTab({ onBack }) {
         {!loading && (
           <ChurchesMap
             churches={visible}
+            focus={mapFocus}
             onChurchClick={(id) => {
               setExpanded(prev => prev === id ? null : id);
               setTimeout(() => {
@@ -373,6 +457,15 @@ export default function ChurchesTab({ onBack }) {
                         border:"1px solid rgba(62,207,142,0.25)", whiteSpace:"nowrap" }}>
                         ✓ Verified
                       </span>
+                      {typeof c.lat === "number" && typeof c.lng === "number" && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); showOnMap(c); }}
+                          title="Show this church on the map"
+                          style={{ padding:"3px 10px", borderRadius:999, fontSize:11, cursor:"pointer", whiteSpace:"nowrap",
+                            background:"rgba(232,179,75,0.12)", color:"#e8b34b", border:"1px solid rgba(232,179,75,0.3)", fontFamily:"inherit" }}>
+                          📍 Show on map
+                        </button>
+                      )}
                       {c.size && (
                         <span style={{ fontSize:11, color:"rgba(255,255,255,0.3)" }}>{c.size} {isOrgRow ? "team" : "members"}</span>
                       )}

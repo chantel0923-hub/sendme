@@ -6,6 +6,12 @@ if (typeof window !== "undefined") { window.mapboxWorkerCount = 0; }
 
 mapboxgl.accessToken = process.env.REACT_APP_MAPBOX_TOKEN || "pk.eyJ1Ijoic2VuZG1lMDkyMyIsImEiOiJjbXI1anZpOGcwYXJvMzFyMHo2aDU2YnI2In0.CutnKCVEf1SzDpddacdekg";
 
+// Popups are built as HTML text and mission details are typed by applicants, so every value is
+// escaped before it goes into a popup.
+const esc = (v) => String(v ?? "")
+  .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+  .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+
 // Override Mapbox default white popup styles
 const _styleId = "sendme-popup-styles";
 if (!document.getElementById(_styleId)) {
@@ -123,8 +129,8 @@ export default function MapboxMap({ missions, churches = [], onMissionClick }) {
           .setHTML(`
             <div style="font-family:Georgia,serif;background:#0c1628;border:1px solid rgba(232,91,91,0.3);border-radius:12px;padding:12px 14px;min-width:180px;max-width:240px;box-shadow:0 8px 32px rgba(0,0,0,0.5);">
               <div style="font-size:11px;color:#e85b5b;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">High-Risk Mission Field</div>
-              <div style="font-size:14px;font-weight:700;color:#eef1ff;margin-bottom:4px">${props.name}</div>
-              ${location ? `<div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:6px">${location}</div>` : ""}
+              <div style="font-size:14px;font-weight:700;color:#eef1ff;margin-bottom:4px">${esc(props.name)}</div>
+              ${location ? `<div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:6px">${esc(location)}</div>` : ""}
               <div style="font-size:12px;color:rgba(255,255,255,0.55);line-height:1.5">Flagged by the missionary during application — security, political, or persecution risk in this field.</div>
             </div>
           `)
@@ -216,10 +222,10 @@ export default function MapboxMap({ missions, churches = [], onMissionClick }) {
           .setLngLat(coords)
           .setHTML(`
             <div style="font-family:Georgia,serif;background:#0c1628;border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:14px 16px;min-width:200px;box-shadow:0 8px 32px rgba(0,0,0,0.5);">
-              <div style="font-size:11px;color:${props.color};letter-spacing:2px;text-transform:uppercase;margin-bottom:4px">${props.role}${props.status === "complete" ? ' <span style="color:#3ecf8e;letter-spacing:1px;">· ✓ Completed</span>' : ""}</div>
-              <div style="font-size:14px;font-weight:700;color:#eef1ff;margin-bottom:3px">${props.name}${props.riskLevel === 4 ? ' <span style="color:#e85b5b;font-size:11px;">🔴 High Risk</span>' : ""}</div>
-              <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:10px">${props.protected ? "Location Protected" : [props.city, props.country].filter(Boolean).join(", ")}</div>
-              <div style="font-size:12px;color:rgba(255,255,255,0.6);margin-bottom:6px">${props.title}</div>
+              <div style="font-size:11px;color:${props.color};letter-spacing:2px;text-transform:uppercase;margin-bottom:4px">${esc(props.role)}${props.status === "complete" ? ' <span style="color:#3ecf8e;letter-spacing:1px;">· ✓ Completed</span>' : ""}</div>
+              <div style="font-size:14px;font-weight:700;color:#eef1ff;margin-bottom:3px">${esc(props.name)}${props.riskLevel === 4 ? ' <span style="color:#e85b5b;font-size:11px;">🔴 High Risk</span>' : ""}</div>
+              <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:10px">${props.protected ? "Location Protected" : esc([props.city, props.country].filter(Boolean).join(", "))}</div>
+              <div style="font-size:12px;color:rgba(255,255,255,0.6);margin-bottom:6px">${esc(props.title)}</div>
               <div style="background:rgba(255,255,255,0.07);border-radius:999px;height:5px;overflow:hidden;margin-bottom:6px">
                 <div style="width:${pct}%;height:100%;background:${props.color};border-radius:999px"></div>
               </div>
