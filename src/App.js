@@ -1725,6 +1725,13 @@ if (typeof document !== "undefined" && !document.getElementById(_navStyleId)) {
 
 const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, onMyChurch, onChurches, onProfile, onEmergency, onEmergencyDetail, onFamilyNeed, onGeneralFund, onMatching, onPray, onTestimonies, onWorker, onQR, onFaq, onPayout, onAdminPayouts, isAdmin, isPastor, onMilestoneProof, onPastorReview, onMissionaryDashboard, onAdminApprovals, onAdminChurchVerification, guest, onSignIn, onDonate, onAdminWorkers, onAdminEmergency, onAdminFamilyNeeds, onAdminGeneralFund, onAdminPipeline, onAdminWhatsAppGroup, onAdminMonthlyReport, onAdminUsers, onAdminPastors, onAdminTestimonies }) => {
   const [region,setRegion]       = useState("All");
+  const [mapFocus,setMapFocus]   = useState(null);
+  // "Show on map" on a mission card: scroll up/down to the world map, then zoom to that mission's pin.
+  const showOnMap = (m) => {
+    const el = document.getElementById("world-map");
+    if (el) el.scrollIntoView({ behavior:"smooth", block:"start" });
+    setTimeout(() => setMapFocus(prev => ({ id:m.id, n:(prev?.n||0)+1 })), 300);
+  };
   const [missions,setMissions]   = useState([]);
   // Completed missions are NOT part of the Active Missions list, but they stay pinned on the
   // world map so visitors can see what has been done. Kept in their own list for that reason.
@@ -1897,6 +1904,10 @@ const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, o
                       <div style={{ fontSize:10,color:m.color,letterSpacing:2,textTransform:"uppercase",marginBottom:2 }}>{m.role}</div>
                       <div style={{ fontSize:16,fontWeight:700,color:"#eef1ff" }}>{m.protected?"Protected Mission":m.name}</div>
                       <div style={{ fontSize:12,color:"rgba(255,255,255,0.35)",marginTop:2 }}>📍 {m.protected?m.region+" (Protected)":shortPlace(m)}</div>
+                      {Number.isFinite(m.lat) && Number.isFinite(m.lng) && (
+                        <button onClick={e=>{e.stopPropagation();showOnMap(m);}} title="Show this mission on the map"
+                          style={{ marginTop:8,padding:"3px 10px",borderRadius:999,fontSize:11,cursor:"pointer",whiteSpace:"nowrap",background:"rgba(232,179,75,0.12)",color:"#e8b34b",border:"1px solid rgba(232,179,75,0.3)",fontFamily:"inherit" }}>📍 Show on map</button>
+                      )}
                     </div>
                   </div>
                   <div style={{ display:"flex",flexDirection:"column",gap:5,alignItems:"flex-end" }}>
@@ -1933,7 +1944,7 @@ const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, o
         </div>
         </div>
         <div style={{ marginBottom:24 }}>
-          {loading?<LoadingMap/>:<MapboxMap missions={[...missions, ...completedMissions]} onMissionClick={onMission}/>}
+          {loading?<LoadingMap/>:<MapboxMap missions={[...missions, ...completedMissions]} onMissionClick={onMission} focus={mapFocus}/>}
         </div>
         {userRole==="missionary"&&user&&(
           <div onClick={onMissionaryDashboard} style={{ background:"rgba(232,179,75,0.08)",borderRadius:14,border:"1px solid rgba(232,179,75,0.25)",padding:"14px 18px",marginBottom:16,display:"flex",gap:14,alignItems:"center",cursor:"pointer",transition:"background .15s" }}

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import "mapbox-gl/dist/mapbox-gl.css";
 
 import mapboxgl from "mapbox-gl";
@@ -61,10 +61,62 @@ const buildHighRiskFeatures = (missions) =>
 // pinned at 0,0 in the Atlantic.
 const hasCoords = (m) => Number.isFinite(m.lat) && Number.isFinite(m.lng);
 
-export default function MapboxMap({ missions, churches = [], onMissionClick }) {
+// The properties each mission pin carries (also used to rebuild its popup when a mission card's
+// "Show on map" button zooms to it).
+const missionProps = (m) => ({
+  id:        m.id,
+  name:      m.protected ? "Protected Mission" : (m.name || m.title || "Untitled Mission"),
+  title:     m.title,
+  role:      m.role,
+  city:      m.city,
+  country:   m.country,
+  color:     m.status === "complete" ? "#3ecf8e" : m.protected ? "#b06cf5" : m.color,
+  protected: m.protected,
+  status:    m.status,
+  raised:    m.raised,
+  goal:      m.goal,
+  fundingTarget: m.fundingTarget || m.goal,
+  riskLevel: m.riskLevel,
+});
+
+export default function MapboxMap({ missions, churches = [], onMissionClick, focus }) {
   const mapContainer = useRef(null);
   const map          = useRef(null);
   const popup        = useRef(null);
+  const missionsRef  = useRef(missions);
+  missionsRef.current = missions;
+  const showPopupRef = useRef(null);
+  const [zoomedIn, setZoomedIn] = useState(false);
+
+  // A "Show on map" tap on a mission card arrives as a new `focus` ({ id, n } — n changes on every
+  // tap so tapping the same mission twice zooms again). Fly to that pin, ring it and open its popup.
+  // A protected mission is only zoomed to region level — never to its exact spot.
+  useEffect(() => {
+    const mp = map.current;
+    if (!focus || !mp) return;
+    let src;
+    try { src = mp.getSource("missions"); } catch (_e) { return; }
+    if (!src) return;
+    const m = (missionsRef.current || []).find(x => String(x.id) === String(focus.id));
+    if (!m || !hasCoords(m)) return;
+    try { mp.setFilter("mission-focus", ["==", ["get", "id"], m.id]); } catch (_e) {}
+    setZoomedIn(true);
+    const coords = [m.lng, m.lat];
+    mp.flyTo({ center: coords, zoom: m.protected ? 5 : 11, speed: 1.2, curve: 1.2 });
+    const openIt = () => { if (showPopupRef.current) showPopupRef.current(missionProps(m), coords); };
+    mp.once("moveend", openIt);
+    const t = setTimeout(openIt, 2500); // in case the map was already there and never "moves"
+    return () => clearTimeout(t);
+  }, [focus]);
+
+  const showAll = () => {
+    const mp = map.current;
+    if (!mp) return;
+    if (popup.current) popup.current.remove();
+    try { mp.setFilter("mission-focus", ["==", ["get", "id"], ""]); } catch (_e) {}
+    mp.flyTo({ center: [20, 10], zoom: 2.2 });
+    setZoomedIn(false);
+  };
 
   useEffect(() => {
     if (map.current) return;
@@ -148,21 +200,7 @@ export default function MapboxMap({ missions, churches = [], onMissionClick }) {
           features: (missions || []).filter(hasCoords).map(m => ({
             type: "Feature",
             geometry: { type: "Point", coordinates: [m.lng, m.lat] },
-            properties: {
-              id:        m.id,
-              name:      m.protected ? "Protected Mission" : (m.name || m.title || "Untitled Mission"),
-              title:     m.title,
-              role:      m.role,
-              city:      m.city,
-              country:   m.country,
-              color:     m.status === "complete" ? "#3ecf8e" : m.protected ? "#b06cf5" : m.color,
-              protected: m.protected,
-              status:    m.status,
-              raised:    m.raised,
-              goal:      m.goal,
-              fundingTarget: m.fundingTarget || m.goal,
-              riskLevel: m.riskLevel,
-            },
+            properties: missionProps(m),
           })),
         },
       });
@@ -213,10 +251,22 @@ export default function MapboxMap({ missions, churches = [], onMissionClick }) {
         paint: { "text-color": "#ffffff" },
       });
 
-      map.current.on("mouseenter", "mission-circle", (e) => {
-        map.current.getCanvas().style.cursor = "pointer";
-        const props = e.features[0].properties;
-        const coords = e.features[0].geometry.coordinates.slice();
+      // Gold ring around the mission that "Show on map" zoomed to (empty id = nothing ringed).
+      map.current.addLayer({
+        id: "mission-focus",
+        type: "circle",
+        source: "missions",
+        filter: ["==", ["get", "id"], ""],
+        paint: {
+          "circle-radius": 22,
+          "circle-color": "rgba(0,0,0,0)",
+          "circle-stroke-width": 3,
+          "circle-stroke-color": "#e8b34b",
+          "circle-stroke-opacity": 0.95,
+        },
+      });
+
+      const showMissionPopup = (props, coords) => {
         const pct = Math.min(100, Math.round((props.raised / props.fundingTarget) * 100));
         popup.current
           .setLngLat(coords)
@@ -237,6 +287,12 @@ export default function MapboxMap({ missions, churches = [], onMissionClick }) {
             </div>
           `)
           .addTo(map.current);
+      };
+      showPopupRef.current = showMissionPopup;
+
+      map.current.on("mouseenter", "mission-circle", (e) => {
+        map.current.getCanvas().style.cursor = "pointer";
+        showMissionPopup(e.features[0].properties, e.features[0].geometry.coordinates.slice());
       });
 
       map.current.on("mouseleave", "mission-circle", () => {
@@ -286,9 +342,17 @@ export default function MapboxMap({ missions, churches = [], onMissionClick }) {
   }, []);
 
   return (
-    <div style={{ position:"relative", borderRadius:20, overflow:"hidden",
-      border:"1px solid rgba(255,255,255,0.08)", height:400 }}>
+    <div id="world-map" style={{ position:"relative", borderRadius:20, overflow:"hidden",
+      border:"1px solid rgba(255,255,255,0.08)", height:400, scrollMarginTop:92 }}>
       <div ref={mapContainer} style={{ width:"100%", height:"100%" }} />
+      {zoomedIn && (
+        <button onClick={showAll}
+          style={{ position:"absolute", bottom:40, right:16, zIndex:10, background:"rgba(6,12,24,0.92)",
+            border:"1px solid rgba(232,179,75,0.4)", borderRadius:10, padding:"8px 14px", color:"#e8b34b",
+            fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"Georgia, serif" }}>
+          🌍 Show all missions
+        </button>
+      )}
       <div style={{ position:"absolute", bottom:16, left:16, zIndex:10,
         background:"rgba(6,12,24,0.88)", borderRadius:12,
         border:"1px solid rgba(255,255,255,0.1)", padding:"10px 14px",
