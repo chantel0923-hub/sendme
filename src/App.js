@@ -904,7 +904,7 @@ const MissionDetail = ({ mission: m, onBack, onDonate, onLedger, user, userRole,
       `Goal: $${fmt(m.fundingTarget)} - ${funded}% funded\n\n` +
       `"${short}"\n\n` +
       `Help us reach unreached souls - SendMe Global Mission Fund\n` +
-      `https://sendme-nine.vercel.app`
+      `https://sendmeglobalmission.org/mission/${m.id}`
     );
     window.open(`https://wa.me/?text=${text}`, "_blank");
   };
@@ -1045,7 +1045,12 @@ const MissionDetail = ({ mission: m, onBack, onDonate, onLedger, user, userRole,
 };
 
 const PrayerWall = ({ missions, onBack, filterMissionId }) => {
-  const [joined, setJoined]           = useState({});
+  // Joining a prayer chain is per MISSION (one row in mission_prayers per person per mission),
+  // whichever card or button was tapped — so joined state is keyed by mission id.
+  const [joinedMissions, setJoinedMissions] = useState({});   // already in the chain (from the database, or just joined)
+  const [sessionJoins, setSessionJoins]     = useState({});   // joined during this visit — adds 1 to the count loaded earlier
+  const [joiningMission, setJoiningMission] = useState(null);
+  const [chainNote, setChainNote]           = useState("");
   const [allRequests, setAllRequests] = useState([]);
   const [loadingPrayer, setLoadingPrayer] = useState(true);
   // #78: real global chain total, from mission_prayers — not local clicks
@@ -1134,11 +1139,7 @@ const PrayerWall = ({ missions, onBack, filterMissionId }) => {
           (chainRes.data || []).forEach(row => {
             if (row.donor_id === uid) joinedByMission[row.mission_id] = true;
           });
-          const joinedByRequestId = {};
-          merged.forEach(r => {
-            if (joinedByMission[r.missionId]) joinedByRequestId[r.id] = true;
-          });
-          setJoined(joinedByRequestId);
+          setJoinedMissions(joinedByMission);
         }
       } catch (e) {
         console.log("PrayerWall exception:", e);
@@ -1151,18 +1152,35 @@ const PrayerWall = ({ missions, onBack, filterMissionId }) => {
 
   // #78: real total, not local-click count. Local joins still bump it
   // optimistically until the next fetch.
-  const totalPraying = totalChainCount + Object.values(joined).filter(Boolean).length;
+  const totalPraying = totalChainCount + Object.keys(sessionJoins).length;
+  const chainCountFor = (missionId) => (chainCountByMission[missionId] || 0) + (sessionJoins[missionId] ? 1 : 0);
 
-  const joinPrayer = async (r) => {
-    if (joined[r.id]) return;
-    setJoined(j => ({ ...j, [r.id]: true }));
-    // Write back to the same table Mission Detail's "Join Prayer Chain" uses,
-    // so joining from the Wall counts toward the mission's real total too.
+  // Joins the mission's prayer chain — the same table and row Mission Detail's
+  // "Join Prayer Chain" button writes, so a join from here counts there too. The result is
+  // checked: a signed-out visitor (or any blocked insert) gets a clear message instead of a
+  // false "Praying" tick.
+  const joinMissionChain = async (missionId) => {
+    if (!missionId || joinedMissions[missionId] || joiningMission === missionId) return;
+    setChainNote("");
+    setJoiningMission(missionId);
     try {
       const { data: userData } = await supabase.auth.getUser();
       const uid = userData?.user?.id || null;
-      await supabase.from("mission_prayers").insert({ mission_id: r.missionId, type: "chain", donor_id: uid });
-    } catch {}
+      if (!uid) {
+        setChainNote("Please sign in to join the prayer chain.");
+      } else {
+        const { error } = await supabase.from("mission_prayers").insert({ mission_id: missionId, type: "chain", donor_id: uid });
+        if (error) throw error;
+        setJoinedMissions(j => ({ ...j, [missionId]: true }));
+        setSessionJoins(j => ({ ...j, [missionId]: true }));
+      }
+    } catch (e) {
+      const msg = (e?.message || "").toLowerCase();
+      setChainNote(e?.code === "42501" || msg.includes("row-level security")
+        ? "Please sign in to join the prayer chain."
+        : "Something went wrong — please try again.");
+    }
+    setJoiningMission(null);
   };
 
   // #96 — scoped view when opened from a specific mission's "View All" button
@@ -1208,6 +1226,39 @@ const PrayerWall = ({ missions, onBack, filterMissionId }) => {
             </button>
           </div>
         )}
+        {chainNote && (
+          <div style={{ background:"rgba(232,91,91,0.08)", border:"1px solid rgba(232,91,91,0.25)", borderRadius:12, padding:"12px 16px", marginBottom:16, fontSize:13, color:"#e85b5b" }}>{chainNote}</div>
+        )}
+        {(() => {
+          // Every active mission can be prayed for from here, even before anyone has posted a
+          // prayer request for it — joining adds you to that mission's prayer chain.
+          const prayable = (missions || []).filter(m => !activeFilterMissionId || String(m.id) === String(activeFilterMissionId));
+          if (prayable.length === 0) return null;
+          return (
+            <div style={{ marginBottom:28 }}>
+              <div style={{ fontSize:16, fontWeight:700, color:"#eef1ff", marginBottom:4 }}>🌍 Pray for a mission</div>
+              <div style={{ fontSize:12, color:"rgba(255,255,255,0.4)", marginBottom:12, lineHeight:1.5 }}>Tap to join the prayer chain for any active mission — no prayer request needed.</div>
+              <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                {prayable.map(m => {
+                  const isIn = !!joinedMissions[m.id];
+                  const place = m.protected ? (m.region || "") : (m.country || m.region || "");
+                  return (
+                    <div key={m.id} style={{ background:"#0c1628", borderRadius:14, border:"1px solid rgba(255,255,255,0.07)", borderLeft:"3px solid #e8b34b", padding:"12px 16px", display:"flex", alignItems:"center", gap:12 }}>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:14, fontWeight:700, color:"#eef1ff" }}>{m.protected ? "Protected Mission" : (m.title || m.name)}</div>
+                        <div style={{ fontSize:12, color:"rgba(255,255,255,0.4)", marginTop:2 }}>{place ? `📍 ${place} · ` : ""}{fmt(chainCountFor(m.id))} believers praying</div>
+                      </div>
+                      <button onClick={() => joinMissionChain(m.id)} disabled={isIn || joiningMission === m.id}
+                        style={{ padding:"8px 14px", borderRadius:10, border:"none", background:isIn?"rgba(62,207,142,0.12)":"linear-gradient(135deg,#e8b34b,#c8942b)", color:isIn?"#3ecf8e":"#000", fontWeight:700, cursor:isIn?"default":"pointer", fontSize:13, fontFamily:"Georgia, serif", whiteSpace:"nowrap" }}>
+                        {isIn ? "✓ Praying" : "🙏 I'm praying"}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
         {loadingPrayer && (
           <div style={{ textAlign:"center", padding:"40px 0", color:"rgba(255,255,255,0.3)", fontSize:14 }}>
             🙏 Loading prayer requests...
@@ -1220,8 +1271,8 @@ const PrayerWall = ({ missions, onBack, filterMissionId }) => {
         )}
         <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
           {displayedRequests.map(r => {
-            const isJoined = joined[r.id];
-            const count = r.prayers + (isJoined ? 1 : 0);
+            const isJoined = !!joinedMissions[r.missionId];
+            const count = chainCountFor(r.missionId);
             return (
               <div key={r.id} style={{ background:"#0c1628", borderRadius:16, border:`1px solid ${r.urgent?"rgba(232,91,91,0.3)":"rgba(255,255,255,0.07)"}`, borderLeft:`3px solid ${r.urgent?"#e85b5b":"#e8b34b"}`, padding:20 }}>
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:10, gap:10 }}>
@@ -1236,7 +1287,7 @@ const PrayerWall = ({ missions, onBack, filterMissionId }) => {
                 </div>
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:12 }}>
                   <span style={{ fontSize:13, color:"rgba(255,255,255,0.4)" }}>{fmt(count)} believers praying</span>
-                  <button onClick={() => joinPrayer(r)} disabled={isJoined}
+                  <button onClick={() => joinMissionChain(r.missionId)} disabled={isJoined || joiningMission === r.missionId}
                     style={{ padding:"8px 20px", borderRadius:10, border:"none", background:isJoined?"rgba(62,207,142,0.12)":"linear-gradient(135deg,#e8b34b,#c8942b)", color:isJoined?"#3ecf8e":"#000", fontWeight:700, cursor:isJoined?"default":"pointer", fontSize:13, fontFamily:"Georgia, serif" }}>
                     {isJoined ? "✓ Praying" : "Join Prayer"}
                   </button>
@@ -2327,6 +2378,61 @@ const GuestBlocked = ({ title, message, onBack, onRegister, primaryLabel="✝ Si
   </div>
 );
 
+// ── Phone / browser Back button support ─────────────────────────────────────────────
+// SendMe switches screens with state rather than separate web addresses, so the browser had
+// nothing to step back through and the phone's Back button left the site. This keeps a small
+// trail of the screens visited and mirrors it into the browser history: Back steps to the
+// previous screen, and the in-app Back / Home buttons unwind the same trail.
+function useScreenHistory(screen, setScreen) {
+  const stack  = useRef(["home"]);
+  const synced = useRef("home");
+  useEffect(() => {
+    try { window.history.replaceState({ sendmeScreen: "home" }, ""); } catch {}
+    const onPop = (e) => {
+      const s = (e.state && e.state.sendmeScreen) || "home";
+      const i = stack.current.lastIndexOf(s);
+      stack.current = i >= 0 ? stack.current.slice(0, i + 1) : [s];
+      synced.current = s;
+      setScreen(s);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [setScreen]);
+  useEffect(() => {
+    if (screen === synced.current) return;
+    synced.current = screen;
+    const idx = stack.current.lastIndexOf(screen);
+    if (idx < 0) {
+      stack.current = [...stack.current, screen];
+      try { window.history.pushState({ sendmeScreen: screen }, ""); } catch {}
+    } else if (idx < stack.current.length - 1) {
+      const steps = stack.current.length - 1 - idx;
+      stack.current = stack.current.slice(0, idx + 1);
+      try { window.history.go(-steps); } catch {}
+    }
+  }, [screen]);
+}
+
+// ── Slim navigation bar shown at the top of every screen except Home ─────────────────────
+// Home has the full menu; every other screen used to show only its own Back button, so people
+// lost the menu the moment they opened Pray or Churches. Not sticky on purpose: most screens
+// have their own sticky Back header, and two stacked sticky bars would cover each other.
+const InnerNavBar = ({ user, userRole, guest, isAdmin, onHome, onDonate, onPray, onChurches, nav, adminNav }) => {
+  const pill = { background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", borderRadius:10, padding:"7px 12px", color:"rgba(255,255,255,0.6)", cursor:"pointer", fontSize:13, fontFamily:"Georgia, serif" };
+  return (
+    <div className="sendme-inner-nav" style={{ background:"#09111f", borderBottom:"1px solid rgba(255,255,255,0.07)", padding:"10px 16px", display:"flex", alignItems:"center", gap:8, flexWrap:"wrap", position:"relative", zIndex:300, fontFamily:"Georgia, serif" }}>
+      <button onClick={onHome} aria-label="SendMe home" style={{ background:"none", border:"none", cursor:"pointer", padding:0, marginRight:"auto", fontFamily:"Georgia, serif" }}>
+        <span style={{ fontSize:22, fontWeight:800, color:"#fff" }}>Send<span style={{ color:"#e8b34b" }}>Me</span></span>
+      </button>
+      <button onClick={onDonate} style={{ background:"linear-gradient(135deg,#4caf7d,#3a8f63)", border:"none", borderRadius:10, padding:"7px 14px", color:"#fff", cursor:"pointer", fontSize:13, fontWeight:700, fontFamily:"Georgia, serif" }}>💛 Donate</button>
+      <button onClick={onPray} style={pill}>Pray</button>
+      <button onClick={onChurches} style={pill}>Churches</button>
+      <NavDropdown user={user} userRole={userRole} guest={guest} {...nav} />
+      {isAdmin && <AdminDropdown {...adminNav} />}
+    </div>
+  );
+};
+
 export default function App() {
   const [user,setUser]                         = useState(null);
   const [showSplash,setShowSplash]             = useState(false);
@@ -2347,6 +2453,7 @@ export default function App() {
   // The global nav "Pray" button clears this so it always opens unfiltered.
   const [prayerWallFilterMissionId, setPrayerWallFilterMissionId] = useState(null);
   const [liveMissions,setLiveMissions]         = useState([]);
+  useScreenHistory(screen, setScreen);
 
   const loadRole = async (u) => {
     if (!u) { setUserRole(null); return; }
@@ -2455,6 +2562,31 @@ export default function App() {
   const isAdminUser   = user?.email === ADMIN_EMAIL || user?.isAdmin === true;
   const openMission   = (m)  =>{setSelectedMission(m);setScreen("detail");};
   const openDonate    = ()   =>{setScreen("donate");};
+  // Wraps every screen except Home with the slim top bar (see InnerNavBar).
+  const withNav = (node) => (
+    <>
+      <InnerNavBar user={user} userRole={userRole} guest={guest} isAdmin={isAdminUser}
+        onHome={()=>setScreen("home")} onDonate={()=>setScreen("donor-browse")}
+        onPray={()=>{ setPrayerWallFilterMissionId(null); setScreen("pray"); }}
+        onChurches={()=>setScreen("churches")}
+        nav={{
+          onProfile:()=>setScreen("profile"), onEmergency:()=>setScreen("emergency"), onFamilyNeed:()=>setScreen("family-needs"),
+          onGeneralFund:()=>setScreen("general-fund"), onTestimonies:()=>setScreen("testimonies"), onWorker:()=>setScreen("worker"),
+          onMatching:()=>setScreen("matching"), onQR:()=>setScreen("qr"), onFaq:()=>setScreen("faq"),
+        }}
+        adminNav={{
+          onAdminChurchVerification:()=>setScreen("admin-church-verification"), onAdminWorkers:()=>setScreen("admin-workers"),
+          onAdminEmergency:()=>setScreen("admin-emergency"), onAdminFamilyNeeds:()=>setScreen("admin-family-needs"),
+          onAdminGeneralFund:()=>setScreen("admin-general-fund"), onAdminApprovals:()=>setScreen("admin-approvals"),
+          onAdminPayouts:()=>setScreen("admin-payouts"), onAdminPipeline:()=>setScreen("admin-pipeline"),
+          onAdminWhatsAppGroup:()=>setScreen("admin-whatsapp-group"), onAdminMonthlyReport:()=>setScreen("admin-monthly-report"),
+          onAdminUsers:()=>setScreen("admin-users"), onAdminPastors:()=>setScreen("admin-pastors"),
+          onAdminTestimonies:()=>setScreen("admin-testimonies"),
+        }}
+      />
+      {node}
+    </>
+  );
   const handlePayfastDonate = (amt, guestInfo, type = "once") => startPaystackDonation({ mission: selectedMission, amount: amt, user, guestInfo, type });
 
   if(!authReady) return(<div style={{ minHeight:"100vh",background:"#060c18",display:"flex",alignItems:"center",justifyContent:"center" }}><div style={{ fontSize:48,color:"#e8b34b" }}>✝</div></div>);
@@ -2462,41 +2594,41 @@ export default function App() {
   if(!user && !guest) return <Auth onLogin={(u)=>{ setUser(u); if(!localStorage.getItem("sendme_splash_seen")){ setShowSplash(true); } }} onGuest={()=>setGuest(true)}/>;
   if(showSplash) return <MissionVisionSplash onDone={()=>{ localStorage.setItem("sendme_splash_seen","1"); setShowSplash(false); }}/>;
 
-  if(screen==="donor-browse")    return <DonorBrowse onBack={()=>setScreen("home")} onMission={openMission} user={user}/>;
-  if(screen==="faq")              return <FAQScreen onBack={()=>setScreen("home")}/>;
-  if(screen==="payout")           return <PayoutSetup onBack={()=>setScreen("home")} user={user}/>;
-  if(screen==="admin-payouts")    return isAdminUser ? <AdminPayouts onBack={()=>setScreen("home")}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
-  if(screen==="admin-pipeline")   return isAdminUser ? <AdminPipeline onBack={()=>setScreen("home")} onAdminChurchVerification={()=>setScreen("admin-church-verification")} onAdminApprovals={()=>setScreen("admin-approvals")} onAdminPayouts={()=>setScreen("admin-payouts")} onAdminEmergency={()=>setScreen("admin-emergency")}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
-  if(screen==="pray")             return <PrayerWall missions={liveMissions} onBack={()=>setScreen("home")} filterMissionId={prayerWallFilterMissionId}/>;
-  if(screen==="churches")         return <ChurchesTab onBack={()=>setScreen("home")}/>;
-  if(screen==="apply")            return guest ? <GuestBlocked title="Registration Required" message="Applying as a missionary requires a SendMe account so your application can be tracked and your church can endorse you. Please sign in or register to continue." onBack={()=>setScreen("home")} onRegister={()=>{setGuest(false);setScreen("home");}}/> : userRole==="donor" ? <GuestBlocked title="Not Available for Donors" message="Applying as a missionary isn't available on a Donor/Supporter account. If you're called to the mission field, please register a separate missionary account, or contact admin to update your role." onBack={()=>setScreen("home")} primaryLabel="Back to Home" onPrimary={()=>setScreen("home")}/> : <MissionaryApplication key={editingMission ? editingMission.id : "new"} onBack={()=>{ setEditingMission(null); setScreen(editingMission ? "missionary-dashboard" : "home"); }} user={user} editMission={editingMission}/>;
-  if(screen==="church")           return (isPastor||isAdminUser) ? <ChurchRegistration onBack={()=>setScreen("home")} user={user} userRole={userRole}/> : null;
-  if(screen==="my-church")        return (isPastor||isAdminUser) ? <MyChurch onBack={()=>setScreen("home")} user={user} userRole={userRole} onPayout={()=>setScreen("payout")}/> : null;
-  if(screen==="profile")          return <DonorProfile user={user} onBack={()=>setScreen("home")} userRole={userRole} isAdmin={isAdminUser}/>;
-  if(screen==="emergency")        return guest ? <GuestBlocked title="Registration Required" message="Submitting an emergency mission request requires a SendMe account, so admin can verify and follow up with you directly. Please sign in or register to continue." onBack={()=>setScreen("home")} onRegister={()=>{setGuest(false);setScreen("home");}}/> : <EmergencyRequests onBack={()=>{setSelectedEmergencyId(null);setScreen("home");}} user={user} userRole={userRole} preselectedId={selectedEmergencyId}/>;
-  if(screen==="matching")         return <MissionMatching missions={liveMissions} onMission={openMission} onBack={()=>setScreen("home")}/>;
-  if(screen==="testimonies")      return <TestimonyEngine onBack={()=>setScreen("home")} onMission={openMission} onAddTestimony={isAdminUser ? ()=>setScreen("admin-testimonies") : undefined}/>;
-  if(screen==="worker")           return guest ? <GuestBlocked title="Registration Required" message="Posting or responding to a worker request requires a SendMe account, so churches can coordinate and follow up directly. Please sign in or register to continue." onBack={()=>setScreen("home")} onRegister={()=>{setGuest(false);setScreen("home");}}/> : <SendAWorker onBack={()=>setScreen("home")} user={user}/>;
-  if(screen==="qr")               return <QRShare missions={liveMissions} onBack={()=>setScreen("home")}/>;
-  if(screen==="milestone-proof")  return <ProofCenter onBack={()=>setScreen("home")} user={user} isAdmin={isAdminUser} isPastor={isPastor} initialTab="submit"/>;
-  if(screen==="pastor-review")    return (isPastor||isAdminUser) ? <ProofCenter onBack={()=>setScreen("home")} user={user} isAdmin={isAdminUser} isPastor={true} initialTab="approve"/> : <FAQScreen onBack={()=>setScreen("home")}/>;
-  if(screen==="missionary-dashboard") return <MissionaryDashboard onBack={()=>setScreen("home")} user={user} onSubmitProof={()=>setScreen("milestone-proof")} onFixApplication={(m)=>{ setEditingMission(m); setScreen("apply"); }}/>;
-  if(screen==="admin-approvals")  return isAdminUser ? <AdminApprovals onBack={()=>setScreen("home")} user={user}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
-  if(screen==="admin-church-verification") return isAdminUser ? <AdminChurchVerification onBack={()=>setScreen("home")} user={user}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
-  if(screen==="admin-workers")        return isAdminUser ? <AdminWorkerRequests onBack={()=>setScreen("home")}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
-  if(screen==="admin-emergency")      return isAdminUser ? <AdminEmergencyRequests onBack={()=>setScreen("home")} adminEmail={user?.email}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
-  if(screen==="admin-whatsapp-group") return isAdminUser ? <AdminWhatsAppGroup onBack={()=>setScreen("home")}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
-  if(screen==="admin-testimonies")    return isAdminUser ? <AdminTestimonies onBack={()=>setScreen("testimonies")}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
-  if(screen==="admin-pastors")        return isAdminUser ? <AdminPastors onBack={()=>setScreen("home")}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
-  if(screen==="admin-users")          return isAdminUser ? <AdminUsers onBack={()=>setScreen("home")}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
-  if(screen==="admin-monthly-report") return isAdminUser ? <AdminMonthlyReport onBack={()=>setScreen("home")} user={user}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
-  if(screen==="family-needs")     return guest ? <GuestBlocked title="Registration Required" message="Submitting a family need requires a SendMe account, so the family's church can be contacted for endorsement. Please sign in or register to continue." onBack={()=>setScreen("home")} onRegister={()=>{setGuest(false);setScreen("home");}}/> : <FamilyNeeds onBack={()=>setScreen("home")} user={user} userRole={userRole}/>;
-  if(screen==="admin-family-needs") return isAdminUser ? <AdminFamilyNeeds onBack={()=>setScreen("home")} adminEmail={user?.email}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
-  if(screen==="general-fund")       return <GeneralFund onBack={()=>setScreen("home")} user={user}/>;
-  if(screen==="admin-general-fund") return isAdminUser ? <AdminGeneralFund onBack={()=>setScreen("home")}/> : <FAQScreen onBack={()=>setScreen("home")}/>;
-  if(screen==="ledger"&&selectedMission)  return <TransparencyLedger mission={selectedMission} onBack={()=>setScreen("detail")}/>;
-  if(screen==="detail"&&selectedMission)  return <MissionDetail mission={selectedMission} onBack={()=>setScreen("home")} onDonate={openDonate} onLedger={()=>setScreen("ledger")} user={user} userRole={userRole} guest={guest} isAdmin={isAdminUser} onBrowseMissions={()=>setScreen("donor-browse")} onViewPrayerWall={()=>{ setPrayerWallFilterMissionId(selectedMission.id); setScreen("pray"); }} onMissionEdited={(row)=>setSelectedMission(prev=>({ ...mapRow(row,0), color: (prev && prev.color) || mapRow(row,0).color }))}/>;
-  if(screen==="donate"&&selectedMission)  return <DonateScreen mission={selectedMission} onBack={()=>setScreen("detail")} onPayfast={handlePayfastDonate} user={user} onBrowseMissions={()=>setScreen("donor-browse")}/>;
+  if(screen==="donor-browse")    return withNav(<DonorBrowse onBack={()=>setScreen("home")} onMission={openMission} user={user}/>);
+  if(screen==="faq")              return withNav(<FAQScreen onBack={()=>setScreen("home")}/>);
+  if(screen==="payout")           return withNav(<PayoutSetup onBack={()=>setScreen("home")} user={user}/>);
+  if(screen==="admin-payouts")    return withNav(isAdminUser ? <AdminPayouts onBack={()=>setScreen("home")}/> : <FAQScreen onBack={()=>setScreen("home")}/>);
+  if(screen==="admin-pipeline")   return withNav(isAdminUser ? <AdminPipeline onBack={()=>setScreen("home")} onAdminChurchVerification={()=>setScreen("admin-church-verification")} onAdminApprovals={()=>setScreen("admin-approvals")} onAdminPayouts={()=>setScreen("admin-payouts")} onAdminEmergency={()=>setScreen("admin-emergency")}/> : <FAQScreen onBack={()=>setScreen("home")}/>);
+  if(screen==="pray")             return withNav(<PrayerWall missions={liveMissions} onBack={()=>setScreen("home")} filterMissionId={prayerWallFilterMissionId}/>);
+  if(screen==="churches")         return withNav(<ChurchesTab onBack={()=>setScreen("home")}/>);
+  if(screen==="apply")            return withNav(guest ? <GuestBlocked title="Registration Required" message="Applying as a missionary requires a SendMe account so your application can be tracked and your church can endorse you. Please sign in or register to continue." onBack={()=>setScreen("home")} onRegister={()=>{setGuest(false);setScreen("home");}}/> : userRole==="donor" ? <GuestBlocked title="Not Available for Donors" message="Applying as a missionary isn't available on a Donor/Supporter account. If you're called to the mission field, please register a separate missionary account, or contact admin to update your role." onBack={()=>setScreen("home")} primaryLabel="Back to Home" onPrimary={()=>setScreen("home")}/> : <MissionaryApplication key={editingMission ? editingMission.id : "new"} onBack={()=>{ setEditingMission(null); setScreen(editingMission ? "missionary-dashboard" : "home"); }} user={user} editMission={editingMission}/>);
+  if(screen==="church")           return withNav((isPastor||isAdminUser) ? <ChurchRegistration onBack={()=>setScreen("home")} user={user} userRole={userRole}/> : null);
+  if(screen==="my-church")        return withNav((isPastor||isAdminUser) ? <MyChurch onBack={()=>setScreen("home")} user={user} userRole={userRole} onPayout={()=>setScreen("payout")}/> : null);
+  if(screen==="profile")          return withNav(<DonorProfile user={user} onBack={()=>setScreen("home")} userRole={userRole} isAdmin={isAdminUser}/>);
+  if(screen==="emergency")        return withNav(guest ? <GuestBlocked title="Registration Required" message="Submitting an emergency mission request requires a SendMe account, so admin can verify and follow up with you directly. Please sign in or register to continue." onBack={()=>setScreen("home")} onRegister={()=>{setGuest(false);setScreen("home");}}/> : <EmergencyRequests onBack={()=>{setSelectedEmergencyId(null);setScreen("home");}} user={user} userRole={userRole} preselectedId={selectedEmergencyId}/>);
+  if(screen==="matching")         return withNav(<MissionMatching missions={liveMissions} onMission={openMission} onBack={()=>setScreen("home")}/>);
+  if(screen==="testimonies")      return withNav(<TestimonyEngine onBack={()=>setScreen("home")} onMission={openMission} onAddTestimony={isAdminUser ? ()=>setScreen("admin-testimonies") : undefined}/>);
+  if(screen==="worker")           return withNav(guest ? <GuestBlocked title="Registration Required" message="Posting or responding to a worker request requires a SendMe account, so churches can coordinate and follow up directly. Please sign in or register to continue." onBack={()=>setScreen("home")} onRegister={()=>{setGuest(false);setScreen("home");}}/> : <SendAWorker onBack={()=>setScreen("home")} user={user}/>);
+  if(screen==="qr")               return withNav(<QRShare missions={liveMissions} onBack={()=>setScreen("home")}/>);
+  if(screen==="milestone-proof")  return withNav(<ProofCenter onBack={()=>setScreen("home")} user={user} isAdmin={isAdminUser} isPastor={isPastor} initialTab="submit"/>);
+  if(screen==="pastor-review")    return withNav((isPastor||isAdminUser) ? <ProofCenter onBack={()=>setScreen("home")} user={user} isAdmin={isAdminUser} isPastor={true} initialTab="approve"/> : <FAQScreen onBack={()=>setScreen("home")}/>);
+  if(screen==="missionary-dashboard") return withNav(<MissionaryDashboard onBack={()=>setScreen("home")} user={user} onSubmitProof={()=>setScreen("milestone-proof")} onFixApplication={(m)=>{ setEditingMission(m); setScreen("apply"); }}/>);
+  if(screen==="admin-approvals")  return withNav(isAdminUser ? <AdminApprovals onBack={()=>setScreen("home")} user={user}/> : <FAQScreen onBack={()=>setScreen("home")}/>);
+  if(screen==="admin-church-verification") return withNav(isAdminUser ? <AdminChurchVerification onBack={()=>setScreen("home")} user={user}/> : <FAQScreen onBack={()=>setScreen("home")}/>);
+  if(screen==="admin-workers")        return withNav(isAdminUser ? <AdminWorkerRequests onBack={()=>setScreen("home")}/> : <FAQScreen onBack={()=>setScreen("home")}/>);
+  if(screen==="admin-emergency")      return withNav(isAdminUser ? <AdminEmergencyRequests onBack={()=>setScreen("home")} adminEmail={user?.email}/> : <FAQScreen onBack={()=>setScreen("home")}/>);
+  if(screen==="admin-whatsapp-group") return withNav(isAdminUser ? <AdminWhatsAppGroup onBack={()=>setScreen("home")}/> : <FAQScreen onBack={()=>setScreen("home")}/>);
+  if(screen==="admin-testimonies")    return withNav(isAdminUser ? <AdminTestimonies onBack={()=>setScreen("testimonies")}/> : <FAQScreen onBack={()=>setScreen("home")}/>);
+  if(screen==="admin-pastors")        return withNav(isAdminUser ? <AdminPastors onBack={()=>setScreen("home")}/> : <FAQScreen onBack={()=>setScreen("home")}/>);
+  if(screen==="admin-users")          return withNav(isAdminUser ? <AdminUsers onBack={()=>setScreen("home")}/> : <FAQScreen onBack={()=>setScreen("home")}/>);
+  if(screen==="admin-monthly-report") return withNav(isAdminUser ? <AdminMonthlyReport onBack={()=>setScreen("home")} user={user}/> : <FAQScreen onBack={()=>setScreen("home")}/>);
+  if(screen==="family-needs")     return withNav(guest ? <GuestBlocked title="Registration Required" message="Submitting a family need requires a SendMe account, so the family's church can be contacted for endorsement. Please sign in or register to continue." onBack={()=>setScreen("home")} onRegister={()=>{setGuest(false);setScreen("home");}}/> : <FamilyNeeds onBack={()=>setScreen("home")} user={user} userRole={userRole}/>);
+  if(screen==="admin-family-needs") return withNav(isAdminUser ? <AdminFamilyNeeds onBack={()=>setScreen("home")} adminEmail={user?.email}/> : <FAQScreen onBack={()=>setScreen("home")}/>);
+  if(screen==="general-fund")       return withNav(<GeneralFund onBack={()=>setScreen("home")} user={user}/>);
+  if(screen==="admin-general-fund") return withNav(isAdminUser ? <AdminGeneralFund onBack={()=>setScreen("home")}/> : <FAQScreen onBack={()=>setScreen("home")}/>);
+  if(screen==="ledger"&&selectedMission)  return withNav(<TransparencyLedger mission={selectedMission} onBack={()=>setScreen("detail")}/>);
+  if(screen==="detail"&&selectedMission)  return withNav(<MissionDetail mission={selectedMission} onBack={()=>setScreen("home")} onDonate={openDonate} onLedger={()=>setScreen("ledger")} user={user} userRole={userRole} guest={guest} isAdmin={isAdminUser} onBrowseMissions={()=>setScreen("donor-browse")} onViewPrayerWall={()=>{ setPrayerWallFilterMissionId(selectedMission.id); setScreen("pray"); }} onMissionEdited={(row)=>setSelectedMission(prev=>({ ...mapRow(row,0), color: (prev && prev.color) || mapRow(row,0).color }))}/>);
+  if(screen==="donate"&&selectedMission)  return withNav(<DonateScreen mission={selectedMission} onBack={()=>setScreen("detail")} onPayfast={handlePayfastDonate} user={user} onBrowseMissions={()=>setScreen("donor-browse")}/>);
 
   return(
     <HomeScreen
