@@ -41,8 +41,12 @@ function getRawBody(req) {
 // secret key, sent in the x-paystack-signature header. Simpler than
 // PayFast's field-by-field string-building — just hash the raw bytes as-is.
 function verifySignature(rawBody, signature) {
+  if (typeof signature !== "string") return false;
   const hash = crypto.createHmac("sha512", process.env.PAYSTACK_SECRET_KEY).update(rawBody).digest("hex");
-  return hash === signature;
+  const a = Buffer.from(hash);
+  const b = Buffer.from(signature);
+  // timingSafeEqual needs equal lengths; a wrong-length signature is simply wrong
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
 export default async function handler(req, res) {
@@ -145,16 +149,30 @@ export default async function handler(req, res) {
     const creditAmount = usdAmount ?? Number(amountCents) / 100;
 
     // Update the donations row — keep the original USD `amount` untouched.
-    const { error: updateError } = await supabase
+    //
+    // DUPLICATE PROTECTION: Paystack can deliver the same charge.success more than once (retries,
+    // occasional duplicate events). Crediting must happen exactly once per charge, so this update
+    // only matches a row that is NOT already complete and asks for the updated rows back. The
+    // database applies it atomically, so even two deliveries arriving at the same moment cannot
+    // both win: the first flips pending -> complete and carries on to credit; the second matches
+    // nothing and stops here. (Status NULL is treated as "not complete".)
+    const { data: updatedRows, error: updateError } = await supabase
       .from("donations")
       .update({
         status: "complete",
         paystack_authorization_code: authorization?.authorization_code || null,
         updated_at: new Date().toISOString(),
       })
-      .eq("paystack_reference", reference);
+      .eq("paystack_reference", reference)
+      .or("status.is.null,status.neq.complete")
+      .select("paystack_reference");
     if (updateError) {
       console.error("paystack-webhook: failed to update donation row", updateError);
+      return res.status(200).send("OK");
+    }
+    if (donationRow && (!updatedRows || updatedRows.length === 0)) {
+      // The row exists but was already complete — this charge has been credited before.
+      console.log("paystack-webhook: duplicate delivery ignored", { reference });
       return res.status(200).send("OK");
     }
 
