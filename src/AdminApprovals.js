@@ -56,6 +56,11 @@ export default function AdminApprovals({ onBack, user }) {
   const [closeTarget, setCloseTarget]   = useState({});     // { [missionId]: other mission id }
   const [closeReason, setCloseReason]   = useState({});     // { [missionId]: string }
   const [notice, setNotice]             = useState("");     // green success line at the top
+  // Complete — funded outside SendMe: the mission went ahead with funding that did not come through
+  // SendMe (nothing raised here). Marks it complete so it stays on the world map and can get a testimony.
+  const [outsideOpen, setOutsideOpen]   = useState(null);   // mission id with the panel open
+  const [outsideNote, setOutsideNote]   = useState({});     // { [missionId]: string }
+  const [outsideEmail, setOutsideEmail] = useState({});     // { [missionId]: false when "don't email" is ticked }
   // Flag Missionary — admin's case-by-case call that someone who got full
   // upfront funding never submitted proof. Blocks new applications until
   // admin manually unblocks (no automated deadline — pure judgment call).
@@ -188,6 +193,35 @@ export default function AdminApprovals({ onBack, user }) {
       await load();
     } catch (e) {
       setError("Could not mark mission complete. (" + (e.message || "") + ")");
+    }
+    setActing(null);
+  };
+
+  const completeOutside = async (m) => {
+    const note = (outsideNote[m.id] || "").trim();
+    const ok = window.confirm(
+      `Mark \"${m.title}\" complete?\n\n` +
+      `Nothing was raised on SendMe, so no payout is created — the mission was funded outside SendMe.\n\n` +
+      `It stays on the world map as a completed mission and you can add its testimony. This cannot be undone.`
+    );
+    if (!ok) return;
+    setActing(m.id);
+    setError("");
+    try {
+      const { error: rpcError } = await supabase.rpc("complete_mission_funded_outside", { p_mission_id: m.id, p_note: note || null });
+      if (rpcError) throw rpcError;
+      if (outsideEmail[m.id] !== false) {
+        sendNotification("mission_completed", m.missionary_email, {
+          missionaryName: m.missionary_name,
+          missionTitle: m.title,
+          testimonyUrl: `${window.location.origin}/`,
+        });
+      }
+      setOutsideOpen(null);
+      setNotice(`✓ \"${m.title}\" is now complete (funded outside SendMe). It stays on the world map, and you can add its testimony under Admin → Testimonies.`);
+      await load();
+    } catch (e) {
+      setError("Could not complete this mission. (" + (e.message || "") + ")  If this says the function does not exist, run early-close.sql in Supabase first.");
     }
     setActing(null);
   };
@@ -695,6 +729,44 @@ export default function AdminApprovals({ onBack, user }) {
                       style={{ display: "block", textAlign: "center", marginTop: 12, padding: "11px 0", borderRadius: 10, border: "1px solid rgba(37,211,102,0.35)", background: "rgba(37,211,102,0.08)", color: "#25d366", fontWeight: 700, fontSize: 13, fontFamily: "Georgia, serif", textDecoration: "none" }}>
                       📲 Post to WhatsApp Group
                     </a>
+                  )}
+
+                  {/* Complete — funded outside SendMe: nothing raised here, but the mission goes ahead with
+                      other funding. Stays on the map as a completed mission and can get a testimony. */}
+                  {m.status === "active" && !(Number(m.raised) > 0) && (
+                    outsideOpen === m.id ? (
+                      <div style={{ marginTop: 12, background: "rgba(62,207,142,0.05)", border: "1px solid rgba(62,207,142,0.28)", borderRadius: 10, padding: 14 }}>
+                        <div style={{ fontSize: 12, color: "#3ecf8e", fontWeight: 700, marginBottom: 8 }}>✅ Complete — Funded Outside SendMe</div>
+                        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", lineHeight: 1.6, marginBottom: 10 }}>
+                          Use this when the mission went ahead with funding that did not come through SendMe. Nothing was raised here, so no payout is created. It stays on the world map as a completed mission, and you can add its testimony.
+                        </div>
+                        <textarea
+                          value={outsideNote[m.id] || ""}
+                          onChange={e => setOutsideNote(n => ({ ...n, [m.id]: e.target.value }))}
+                          placeholder="Optional note for your records (e.g. funded directly by the local church)"
+                          style={{ width: "100%", padding: "9px 12px", borderRadius: 8, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", color: "#eef1ff", fontSize: 13, fontFamily: "Georgia, serif", outline: "none", resize: "vertical", minHeight: 54, boxSizing: "border-box" }}
+                        />
+                        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "rgba(255,255,255,0.5)", marginTop: 8, cursor: "pointer" }}>
+                          <input type="checkbox" checked={outsideEmail[m.id] !== false} onChange={e => setOutsideEmail(x => ({ ...x, [m.id]: e.target.checked }))} />
+                          Email the missionary that the mission is complete
+                        </label>
+                        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                          <button disabled={acting === m.id} onClick={() => completeOutside(m)}
+                            style={{ flex: 1, padding: "9px 0", borderRadius: 8, border: "none", background: "linear-gradient(135deg,#3ecf8e,#2aaf74)", color: "#000", fontWeight: 700, cursor: "pointer", fontSize: 12, fontFamily: "Georgia, serif", opacity: acting === m.id ? 0.5 : 1 }}>
+                            Confirm Complete
+                          </button>
+                          <button onClick={() => setOutsideOpen(null)}
+                            style={{ flex: 1, padding: "9px 0", borderRadius: 8, border: "1px solid rgba(255,255,255,0.15)", background: "transparent", color: "rgba(255,255,255,0.5)", cursor: "pointer", fontSize: 12, fontFamily: "Georgia, serif" }}>
+                            Never Mind
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button onClick={() => { setOutsideOpen(m.id); setError(""); setNotice(""); }}
+                        style={{ marginTop: 10, width: "100%", padding: "9px 0", borderRadius: 10, border: "1px solid rgba(62,207,142,0.3)", background: "rgba(62,207,142,0.06)", color: "#3ecf8e", cursor: "pointer", fontSize: 12, fontFamily: "Georgia, serif" }}>
+                        ✅ Mark Complete — Funded Outside SendMe
+                      </button>
+                    )
                   )}
 
                   {/* Close early — time limit expired before full funding: SendMe keeps 10% of what was

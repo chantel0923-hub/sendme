@@ -231,6 +231,7 @@ export default function AdminPayouts({ onBack }) {
   // ── Build legacy milestone rows (from missions.current_milestone) ─────────
   const legacyRows = [];
   missions.forEach(m => {
+    if (m.funded_outside) return; // completed with funding from outside SendMe — nothing to pay out from here
     // Use current_milestone (new column); fall back to old milestone field
     const currentMilestone = m.current_milestone || m.milestone || 0;
     const { details, source } = getBankingDetails(m);
@@ -382,6 +383,7 @@ export default function AdminPayouts({ onBack }) {
   const approvedUnpaid = approvedRows.filter(r => !r.isPaid).length;
 
   const missingBanking = missions.filter(m => {
+    if (m.funded_outside) return false;
     if ((m.current_milestone || m.milestone || 0) === 0) return false;
     const { details } = getBankingDetails(m);
     return !details;

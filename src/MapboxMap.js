@@ -77,6 +77,7 @@ const missionProps = (m) => ({
   goal:      m.goal,
   fundingTarget: m.fundingTarget || m.goal,
   riskLevel: m.riskLevel,
+  fundedOutside: !!m.fundedOutside,
 });
 
 export default function MapboxMap({ missions, churches = [], onMissionClick, focus }) {
@@ -276,13 +277,13 @@ export default function MapboxMap({ missions, churches = [], onMissionClick, foc
               <div style="font-size:14px;font-weight:700;color:#eef1ff;margin-bottom:3px">${esc(props.name)}${props.riskLevel === 4 ? ' <span style="color:#e85b5b;font-size:11px;">🔴 High Risk</span>' : ""}</div>
               <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:10px">${props.protected ? "Location Protected" : esc([props.city, props.country].filter(Boolean).join(", "))}</div>
               <div style="font-size:12px;color:rgba(255,255,255,0.6);margin-bottom:6px">${esc(props.title)}</div>
-              <div style="background:rgba(255,255,255,0.07);border-radius:999px;height:5px;overflow:hidden;margin-bottom:6px">
+              ${props.fundedOutside ? '<div style="font-size:12px;color:#3ecf8e;font-weight:700">✓ Completed with funding from outside SendMe</div>' : `<div style="background:rgba(255,255,255,0.07);border-radius:999px;height:5px;overflow:hidden;margin-bottom:6px">
                 <div style="width:${pct}%;height:100%;background:${props.color};border-radius:999px"></div>
               </div>
               <div style="display:flex;justify-content:space-between">
                 <span style="font-size:12px;color:${props.color};font-weight:700">$${String(Math.round(props.raised)).replace(/\B(?=(\d{3})+(?!\d))/g,",")} raised</span>
                 <span style="font-size:11px;color:rgba(255,255,255,0.3)">${pct}%</span>
-              </div>
+              </div>`}
               <div style="font-size:11px;color:rgba(255,255,255,0.3);margin-top:8px;text-align:center">Click to open mission</div>
             </div>
           `)

@@ -84,6 +84,7 @@ const mapRow = (row, i) => ({
   souls:row.souls||0, bibles:row.bibles||0, churches:row.churches_planted||0,
   prayers:row.prayers||0, protected:row.protected||false,
   closedEarlyAt:row.closed_early_at||null,
+  fundedOutside:row.funded_outside||false,
   trustLevel:row.trust_level||1, journeyStep:row.journey_step||1,
   riskLevel:row.risk_level||1, budget:row.budget||[],
 });
@@ -921,6 +922,11 @@ const MissionDetail = ({ mission: m, onBack, onDonate, onLedger, user, userRole,
         </div>
       </div>
       <div style={{ maxWidth:700,margin:"0 auto",padding:"0 20px 60px" }}>
+        {m.status === "complete" && m.fundedOutside && (
+          <div style={{ margin:"16px 0 0",background:"rgba(62,207,142,0.07)",border:"1px solid rgba(62,207,142,0.25)",borderRadius:12,padding:"12px 16px",fontSize:13,color:"rgba(255,255,255,0.65)",lineHeight:1.6 }}>
+            <strong style={{ color:"#3ecf8e" }}>✓ Completed.</strong> This mission was carried out with funding from outside SendMe, so no donations were received here for it.
+          </div>
+        )}
         {m.status === "complete" && m.closedEarlyAt && (
           <div style={{ margin:"16px 0 0",background:"rgba(232,179,75,0.07)",border:"1px solid rgba(232,179,75,0.25)",borderRadius:12,padding:"12px 16px",fontSize:13,color:"rgba(255,255,255,0.65)",lineHeight:1.6 }}>
             <strong style={{ color:"#e8b34b" }}>⏱ Closed early.</strong> The fundraising time limit for this mission expired before the full amount was reached. Thank you to everyone who gave — what was raised is being put to good use.
