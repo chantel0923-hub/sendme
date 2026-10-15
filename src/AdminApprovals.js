@@ -19,6 +19,7 @@ const waDigits = (raw, country) => {
 };
 
 const fmt = (n) => String(Math.round(n || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+const money2 = (n) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const timeAgo = (dateStr) => {
   if (!dateStr) return "";
@@ -45,6 +46,16 @@ export default function AdminApprovals({ onBack, user }) {
   const [cancelling, setCancelling]   = useState(null);   // mission id showing the cancel UI
   const [reallocTarget, setReallocTarget] = useState({});  // { [missionId]: "general_fund" | otherMissionId }
   const [cancelReason, setCancelReason]   = useState({});  // { [missionId]: string }
+  // Close early — the fundraising time limit ran out before the goal was reached. SendMe keeps 10% of
+  // what was raised; whatever is left after that (and after anything already paid out) is paid to the
+  // pastor, or moved to another active mission, or to the General Fund. The numbers and the whole
+  // change happen in ONE database function (close_mission_early — see early-close.sql).
+  const [closing, setClosing]           = useState(null);   // mission id with the close-early panel open
+  const [closePreview, setClosePreview] = useState({});     // { [missionId]: numbers from early_close_preview }
+  const [closeDest, setCloseDest]       = useState({});     // { [missionId]: "pay_pastor" | "general_fund" | "mission" }
+  const [closeTarget, setCloseTarget]   = useState({});     // { [missionId]: other mission id }
+  const [closeReason, setCloseReason]   = useState({});     // { [missionId]: string }
+  const [notice, setNotice]             = useState("");     // green success line at the top
   // Flag Missionary — admin's case-by-case call that someone who got full
   // upfront funding never submitted proof. Blocks new applications until
   // admin manually unblocks (no automated deadline — pure judgment call).
@@ -177,6 +188,83 @@ export default function AdminApprovals({ onBack, user }) {
       await load();
     } catch (e) {
       setError("Could not mark mission complete. (" + (e.message || "") + ")");
+    }
+    setActing(null);
+  };
+
+  const openCloseEarly = async (m) => {
+    setClosing(m.id);
+    setError("");
+    setNotice("");
+    setCloseDest(d => ({ ...d, [m.id]: d[m.id] || "pay_pastor" }));
+    setCloseReason(r => ({ ...r, [m.id]: r[m.id] ?? "The fundraising time limit for this mission expired before the full amount was reached." }));
+    const { data, error: pErr } = await supabase.rpc("early_close_preview", { p_mission_id: m.id });
+    if (pErr) {
+      setClosing(null);
+      setError("Could not load the early-close numbers. (" + (pErr.message || "") + ")  If this says the function does not exist, run early-close.sql in Supabase first.");
+      return;
+    }
+    setClosePreview(p => ({ ...p, [m.id]: data }));
+  };
+
+  const closeEarly = async (m) => {
+    const pv     = closePreview[m.id];
+    const dest   = closeDest[m.id] || "pay_pastor";
+    const target = closeTarget[m.id] || "";
+    const reason = (closeReason[m.id] || "").trim();
+    if (!pv) return;
+    if (Number(pv.remainder) < 0) { window.alert("More has already been paid out than is available after SendMe's 10%. Please settle this mission by hand."); return; }
+    if (dest === "mission" && !target) { window.alert("Choose which mission should receive the remainder."); return; }
+    if (!reason) { window.alert("Please give a reason — it is sent to the missionary."); return; }
+
+    const targetTitle = missions.find(x => x.id === target)?.title || "another mission";
+    const where = dest === "pay_pastor" ? "paid to the pastor/church (you will send the EFT, then mark it paid on the Payouts screen)"
+      : dest === "general_fund" ? "moved to the SendMe General Fund"
+      : `moved to \"${targetTitle}\"`;
+    const ok = window.confirm(
+      `Close \"${m.title}\" early?\n\n` +
+      `Raised: $${money2(pv.raised)}\n` +
+      `SendMe keeps 10%: $${money2(pv.platform_fee)}\n` +
+      (Number(pv.already_paid) > 0 ? `Already paid out: $${money2(pv.already_paid)}\n` : "") +
+      `Remainder: $${money2(pv.remainder)} → ${Number(pv.remainder) > 0 ? where : "nothing further to pay"}\n\n` +
+      `The mission will be marked complete. This cannot be undone. The missionary will be notified.`
+    );
+    if (!ok) return;
+
+    setActing(m.id);
+    setError("");
+    try {
+      const { data, error: rpcError } = await supabase.rpc("close_mission_early", {
+        p_mission_id: m.id,
+        p_disposition: dest,
+        p_target: dest === "mission" ? target : null,
+        p_reason: reason,
+      });
+      if (rpcError) throw rpcError;
+      const destinationLabel = Number(data.remainder) <= 0 ? "nothing further is due"
+        : dest === "pay_pastor" ? "it will be paid to your church/pastor"
+        : dest === "general_fund" ? "it has been moved to the SendMe General Fund"
+        : `it has been moved to another mission (${targetTitle})`;
+      sendNotification("mission_closed_early", m.missionary_email, {
+        missionaryName: m.missionary_name,
+        missionTitle: m.title,
+        raised: data.raised,
+        platformFee: data.platform_fee,
+        alreadyPaid: data.already_paid,
+        remainder: data.remainder,
+        destination: destinationLabel,
+        reason,
+      });
+      setClosing(null);
+      setNotice(
+        `✓ "${m.title}" was closed early. ` +
+        (Number(data.remainder) > 0
+          ? (dest === "pay_pastor" ? `$${money2(data.remainder)} is now waiting on Payouts → Early closes for you to pay.` : `$${money2(data.remainder)} was moved to ${dest === "general_fund" ? "the General Fund" : targetTitle}.`)
+          : "Nothing further is due.")
+      );
+      await load();
+    } catch (e) {
+      setError("Could not close this mission early. (" + (e.message || "") + ")");
     }
     setActing(null);
   };
@@ -452,6 +540,11 @@ export default function AdminApprovals({ onBack, user }) {
             ⚠ {error}
           </div>
         )}
+        {notice && (
+          <div style={{ background: "rgba(62,207,142,0.1)", border: "1px solid rgba(62,207,142,0.3)", borderRadius: 10, padding: "10px 14px", marginBottom: 20, fontSize: 13, color: "#3ecf8e" }}>
+            {notice}
+          </div>
+        )}
 
         {loading ? (
           <div style={{ textAlign: "center", padding: "50px 0", color: "rgba(255,255,255,0.3)", fontSize: 14 }}>Loading applications...</div>
@@ -602,6 +695,90 @@ export default function AdminApprovals({ onBack, user }) {
                       style={{ display: "block", textAlign: "center", marginTop: 12, padding: "11px 0", borderRadius: 10, border: "1px solid rgba(37,211,102,0.35)", background: "rgba(37,211,102,0.08)", color: "#25d366", fontWeight: 700, fontSize: 13, fontFamily: "Georgia, serif", textDecoration: "none" }}>
                       📲 Post to WhatsApp Group
                     </a>
+                  )}
+
+                  {/* Close early — time limit expired before full funding: SendMe keeps 10% of what was
+                      raised, the rest is paid to the pastor or moved to another mission / the General Fund. */}
+                  {m.status === "active" && Number(m.raised) > 0 && Number(m.raised) < (Number(m.collection_target) || Number(m.goal) || 0) && (
+                    closing === m.id ? (
+                      <div style={{ marginTop: 12, background: "rgba(232,179,75,0.05)", border: "1px solid rgba(232,179,75,0.28)", borderRadius: 10, padding: 14 }}>
+                        <div style={{ fontSize: 12, color: "#e8b34b", fontWeight: 700, marginBottom: 10 }}>⏱ Close This Mission Early</div>
+                        {!closePreview[m.id] ? (
+                          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)" }}>Loading the numbers…</div>
+                        ) : (() => {
+                          const pv = closePreview[m.id];
+                          const dest = closeDest[m.id] || "pay_pastor";
+                          const row = (label, val, color) => (
+                            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "4px 0", color: color || "rgba(255,255,255,0.7)" }}>
+                              <span>{label}</span><span style={{ fontWeight: 700 }}>{Number(val) < 0 ? "-" : ""}${money2(Math.abs(Number(val)))}</span>
+                            </div>
+                          );
+                          return (
+                            <>
+                              <div style={{ background: "rgba(255,255,255,0.03)", borderRadius: 8, padding: "8px 12px", marginBottom: 12 }}>
+                                {row("Raised so far", pv.raised)}
+                                {row("SendMe keeps 10%", pv.platform_fee, "#e8b34b")}
+                                {Number(pv.already_paid) > 0 && row("Already paid out", pv.already_paid)}
+                                <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", marginTop: 4, paddingTop: 4 }}>
+                                  {row("Remainder to place", pv.remainder, Number(pv.remainder) < 0 ? "#e85b5b" : "#3ecf8e")}
+                                </div>
+                              </div>
+                              {Number(pv.remainder) < 0 ? (
+                                <div style={{ fontSize: 12, color: "#e85b5b", marginBottom: 10, lineHeight: 1.6 }}>
+                                  More has already been paid out than is available after SendMe's 10%, so this one cannot be closed here — please settle it by hand.
+                                </div>
+                              ) : (
+                                <>
+                                  <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginBottom: 6 }}>Where should the remainder go?</div>
+                                  {[
+                                    ["pay_pastor", "💸 Pay it to the pastor / church (I'll send the EFT)"],
+                                    ["mission", "🙏 Move it to another active mission"],
+                                    ["general_fund", "🌐 Move it to the SendMe General Fund"],
+                                  ].map(([val, label]) => (
+                                    <label key={val} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: dest === val ? "#eef1ff" : "rgba(255,255,255,0.5)", padding: "5px 0", cursor: "pointer" }}>
+                                      <input type="radio" name={`closedest-${m.id}`} checked={dest === val} onChange={() => setCloseDest(d => ({ ...d, [m.id]: val }))} />
+                                      {label}
+                                    </label>
+                                  ))}
+                                  {dest === "mission" && (
+                                    <select
+                                      value={closeTarget[m.id] || ""}
+                                      onChange={e => setCloseTarget(t => ({ ...t, [m.id]: e.target.value }))}
+                                      style={{ width: "100%", marginTop: 6, padding: "9px 12px", borderRadius: 8, background: "#0c1628", border: "1px solid rgba(255,255,255,0.1)", color: "#eef1ff", fontSize: 13, fontFamily: "Georgia, serif", outline: "none", colorScheme: "dark" }}>
+                                      <option value="" style={{ background: "#0c1628" }}>Choose a mission…</option>
+                                      {missions.filter(x => x.status === "active" && x.id !== m.id).map(x => (
+                                        <option key={x.id} value={x.id} style={{ background: "#0c1628" }}>{x.title}</option>
+                                      ))}
+                                    </select>
+                                  )}
+                                  <textarea
+                                    value={closeReason[m.id] || ""}
+                                    onChange={e => setCloseReason(r => ({ ...r, [m.id]: e.target.value }))}
+                                    placeholder="Reason — sent to the missionary"
+                                    style={{ width: "100%", marginTop: 10, padding: "9px 12px", borderRadius: 8, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", color: "#eef1ff", fontSize: 13, fontFamily: "Georgia, serif", outline: "none", resize: "vertical", minHeight: 60, boxSizing: "border-box" }}
+                                  />
+                                </>
+                              )}
+                            </>
+                          );
+                        })()}
+                        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                          <button disabled={acting === m.id || !closePreview[m.id] || Number(closePreview[m.id]?.remainder) < 0} onClick={() => closeEarly(m)}
+                            style={{ flex: 1, padding: "9px 0", borderRadius: 8, border: "none", background: "linear-gradient(135deg,#e8b34b,#c8942b)", color: "#000", fontWeight: 700, cursor: "pointer", fontSize: 12, fontFamily: "Georgia, serif", opacity: (acting === m.id || !closePreview[m.id] || Number(closePreview[m.id]?.remainder) < 0) ? 0.5 : 1 }}>
+                            Confirm Early Close
+                          </button>
+                          <button onClick={() => setClosing(null)}
+                            style={{ flex: 1, padding: "9px 0", borderRadius: 8, border: "1px solid rgba(255,255,255,0.15)", background: "transparent", color: "rgba(255,255,255,0.5)", cursor: "pointer", fontSize: 12, fontFamily: "Georgia, serif" }}>
+                            Never Mind
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button onClick={() => openCloseEarly(m)}
+                        style={{ marginTop: 10, width: "100%", padding: "9px 0", borderRadius: 10, border: "1px solid rgba(232,179,75,0.3)", background: "rgba(232,179,75,0.06)", color: "#e8b34b", cursor: "pointer", fontSize: 12, fontFamily: "Georgia, serif" }}>
+                        ⏱ Close Early (funding not reached)
+                      </button>
+                    )
                   )}
 
                   {/* Cancel & Reallocate — for a mission that isn't working

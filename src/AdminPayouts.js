@@ -27,6 +27,8 @@ export default function AdminPayouts({ onBack }) {
   const [emergencies, setEmergencies]       = useState([]);
   const [markingEmPaid, setMarkingEmPaid]   = useState(null);
   const [markingPaid, setMarkingPaid]     = useState(null);
+  const [closures, setClosures]           = useState([]);     // early-closed missions (see early-close.sql)
+  const [markingClosure, setMarkingClosure] = useState(null);
   const [error, setError]                 = useState("");
 
   useEffect(() => { load(); }, []);
@@ -35,7 +37,7 @@ export default function AdminPayouts({ onBack }) {
     setLoading(true);
     setError("");
     try {
-      const [missionsRes, detailsRes, recordsRes, proofsRes] = await Promise.all([
+      const [missionsRes, detailsRes, recordsRes, proofsRes, closuresRes] = await Promise.all([
         supabase.from("missions").select("*").order("created_at", { ascending: false }),
         supabase.from("payout_details").select("*"),
         supabase.from("payout_records").select("*"),
@@ -48,6 +50,7 @@ export default function AdminPayouts({ onBack }) {
           `)
           .eq("status", "approved")
           .order("reviewed_at", { ascending: false }),
+        supabase.from("mission_closures").select("*").order("closed_at", { ascending: false }),
       ]);
 
       const missionDetailsMap = {};
@@ -68,6 +71,9 @@ export default function AdminPayouts({ onBack }) {
       setChurchDetails(churchDetailsMap);
       setPayoutRecords(recordsMap);
       setApprovedProofs(proofsRes.data || []);
+      // If early-close.sql has not been run yet this query errors — that must not break the screen.
+      if (closuresRes.error) console.log("mission_closures not available yet:", closuresRes.error.message);
+      setClosures(closuresRes.error ? [] : (closuresRes.data || []));
     } catch (e) {
       setError("Could not load payout data: " + (e.message || ""));
     }
@@ -91,6 +97,11 @@ export default function AdminPayouts({ onBack }) {
     }
     return { details: null, source: null };
   };
+
+  // Missions that were closed early: whatever was still unpaid is settled by the single early-close
+  // payout (Early closes tab), so their remaining milestone rows are hidden below to prevent a
+  // double payment. Milestones already paid stay visible as history.
+  const closedIds = new Set(closures.map(c => c.mission_id));
 
   const milestoneAmount = (goal, milestoneNum) => {
     const goalNum = Number(goal) || 0;
@@ -183,7 +194,9 @@ export default function AdminPayouts({ onBack }) {
   };
 
   // ── Build approved-proof rows (the new "Ready to Pay" queue) ──────────────
-  const approvedRows = approvedProofs.map(proof => {
+  const approvedRows = approvedProofs.filter(proof =>
+    !closedIds.has(proof.mission_id) || payoutRecords[proof.mission_id]?.[proof.milestone_number]?.status === "paid"
+  ).map(proof => {
     const m = proof.missions || {};
     const records = payoutRecords[proof.mission_id] || {};
     const record  = records[proof.milestone_number];
@@ -226,6 +239,7 @@ export default function AdminPayouts({ onBack }) {
       const amount  = milestoneAmount(m.goal, i);
       const record  = records[i];
       const isPaid  = record?.status === "paid";
+      if (closedIds.has(m.id) && !isPaid) continue; // replaced by the early-close payout
       legacyRows.push({
         missionId:    m.id,
         missionTitle: m.title || "Untitled Mission",
@@ -285,6 +299,73 @@ export default function AdminPayouts({ onBack }) {
     setMarkingEmPaid(null);
   };
 
+  // ── Early-closed missions ──────────────────────────────────────────────────
+  const closureRows = closures.map(c => {
+    const m = missions.find(x => x.id === c.mission_id) || {};
+    const { details, source } = m.id ? getBankingDetails(m) : { details: null, source: null };
+    const target = c.target_mission_id ? missions.find(x => x.id === c.target_mission_id) : null;
+    return {
+      id: c.id, missionId: c.mission_id,
+      missionTitle: m.title || "Untitled Mission",
+      missionaryEmail: m.missionary_email || null,
+      churchName: m.church_name || "", churchId: m.church_id || null,
+      country: m.country || m.region || "",
+      pastorEmail: m.pastor_email || null, pastorName: m.pastor_name || null,
+      closedAt: c.closed_at, reason: c.reason,
+      raised: Number(c.raised_at_close) || 0, fee: Number(c.platform_fee) || 0,
+      alreadyPaid: Number(c.already_paid) || 0, remainder: Number(c.remainder) || 0,
+      disposition: c.disposition, targetTitle: target?.title || null,
+      payoutStatus: c.payout_status, isPaid: c.payout_status === "paid", paidAt: c.paid_at,
+      details, bankingSource: source,
+    };
+  });
+  const closuresToPay = closureRows.filter(r => r.disposition === "pay_pastor" && r.payoutStatus === "pending");
+  const money2 = (n) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  // Records-only, like markPaid above: it does NOT send money.
+  const markClosurePaid = async (r) => {
+    const toPaid = !r.isPaid;
+    if (toPaid) {
+      const ok = window.confirm(
+        `This only updates SendMe's records — it does NOT send any money.\n\n` +
+        `Have you already completed the EFT transfer of $${money2(r.remainder)} to ${r.details?.recipient_name || "the church/pastor"} for "${r.missionTitle}" (early close) from your own banking app?\n\n` +
+        `Click OK only if that transfer is already done.`
+      );
+      if (!ok) return;
+    } else if (!window.confirm("Mark this early-close payout as unpaid again?")) {
+      return;
+    }
+    setMarkingClosure(r.id);
+    setError("");
+    const paidAt = toPaid ? new Date().toISOString() : null;
+    try {
+      const { data, error } = await supabase
+        .from("mission_closures")
+        .update({ payout_status: toPaid ? "paid" : "pending", paid_at: paidAt })
+        .eq("id", r.id)
+        .select("id");
+      if (error) throw error;
+      if (!data || data.length === 0) throw new Error("The change was not saved — please try again.");
+      setClosures(prev => prev.map(c => c.id === r.id ? { ...c, payout_status: toPaid ? "paid" : "pending", paid_at: paidAt } : c));
+      if (toPaid) {
+        sendNotification("payout_sent", r.missionaryEmail, {
+          missionTitle: r.missionTitle,
+          amount: r.remainder,
+          recipientName: r.details?.recipient_name,
+        });
+        notifyAdmin("payout_processed", {
+          missionTitle: r.missionTitle,
+          amount: r.remainder,
+          recipientName: r.details?.recipient_name || "pastor/church",
+          milestone: "early close",
+        });
+      }
+    } catch (e) {
+      setError("Could not update payment status: " + (e.message || ""));
+    }
+    setMarkingClosure(null);
+  };
+
   // Filter tabs
   const filteredRows = filter === "approved"
     ? approvedRows
@@ -294,8 +375,10 @@ export default function AdminPayouts({ onBack }) {
     ? legacyRows.filter(r => r.isPaid)
     : legacyRows;
 
-  const totalDue      = legacyRows.filter(r => !r.isPaid).reduce((acc, r) => acc + r.amount, 0);
-  const totalPaid     = legacyRows.filter(r =>  r.isPaid).reduce((acc, r) => acc + r.amount, 0);
+  const totalDue      = legacyRows.filter(r => !r.isPaid).reduce((acc, r) => acc + r.amount, 0)
+                      + closuresToPay.reduce((acc, r) => acc + r.remainder, 0);
+  const totalPaid     = legacyRows.filter(r =>  r.isPaid).reduce((acc, r) => acc + r.amount, 0)
+                      + closureRows.filter(r => r.disposition === "pay_pastor" && r.isPaid).reduce((acc, r) => acc + r.remainder, 0);
   const approvedUnpaid = approvedRows.filter(r => !r.isPaid).length;
 
   const missingBanking = missions.filter(m => {
@@ -360,6 +443,27 @@ export default function AdminPayouts({ onBack }) {
         em.contact_email || "",
         em.contact_phone || "",
       ]));
+    } else if (filter === "closed") {
+      sheetName = "Early Closes";
+      headers = ["Closed On","Mission Title","Church","Country","Raised (USD)","SendMe 10% (USD)","Already Paid (USD)","Remainder (USD)","Where It Went","Status","Paid At","Recipient","Bank","Account No","Branch Code","SWIFT","Banking Source","Reason"];
+      currencyCols = [4, 5, 6, 7];
+      dataRows = closureRows.map(r => ([
+        r.closedAt ? new Date(r.closedAt).toLocaleDateString("en-GB") : "",
+        r.missionTitle || "",
+        r.churchName || "",
+        r.country || "",
+        r.raised, r.fee, r.alreadyPaid, r.remainder,
+        r.disposition === "pay_pastor" ? "Paid to pastor/church" : r.disposition === "general_fund" ? "General Fund" : `Moved to ${r.targetTitle || "another mission"}`,
+        r.disposition === "pay_pastor" ? (r.isPaid ? "Paid" : (r.remainder > 0 ? "Due" : "Nothing due")) : "No payment needed",
+        r.paidAt ? new Date(r.paidAt).toLocaleDateString("en-GB") : "",
+        r.details?.recipient_name || "",
+        r.details?.bank_name || "",
+        r.details?.account_number || "",
+        r.details?.branch_code || "",
+        r.details?.swift_code || "",
+        r.bankingSource || "",
+        r.reason || "",
+      ]));
     } else {
       sheetName = filter === "approved" ? "Pastor Approved"
         : filter === "due"   ? "Payments Due"
@@ -417,7 +521,7 @@ export default function AdminPayouts({ onBack }) {
           alignment: { horizontal: isCurrency ? "right" : "left" },
           fill: row % 2 === 0 ? { fgColor: { rgb: "F7F3EA" } } : undefined,
         };
-        if (isCurrency) ws[ref].z = '"$"#,##0';
+        if (isCurrency) ws[ref].z = filter === "closed" ? '"$"#,##0.00' : '"$"#,##0';
       }
     }
 
@@ -447,9 +551,9 @@ export default function AdminPayouts({ onBack }) {
           <div style={{ fontSize:18, fontWeight:700 }}>Payout Dashboard</div>
           <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", letterSpacing:2, marginTop:2 }}>SENDME ADMIN · CONFIDENTIAL</div>
         </div>
-        {approvedUnpaid > 0 && (
+        {approvedUnpaid + closuresToPay.length > 0 && (
           <div style={{ background:"rgba(62,207,142,0.15)", border:"1px solid rgba(62,207,142,0.4)", borderRadius:999, padding:"4px 14px", fontSize:13, color:"#3ecf8e", fontWeight:700 }}>
-            {approvedUnpaid} ready to pay
+            {approvedUnpaid + closuresToPay.length} ready to pay
           </div>
         )}
         <button onClick={generateReport} style={{ background:"rgba(232,179,75,0.1)", border:"1px solid rgba(232,179,75,0.3)", borderRadius:10, padding:"8px 14px", color:"#e8b34b", cursor:"pointer", fontSize:12, fontFamily:"Georgia, serif", fontWeight:600 }}>⬇ Download Report (Excel)</button>
@@ -516,6 +620,7 @@ export default function AdminPayouts({ onBack }) {
         <div style={{ display:"flex", gap:8, marginBottom:18, flexWrap:"wrap" }}>
           {[
             ["approved", `✅ Pastor Approved${approvedUnpaid > 0 ? ` (${approvedUnpaid})` : ""}`],
+            ["closed", `⏱ Early closes${closuresToPay.length > 0 ? ` (${closuresToPay.length})` : ""}`],
             ["emergency", `🚨 Emergency${emergencies.filter(e=>!e.paid).length > 0 ? ` (${emergencies.filter(e=>!e.paid).length})` : ""}`],
             ["due",      "Payments Due"],
             ["paid",     "Paid"],
@@ -668,6 +773,114 @@ export default function AdminPayouts({ onBack }) {
           )
         )}
 
+        {/* ── EARLY CLOSES (part-funded missions closed when the time limit expired) ── */}
+        {filter === "closed" && (
+          loading ? (
+            <div style={{ textAlign:"center", padding:"40px 0", color:"rgba(255,255,255,0.3)" }}>Loading...</div>
+          ) : closureRows.length === 0 ? (
+            <div style={{ textAlign:"center", padding:"40px 0", color:"rgba(255,255,255,0.3)", fontSize:14, lineHeight:1.7 }}>
+              ⏱ No missions have been closed early yet.<br/>
+              <span style={{ fontSize:12 }}>Use "Close Early" on an active, part-funded mission in Admin → Approvals.</span>
+            </div>
+          ) : (
+            <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+              {closureRows.map(r => {
+                const needsPayment = r.disposition === "pay_pastor" && r.remainder > 0;
+                const busy = markingClosure === r.id;
+                const stat = (label, val, color) => (
+                  <div style={{ display:"flex", justifyContent:"space-between", fontSize:13, padding:"3px 0", color: color || "rgba(255,255,255,0.65)" }}>
+                    <span>{label}</span><span style={{ fontWeight:700 }}>${money2(val)}</span>
+                  </div>
+                );
+                return (
+                  <div key={r.id} style={{ background:"#0c1628", borderRadius:16,
+                    border:`1px solid ${r.isPaid || !needsPayment ? "rgba(232,179,75,0.2)" : "rgba(232,179,75,0.45)"}`,
+                    borderLeft:`3px solid ${r.isPaid || !needsPayment ? "rgba(232,179,75,0.35)" : "#e8b34b"}`,
+                    padding:"18px 20px" }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:12, marginBottom:12 }}>
+                      <div style={{ flex:1 }}>
+                        <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:6, flexWrap:"wrap" }}>
+                          <span style={{ fontSize:11, padding:"3px 10px", borderRadius:999, background:"rgba(232,179,75,0.12)", color:"#e8b34b", border:"1px solid rgba(232,179,75,0.35)", fontWeight:700 }}>
+                            {r.disposition === "pay_pastor"
+                              ? (r.remainder <= 0 ? "⏱ Closed early — nothing further due" : r.isPaid ? "✓ Early close — Paid" : "⏱ Early close — Ready to Pay")
+                              : r.disposition === "general_fund" ? "🌐 Closed early — moved to General Fund"
+                              : `🙏 Closed early — moved to ${r.targetTitle || "another mission"}`}
+                          </span>
+                          {r.closedAt && <span style={{ fontSize:11, color:"rgba(255,255,255,0.3)" }}>Closed {timeAgo(r.closedAt)}</span>}
+                        </div>
+                        <div style={{ fontSize:15, fontWeight:700, color:"#eef1ff" }}>{r.missionTitle}</div>
+                        {r.churchName && <div style={{ fontSize:12, color:"rgba(255,255,255,0.45)", marginTop:3 }}>⛪ {r.churchName}</div>}
+                        <div style={{ fontSize:12, color:"rgba(255,255,255,0.35)", marginTop:2 }}>📍 {r.country}</div>
+                      </div>
+                      <div style={{ textAlign:"right", flexShrink:0 }}>
+                        <div style={{ fontSize:26, fontWeight:700, color: r.isPaid ? "#3ecf8e" : "#e8b34b" }}>${money2(r.remainder)}</div>
+                        <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", marginTop:4 }}>remainder</div>
+                      </div>
+                    </div>
+
+                    <div style={{ background:"rgba(255,255,255,0.03)", borderRadius:10, border:"1px solid rgba(255,255,255,0.06)", padding:"8px 14px", marginBottom:12 }}>
+                      {stat("Raised at close", r.raised)}
+                      {stat("SendMe keeps 10%", r.fee, "#e8b34b")}
+                      {r.alreadyPaid > 0 && stat("Already paid out earlier", r.alreadyPaid)}
+                      <div style={{ borderTop:"1px solid rgba(255,255,255,0.08)", marginTop:4, paddingTop:4 }}>{stat("Remainder", r.remainder, "#3ecf8e")}</div>
+                    </div>
+                    {r.reason && (
+                      <div style={{ fontSize:12, color:"rgba(255,255,255,0.45)", marginBottom:12 }}><strong style={{ color:"rgba(255,255,255,0.6)" }}>Reason:</strong> {r.reason}</div>
+                    )}
+
+                    {needsPayment && (
+                      <>
+                        <div style={{ paddingTop:12, borderTop:"1px solid rgba(255,255,255,0.06)", marginBottom:14 }}>
+                          {r.details ? (
+                            <>
+                              <div style={{ fontSize:11, color:"rgba(255,255,255,0.25)", letterSpacing:1, textTransform:"uppercase", marginBottom:8 }}>
+                                {r.bankingSource === "church" ? "Church Banking Details" : "Pastor Banking Details"}
+                              </div>
+                              <div style={{ fontSize:12, color:"rgba(255,255,255,0.5)", lineHeight:1.8, display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:"4px 16px" }}>
+                                <div><strong style={{color:"rgba(255,255,255,0.7)"}}>Recipient:</strong> {r.details.recipient_name}</div>
+                                <div><strong style={{color:"rgba(255,255,255,0.7)"}}>Bank:</strong> {r.details.bank_name}</div>
+                                <div><strong style={{color:"rgba(255,255,255,0.7)"}}>Account Holder:</strong> {r.details.account_holder}</div>
+                                <div><strong style={{color:"rgba(255,255,255,0.7)"}}>Account No:</strong> {r.details.account_number}</div>
+                                <div><strong style={{color:"rgba(255,255,255,0.7)"}}>Branch Code:</strong> {r.details.branch_code||"—"}</div>
+                                <div><strong style={{color:"rgba(255,255,255,0.7)"}}>Type:</strong> {r.details.account_type} · {r.details.country}</div>
+                                {r.details.swift_code && <div><strong style={{color:"rgba(255,255,255,0.7)"}}>SWIFT/IBAN:</strong> {r.details.swift_code}</div>}
+                              </div>
+                            </>
+                          ) : (
+                            <div style={{ fontSize:12, color:"#e85b5b" }}>
+                              ⚠️ No banking details found. {r.churchId ? "The church has not submitted their banking details yet." : "No banking details submitted for this mission."}
+                              {r.pastorEmail ? (
+                                <button onClick={() => requestBanking(r)}
+                                  style={{ display:"block", marginTop:8, padding:"8px 14px", borderRadius:10, border:"1px solid rgba(232,179,75,0.4)", background:"rgba(232,179,75,0.08)", color:"#e8b34b", cursor:"pointer", fontSize:12, fontFamily:"Georgia, serif" }}>
+                                  📧 Request Banking Details from Pastor
+                                </button>
+                              ) : (
+                                <div style={{ fontSize:11, color:"rgba(255,255,255,0.25)", marginTop:4 }}>No pastor email on record — contact manually.</div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        <button onClick={() => markClosurePaid(r)} disabled={busy}
+                          style={{ padding:"10px 24px", borderRadius:10, border:"none",
+                            background: r.isPaid ? "rgba(255,255,255,0.06)" : "linear-gradient(135deg,#3ecf8e,#2aaf74)",
+                            color: r.isPaid ? "rgba(255,255,255,0.5)" : "#000", fontWeight:700, cursor: busy ? "default" : "pointer",
+                            fontSize:13, fontFamily:"Georgia, serif", opacity: busy ? 0.7 : 1 }}>
+                          {busy ? "Saving..." : r.isPaid ? "↩ Mark as Unpaid" : "✓ Mark as Paid (EFT Done)"}
+                        </button>
+                        {r.isPaid && r.paidAt && (
+                          <span style={{ marginLeft:12, fontSize:12, color:"rgba(255,255,255,0.3)" }}>
+                            Paid {new Date(r.paidAt).toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"})}
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )
+        )}
+
         {/* ── EMERGENCY PAYOUTS ── */}
         {filter === "emergency" && (
           emergencies.length === 0 ? (
@@ -733,7 +946,7 @@ export default function AdminPayouts({ onBack }) {
         )}
 
         {/* ── LEGACY ROWS (due / paid / all) ── */}
-        {filter !== "approved" && filter !== "emergency" && (
+        {filter !== "approved" && filter !== "emergency" && filter !== "closed" && (
           loading ? (
             <div style={{ textAlign:"center", padding:"40px 0", color:"rgba(255,255,255,0.3)" }}>Loading payout data...</div>
           ) : filteredRows.length === 0 ? (
