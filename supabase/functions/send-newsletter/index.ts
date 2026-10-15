@@ -91,8 +91,9 @@ serve(async (req) => {
     try { body = await req.json(); } catch (_e) { return jsonRes(400, { error: "Invalid request body" }); }
     const subject = String(body?.subject ?? "").replace(/[\r\n\u2028\u2029]+/g, " ").trim().slice(0, 200);
     const html = typeof body?.html === "string" ? body.html : "";
-    // Who sent it comes from the login, not from what the browser claims.
-    const sentBy = caller.email;
+    // Who sent it comes from the login, not from what the browser claims. The app has always
+    // logged the sender's user id here (AdminMonthlyReport.js sends user.id), so keep it an id.
+    const sentBy = caller.id;
     if (html.length > MAX_HTML_CHARS) {
       return jsonRes(400, { error: "Newsletter is too large." });
     }

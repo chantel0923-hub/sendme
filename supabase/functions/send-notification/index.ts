@@ -59,6 +59,7 @@ const ADMIN_BOUND_TYPES = new Set<string>([
   "family_need_submitted",
   "worker_request",
   "worker_response_received",
+  "emergency_response_notify",   // EmergencyRequests.js sends this to the SendMe inbox when anyone offers help
   "admin_proof_submitted",
 ]);
 
@@ -708,6 +709,25 @@ const TEMPLATES: Record<string, (d: any) => { subject: string; html: string }> =
       <br/><br/>If you'd like to discuss this or apply again in the future, please reach out to SendMe admin.`,
     ),
   }),
+  // Sent when the admin closes a part-funded mission early (the fundraising time limit expired).
+  // Person-bound, so it needs a signed-in caller like the other emails to people.
+  mission_closed_early: (d) => {
+    const money = (n: unknown) => Number(n || 0).toFixed(2);
+    return {
+      subject: `Update on your mission — "${d.missionTitle || "your mission"}"`,
+      html: wrapEmail(
+        "Mission Closed",
+        `Dear ${d.missionaryName || "brother/sister"},<br/><br/>
+        Your mission <strong style="color:#e8b34b;">${d.missionTitle || "on SendMe"}</strong> has been closed because the fundraising time limit expired before the full amount was reached.<br/><br/>
+        <div style="background:rgba(232,179,75,0.08);border:1px solid rgba(232,179,75,0.25);border-radius:10px;padding:14px 16px;margin-top:8px;"><strong style="color:#e8b34b;">What happened to what was raised</strong><br/>
+        Raised: $${money(d.raised)}<br/>
+        SendMe's 10% platform contribution: $${money(d.platformFee)}<br/>
+        ${Number(d.alreadyPaid) > 0 ? `Already paid out: $${money(d.alreadyPaid)}<br/>` : ""}Remaining: $${money(d.remainder)} — ${d.destination || "handled by SendMe admin"}</div>
+        ${d.reason ? `<br/><strong>Note from SendMe admin:</strong> ${d.reason}` : ""}
+        <br/><br/>Thank you for your faithfulness. If you would like to talk this through, or apply again in the future, please reach out to SendMe admin.`,
+      ),
+    };
+  },
 };
 
 serve(async (req) => {

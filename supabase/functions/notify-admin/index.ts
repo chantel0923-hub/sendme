@@ -66,10 +66,17 @@ function overLimit(key: string, max: number, windowMs: number): boolean {
 // Who may trigger which WhatsApp ping to the admin:
 //  - donation_received: ONLY the server (the Paystack webhook). A fake "donation received"
 //    ping could make the admin believe money arrived, so no browser may send it.
-//  - support_contact: the FAQ contact form, which guests can use.
+//  - support_contact and the "new submission" pings (see GUEST_ALLOWED_TYPES): guests can use these.
 //  - everything else: a signed-in SendMe user (or the server).
 const SERVICE_ONLY_TYPES = new Set<string>(["donation_received"]);
-const GUEST_ALLOWED_TYPES = new Set<string>(["support_contact"]);
+const GUEST_ALLOWED_TYPES = new Set<string>([
+  "support_contact",
+  // These pings mirror the "new submission" emails to the admin, which signed-out visitors can
+  // already trigger (e.g. an emergency request or an offer of help). Blocking them would silently
+  // drop real alerts. They only ever message the admin and are rate-limited below.
+  "church_registered", "mission_applied", "emergency_submitted",
+  "worker_request", "worker_response_received", "family_need_submitted",
+]);
 const LIMIT_PER_CALLER_PER_MIN = 15;
 const LIMIT_ALL_BROWSER_PER_HOUR = 120; // protects the CallMeBot quota from a flood
 
