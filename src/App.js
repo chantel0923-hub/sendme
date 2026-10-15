@@ -1684,6 +1684,12 @@ if (typeof document !== "undefined" && !document.getElementById(_navStyleId)) {
   const _navStyle = document.createElement("style");
   _navStyle.id = _navStyleId;
   _navStyle.innerHTML = `
+    /* Mission cards on Home: on phones the status / risk / trust chips drop onto their own row under
+       the name (and wrap) instead of pushing the card wider than the screen. */
+    @media (max-width: 560px) {
+      .sendme-mcard-side { flex-direction: row !important; flex-wrap: wrap; align-items: center !important; gap: 6px !important; width: 100%; }
+      .sendme-mcard-side > div { justify-content: flex-start !important; }
+    }
     .sendme-home-header {
       flex-direction: row;
       align-items: center;
@@ -1903,10 +1909,10 @@ const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, o
               <div key={m.id} onClick={()=>onMission(m)} style={{ background:"#0c1628",borderRadius:18,border:`1px solid ${m.color}22`,padding:20,cursor:"pointer",borderLeft:`3px solid ${m.color}`,transition:"transform .15s, box-shadow .15s" }}
                 onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow=`0 8px 32px ${m.color}22`;}}
                 onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="";}}>
-                <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10 }}>
-                  <div style={{ display:"flex",gap:12,alignItems:"flex-start" }}>
+                <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:10,marginBottom:10 }}>
+                  <div style={{ display:"flex",gap:12,alignItems:"flex-start",flex:"1 1 220px",minWidth:0 }}>
                     <div style={{ width:48,height:48,borderRadius:14,background:`${m.color}22`,border:`1.5px solid ${m.color}44`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0 }}>✝</div>
-                    <div>
+                    <div style={{ minWidth:0 }}>
                       <div style={{ fontSize:10,color:m.color,letterSpacing:2,textTransform:"uppercase",marginBottom:2 }}>{m.role}</div>
                       <div style={{ fontSize:16,fontWeight:700,color:"#eef1ff" }}>{m.protected?"Protected Mission":m.name}</div>
                       <div style={{ fontSize:12,color:"rgba(255,255,255,0.35)",marginTop:2 }}>📍 {m.protected?m.region+" (Protected)":shortPlace(m)}</div>
@@ -1916,9 +1922,9 @@ const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, o
                       )}
                     </div>
                   </div>
-                  <div style={{ display:"flex",flexDirection:"column",gap:5,alignItems:"flex-end" }}>
+                  <div className="sendme-mcard-side" style={{ display:"flex",flexDirection:"column",gap:5,alignItems:"flex-end",flex:"0 1 auto",maxWidth:"100%" }}>
                     <span style={{ padding:"3px 10px",borderRadius:999,fontSize:11,background:m.status==="complete"?"rgba(62,207,142,0.15)":`${m.color}18`,color:m.status==="complete"?"#3ecf8e":m.color,border:`1px solid ${m.status==="complete"?"#3ecf8e33":m.color+"33"}`,whiteSpace:"nowrap" }}>{m.status==="complete"?"Done":"Active"}</span>
-                    <div style={{ display:"flex",gap:5 }}>
+                    <div style={{ display:"flex",gap:5,flexWrap:"wrap",justifyContent:"flex-end" }}>
                       <RiskBadge level={m.riskLevel||1}/>
                       <TrustBadge level={m.trustLevel||1}/>
                     </div>
