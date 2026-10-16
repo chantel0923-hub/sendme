@@ -167,7 +167,7 @@ const mapAdminToTestimony = (row, i) => ({
   linkedMissionId: row.mission_id || null,
 });
 
-export default function TestimonyEngine({ onBack, onMission, user, onAddTestimony }) {
+export default function TestimonyEngine({ onBack, onMission, user, onAddTestimony, openId }) {
   const [testimonies, setTestimonies] = useState([]);
   const [loading, setLoading]         = useState(true);
   const [selected, setSelected]       = useState(null);
@@ -234,6 +234,12 @@ export default function TestimonyEngine({ onBack, onMission, user, onAddTestimon
         const merged = [...missionTestimonies, ...generalFundTestimonies, ...adminTestimonies]
           .sort((a,b) => new Date(b.completed) - new Date(a.completed));
         setTestimonies(merged);
+        // Arriving from the Home page's "Latest testimony" card: open that testimony straight away.
+        // An id that no longer matches anything simply leaves the normal list showing.
+        if (openId) {
+          const hit = merged.find(x => x.id === openId);
+          if (hit) setSelected(hit);
+        }
       } catch (e) {
         console.log("TestimonyEngine fetch error:", e);
         setTestimonies([]);
@@ -241,6 +247,7 @@ export default function TestimonyEngine({ onBack, onMission, user, onAddTestimon
       setLoading(false);
     };
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

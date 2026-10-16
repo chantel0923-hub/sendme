@@ -54,6 +54,18 @@ const placeLine = (m) => {
     .filter(v => { const k = v.toLowerCase(); if (!v || seen.has(k)) return false; seen.add(k); return true; })
     .join(", ");
 };
+// Home page "Latest testimony" card + "Invite a friend" — small pure helpers.
+const testimonyExcerpt = (story, max = 180) => {
+  const s = String(story || "").replace(/\s+/g, " ").trim();
+  return s.length > max ? s.slice(0, max - 3).trimEnd() + "…" : s;
+};
+// Which testimony the Testimonies page should open: a testimony linked to a COMPLETED mission is
+// shown on that mission's own card (id = mission id); any other is its own card (id = "at-<id>").
+const testimonyOpenKey = (t, completedMissionIds) =>
+  t.mission_id && completedMissionIds.some(id => String(id) === String(t.mission_id)) ? t.mission_id : `at-${t.id}`;
+const INVITE_URL  = "https://sendmeglobalmission.org/?from=friend";
+const INVITE_TEXT = "✝ I'm part of SendMe Global Mission Fund — Message believers supporting real missions around the world, one mission at a time. Have a look and join us: ";
+const inviteWhatsAppLink = () => `https://wa.me/?text=${encodeURIComponent(INVITE_TEXT + INVITE_URL)}`;
 const shortPlace = (m) => [m.city || m.area, m.country].map(v => String(v || "").trim()).filter(Boolean).join(", ");
 
 const mapRow = (row, i) => ({
@@ -1741,9 +1753,11 @@ if (typeof document !== "undefined" && !document.getElementById(_navStyleId)) {
   document.head.appendChild(_navStyle);
 }
 
-const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, onMyChurch, onChurches, onProfile, onEmergency, onEmergencyDetail, onFamilyNeed, onGeneralFund, onMatching, onPray, onTestimonies, onWorker, onQR, onFaq, onPayout, onAdminPayouts, isAdmin, isPastor, onMilestoneProof, onPastorReview, onMissionaryDashboard, onAdminApprovals, onAdminChurchVerification, guest, onSignIn, onDonate, onAdminWorkers, onAdminEmergency, onAdminFamilyNeeds, onAdminGeneralFund, onAdminPipeline, onAdminWhatsAppGroup, onAdminMonthlyReport, onAdminUsers, onAdminPastors, onAdminTestimonies }) => {
+const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, onMyChurch, onChurches, onProfile, onEmergency, onEmergencyDetail, onFamilyNeed, onGeneralFund, onMatching, onPray, onTestimonies, onOpenTestimony, onWorker, onQR, onFaq, onPayout, onAdminPayouts, isAdmin, isPastor, onMilestoneProof, onPastorReview, onMissionaryDashboard, onAdminApprovals, onAdminChurchVerification, guest, onSignIn, onDonate, onAdminWorkers, onAdminEmergency, onAdminFamilyNeeds, onAdminGeneralFund, onAdminPipeline, onAdminWhatsAppGroup, onAdminMonthlyReport, onAdminUsers, onAdminPastors, onAdminTestimonies }) => {
   const [region,setRegion]       = useState("All");
   const [mapFocus,setMapFocus]   = useState(null);
+  const [latestTestimony,setLatestTestimony] = useState(null);   // newest published testimony, for the Home card
+  const [inviteCopied,setInviteCopied] = useState(false);
   // "Show on map" on a mission card: scroll up/down to the world map, then zoom to that mission's pin.
   const showOnMap = (m) => {
     const el = document.getElementById("world-map");
@@ -1833,7 +1847,21 @@ const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, o
       } catch { setFamilyNeeds([]); }
     };
     fetchFamilyNeeds();
+    // Newest published testimony for the "Latest testimony" card. If it can't be read, the card
+    // just doesn't show — it must never get in the way of the rest of Home.
+    const fetchLatestTestimony = async () => {
+      try {
+        const {data,error} = await supabase.from("admin_testimonies").select("id,title,story,souls,bibles,churches,photo_urls,mission_id,created_at").eq("published",true).order("created_at",{ascending:false}).limit(1);
+        if(error) throw error;
+        setLatestTestimony(data && data[0] ? data[0] : null);
+      } catch { setLatestTestimony(null); }
+    };
+    fetchLatestTestimony();
   },[]);
+  const copyInviteLink = async () => {
+    try { await navigator.clipboard.writeText(INVITE_TEXT + INVITE_URL); setInviteCopied(true); setTimeout(()=>setInviteCopied(false),2500); }
+    catch { window.prompt("Copy this message and send it to a friend:", INVITE_TEXT + INVITE_URL); }
+  };
   // Admin-only registered-user count, shown top-left next to the logo.
   const [userCount,setUserCount] = useState(null);
   useEffect(()=>{
@@ -1947,6 +1975,50 @@ const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, o
             ))}
           </div>
         )}
+        <div style={{ height:16 }}/>
+        {/* Latest testimony — proof that missions finish and lives change. Only shows when there is a
+            published testimony; opens that testimony on the Testimonies page. */}
+        {latestTestimony && (() => {
+          const lt = latestTestimony;
+          const photo = Array.isArray(lt.photo_urls) ? lt.photo_urls.find(Boolean) : null;
+          const stats = [[lt.souls,"souls reached","🙏"],[lt.bibles,"Bibles-Message Books","📖"],[lt.churches,"churches planted","⛪"]].filter(([n])=>Number(n)>0);
+          return (
+            <div onClick={()=>onOpenTestimony && onOpenTestimony(testimonyOpenKey(lt, completedMissions.map(c=>c.id)))}
+              style={{ background:"#0c1628",borderRadius:18,border:"1px solid rgba(62,207,142,0.25)",borderLeft:"3px solid #3ecf8e",padding:"16px 18px",marginBottom:16,cursor:"pointer" }}>
+              <div style={{ fontSize:10,color:"#3ecf8e",letterSpacing:2,textTransform:"uppercase",marginBottom:8 }}>✝ Latest Testimony</div>
+              <div style={{ display:"flex",gap:14,alignItems:"flex-start" }}>
+                {photo && <img src={photo} alt="" loading="lazy" onError={e=>{e.currentTarget.style.display="none";}} style={{ width:84,height:84,borderRadius:12,objectFit:"cover",flexShrink:0,border:"1px solid rgba(255,255,255,0.08)" }}/>}
+                <div style={{ minWidth:0,flex:1 }}>
+                  <div style={{ fontSize:15,fontWeight:700,color:"#eef1ff",marginBottom:4 }}>{lt.title || "Testimony"}</div>
+                  <div style={{ fontSize:13,color:"rgba(255,255,255,0.55)",lineHeight:1.6 }}>{testimonyExcerpt(lt.story)}</div>
+                  {stats.length>0 && (
+                    <div style={{ display:"flex",gap:6,flexWrap:"wrap",marginTop:8 }}>
+                      {stats.map(([n,label,icon])=>(
+                        <span key={label} style={{ fontSize:11,padding:"3px 10px",borderRadius:999,background:"rgba(62,207,142,0.1)",color:"#3ecf8e",border:"1px solid rgba(62,207,142,0.25)" }}>{icon} {fmt(n)} {label}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div style={{ marginTop:10,fontSize:12,color:"#e8b34b",fontWeight:700 }}>Read the full testimony →</div>
+            </div>
+          );
+        })()}
+        {/* Invite a friend — opens WhatsApp with a ready-made message and the SendMe link. */}
+        <div style={{ background:"linear-gradient(135deg,rgba(62,207,142,0.08),rgba(232,179,75,0.06))",borderRadius:18,border:"1px solid rgba(232,179,75,0.2)",padding:"16px 18px",marginBottom:16 }}>
+          <div style={{ fontSize:15,fontWeight:700,color:"#eef1ff",marginBottom:4 }}>🤝 Know someone who should be part of this?</div>
+          <div style={{ fontSize:13,color:"rgba(255,255,255,0.5)",lineHeight:1.6,marginBottom:12 }}>Invite a friend, family member or someone from your church to see what God is doing through SendMe.</div>
+          <div style={{ display:"flex",gap:8,flexWrap:"wrap" }}>
+            <a href={inviteWhatsAppLink()} target="_blank" rel="noopener noreferrer"
+              style={{ padding:"10px 18px",borderRadius:10,background:"linear-gradient(135deg,#25d366,#1da851)",color:"#04210f",fontWeight:700,fontSize:13,textDecoration:"none",fontFamily:"Georgia, serif" }}>
+              📲 Invite a friend on WhatsApp
+            </a>
+            <button onClick={copyInviteLink}
+              style={{ padding:"10px 16px",borderRadius:10,border:"1px solid rgba(255,255,255,0.15)",background:"transparent",color:"rgba(255,255,255,0.6)",cursor:"pointer",fontSize:13,fontFamily:"Georgia, serif" }}>
+              {inviteCopied ? "✓ Copied" : "Copy invite message"}
+            </button>
+          </div>
+        </div>
         <div style={{ height:16 }}/>
         {/* General Fund — always visible, unlike the two banners above,
             since this fund never has an "empty" state to hide behind (no
@@ -2483,6 +2555,17 @@ export default function App() {
   const [prayerWallFilterMissionId, setPrayerWallFilterMissionId] = useState(null);
   const [liveMissions,setLiveMissions]         = useState([]);
   useScreenHistory(screen, setScreen);
+  // Which testimony the Testimonies page should open straight away (set by the Home "Latest testimony"
+  // card; every other way into Testimonies leaves it empty so the normal list shows).
+  const [testimonyOpenId, setTestimonyOpenId] = useState(null);
+  const openTestimonies = (id = null) => { setTestimonyOpenId(id); setScreen("testimonies"); };
+  // An invite link (…/?from=friend) is remembered for this visit so the sign-up form can use it.
+  useEffect(() => {
+    try {
+      const from = new URLSearchParams(window.location.search).get("from");
+      if (from) sessionStorage.setItem("sendme_from", String(from).slice(0, 30));
+    } catch {}
+  }, []);
 
   const loadRole = async (u) => {
     if (!u) { setUserRole(null); return; }
@@ -2600,7 +2683,7 @@ export default function App() {
         onChurches={()=>setScreen("churches")}
         nav={{
           onProfile:()=>setScreen("profile"), onEmergency:()=>setScreen("emergency"), onFamilyNeed:()=>setScreen("family-needs"),
-          onGeneralFund:()=>setScreen("general-fund"), onTestimonies:()=>setScreen("testimonies"), onWorker:()=>setScreen("worker"),
+          onGeneralFund:()=>setScreen("general-fund"), onTestimonies:()=>openTestimonies(), onWorker:()=>setScreen("worker"),
           onMatching:()=>setScreen("matching"), onQR:()=>setScreen("qr"), onFaq:()=>setScreen("faq"),
         }}
         adminNav={{
@@ -2636,7 +2719,7 @@ export default function App() {
   if(screen==="profile")          return withNav(<DonorProfile user={user} onBack={()=>setScreen("home")} userRole={userRole} isAdmin={isAdminUser}/>);
   if(screen==="emergency")        return withNav(guest ? <GuestBlocked title="Registration Required" message="Submitting an emergency mission request requires a SendMe account, so admin can verify and follow up with you directly. Please sign in or register to continue." onBack={()=>setScreen("home")} onRegister={()=>{setGuest(false);setScreen("home");}}/> : <EmergencyRequests onBack={()=>{setSelectedEmergencyId(null);setScreen("home");}} user={user} userRole={userRole} preselectedId={selectedEmergencyId}/>);
   if(screen==="matching")         return withNav(<MissionMatching missions={liveMissions} onMission={openMission} onBack={()=>setScreen("home")}/>);
-  if(screen==="testimonies")      return withNav(<TestimonyEngine onBack={()=>setScreen("home")} onMission={openMission} onAddTestimony={isAdminUser ? ()=>setScreen("admin-testimonies") : undefined}/>);
+  if(screen==="testimonies")      return withNav(<TestimonyEngine openId={testimonyOpenId} onBack={()=>setScreen("home")} onMission={openMission} onAddTestimony={isAdminUser ? ()=>setScreen("admin-testimonies") : undefined}/>);
   if(screen==="worker")           return withNav(guest ? <GuestBlocked title="Registration Required" message="Posting or responding to a worker request requires a SendMe account, so churches can coordinate and follow up directly. Please sign in or register to continue." onBack={()=>setScreen("home")} onRegister={()=>{setGuest(false);setScreen("home");}}/> : <SendAWorker onBack={()=>setScreen("home")} user={user}/>);
   if(screen==="qr")               return withNav(<QRShare missions={liveMissions} onBack={()=>setScreen("home")}/>);
   if(screen==="milestone-proof")  return withNav(<ProofCenter onBack={()=>setScreen("home")} user={user} isAdmin={isAdminUser} isPastor={isPastor} initialTab="submit"/>);
@@ -2666,7 +2749,7 @@ export default function App() {
       onMyChurch={()=>setScreen("my-church")}
       onChurches={()=>setScreen("churches")} onProfile={()=>setScreen("profile")}
       onEmergency={()=>setScreen("emergency")} onEmergencyDetail={(id)=>{ setSelectedEmergencyId(id); setScreen("emergency"); }} onFamilyNeed={()=>setScreen("family-needs")} onGeneralFund={()=>setScreen("general-fund")} onMatching={()=>setScreen("matching")}
-      onPray={()=>{ setPrayerWallFilterMissionId(null); setScreen("pray"); }} onTestimonies={()=>setScreen("testimonies")}
+      onPray={()=>{ setPrayerWallFilterMissionId(null); setScreen("pray"); }} onTestimonies={()=>openTestimonies()} onOpenTestimony={(id)=>openTestimonies(id)}
       onWorker={()=>setScreen("worker")} onQR={()=>setScreen("qr")}
       onFaq={()=>setScreen("faq")}
       onPayout={()=>setScreen("payout")}
