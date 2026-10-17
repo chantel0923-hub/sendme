@@ -94,10 +94,27 @@ const normalizePhone = (iso, raw) => {
   return /^\+\d{8,15}$/.test(full) ? full : "";
 };
 
+// "How did you hear about us?" on the sign-up form (optional). The value is saved with the sign-up
+// and copied into the signup_sources table by a database trigger (see signup-source.sql).
+const HEARD_OPTIONS = [
+  ["friend",   "A friend or family member"],
+  ["church",   "My church or pastor"],
+  ["whatsapp", "A WhatsApp message or group"],
+  ["facebook", "Facebook"],
+  ["youtube",  "YouTube"],
+  ["tiktok",   "TikTok"],
+  ["google",   "Google search"],
+  ["other",    "Other"],
+];
+// An invite link (…/?from=friend) is remembered by App.js for this visit.
+const readInviteTag = () => { try { return sessionStorage.getItem("sendme_from") || ""; } catch { return ""; } };
+
 export default function Auth({ onLogin, onGuest }) {
   const [mode, setMode]             = useState("login");
   const [role, setRole]             = useState("");
   const [name, setName]             = useState("");
+  const [heardFrom, setHeardFrom]     = useState(() => (readInviteTag() === "friend" ? "friend" : ""));
+  const [heardDetail, setHeardDetail] = useState("");
   const [email, setEmail]           = useState("");
   const [password, setPassword]     = useState("");
   const [loading, setLoading]       = useState(false);
@@ -174,6 +191,10 @@ export default function Auth({ onLogin, onGuest }) {
         role,
         whatsapp_number: fullPhone || null,
         whatsapp_group_optin: !!(waOptIn && fullPhone),
+        // optional "how did you hear about us" answers (saved by the signup_sources trigger)
+        heard_from: heardFrom || null,
+        heard_from_detail: heardDetail.trim().slice(0, 120) || null,
+        from_param: readInviteTag().slice(0, 30) || null,
       } }
     });
     setLoading(false);
@@ -542,6 +563,24 @@ export default function Auth({ onLogin, onGuest }) {
                 <option value="org_leader" style={{ background: "#0c1628", color: "#eef1ff" }}>Missionary-Sending Organization</option>
                 <option value="minister"   style={{ background: "#0c1628", color: "#eef1ff" }}>Minister / Evangelist</option>
               </select>
+              <select
+                value={heardFrom} onChange={e => setHeardFrom(e.target.value)}
+                aria-label="How did you hear about us? (optional)"
+                style={{ ...inp, color: heardFrom ? "#eef1ff" : "rgba(255,255,255,0.35)" }}
+              >
+                <option value="" style={{ background: "#0c1628", color: "#eef1ff" }}>How did you hear about us? (optional)</option>
+                {HEARD_OPTIONS.map(([val, label]) => (
+                  <option key={val} value={val} style={{ background: "#0c1628", color: "#eef1ff" }}>{label}</option>
+                ))}
+              </select>
+              {(heardFrom === "other" || heardFrom === "friend") && (
+                <input
+                  value={heardDetail} onChange={e => setHeardDetail(e.target.value)}
+                  maxLength={120}
+                  placeholder={heardFrom === "friend" ? "Who invited you? (optional)" : "Please tell us where (optional)"}
+                  style={inp}
+                />
+              )}
             </>
           )}
 

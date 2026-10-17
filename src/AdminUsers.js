@@ -13,6 +13,12 @@
 // why the header badge used to say "1 registered user". If the list shows
 // only one person, that policy is missing.
 import { useState, useEffect } from "react";
+
+// Labels for the sign-up question "How did you hear about us?" (same keys as Auth.js).
+const HEARD_LABELS = {
+  friend: "A friend or family member", church: "My church or pastor", whatsapp: "A WhatsApp message or group",
+  facebook: "Facebook", youtube: "YouTube", tiktok: "TikTok", google: "Google search", other: "Other",
+};
 import { supabase } from "./supabase";
 
 const PAGE = 1000; // Supabase returns at most 1000 rows per request by default
@@ -44,6 +50,9 @@ export default function AdminUsers({ onBack }) {
   const [roleFilter, setRoleFilter] = useState("all");
 
   // Members waiting for email verification (from the confirm-user Edge Function)
+  // How people found SendMe — from the optional sign-up question (table signup_sources).
+  // null = not available (the SQL step has not been run yet), so the section simply stays hidden.
+  const [sources, setSources] = useState(null);
   const [unverified, setUnverified] = useState(null);   // null = still loading
   const [unvError, setUnvError] = useState("");
   const [unvKey, setUnvKey] = useState(0);               // bump to reload the list
@@ -67,6 +76,15 @@ export default function AdminUsers({ onBack }) {
         if (err) throw err;
         setRows(data || []);
         setTotal(count ?? (data || []).length);
+        try {
+          const { data: src, error: srcErr } = await supabase
+            .from("signup_sources").select("user_id, heard_from, heard_from_detail").limit(5000);
+          if (srcErr) throw srcErr;
+          setSources(src || []);
+        } catch (srcE) {
+          console.log("signup_sources not available:", srcE?.message || srcE);
+          setSources(null);
+        }
       } catch (e) {
         console.error("AdminUsers fetch error:", e);
         setError("Could not load users. (" + (e.message || "") + ")");
@@ -123,6 +141,14 @@ export default function AdminUsers({ onBack }) {
       (r.country || "").toLowerCase().includes(q)
     );
   });
+
+  // per-user answer, and the "how people found us" totals
+  const sourceByUser = {};
+  (sources || []).forEach(s => { sourceByUser[s.user_id] = s; });
+  const heardCounts = {};
+  (sources || []).forEach(s => { if (s.heard_from) heardCounts[s.heard_from] = (heardCounts[s.heard_from] || 0) + 1; });
+  const heardTotal = Object.values(heardCounts).reduce((a, b) => a + b, 0);
+  const heardRows = Object.entries(heardCounts).sort((a, b) => b[1] - a[1]);
 
   const joined = (iso) => (iso ? String(iso).slice(0, 10) : "—");
 
@@ -234,6 +260,32 @@ export default function AdminUsers({ onBack }) {
           </div>
         </div>
 
+        {/* ── How people found us (from the optional sign-up question) ── */}
+        {sources !== null && (
+          <div style={{ background: "#0c1628", borderRadius: 14, border: "1px solid rgba(232,179,75,0.2)", padding: "14px 16px", marginBottom: 20 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#e8b34b", marginBottom: 4 }}>📣 How people found us</div>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginBottom: 10, lineHeight: 1.5 }}>
+              From the optional sign-up question. Members who joined before it was added, or who skipped it, are not counted.
+            </div>
+            {heardTotal === 0 ? (
+              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)" }}>No answers yet.</div>
+            ) : (
+              heardRows.map(([key, n]) => (
+                <div key={key} style={{ marginBottom: 8 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "rgba(255,255,255,0.7)", marginBottom: 3 }}>
+                    <span>{HEARD_LABELS[key] || key}</span>
+                    <span style={{ fontWeight: 700, color: "#eef1ff" }}>{n} · {Math.round((n / heardTotal) * 100)}%</span>
+                  </div>
+                  <div style={{ background: "rgba(255,255,255,0.07)", borderRadius: 999, height: 5, overflow: "hidden" }}>
+                    <div style={{ width: `${(n / heardTotal) * 100}%`, height: "100%", background: "#e8b34b", borderRadius: 999 }} />
+                  </div>
+                </div>
+              ))
+            )}
+            {heardTotal > 0 && <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", marginTop: 6 }}>{heardTotal} answered</div>}
+          </div>
+        )}
+
         <input
           placeholder="Search by name, email, number or country..."
           value={search}
@@ -299,6 +351,12 @@ export default function AdminUsers({ onBack }) {
                   </span>
                 )}
                 {r.newsletter_optin && <span style={{ color: "#5b9cf6" }}>✉ Newsletter</span>}
+                {sourceByUser[r.id]?.heard_from && (
+                  <span style={{ color: "#e8b34b" }}>
+                    📣 {HEARD_LABELS[sourceByUser[r.id].heard_from] || sourceByUser[r.id].heard_from}
+                    {sourceByUser[r.id].heard_from_detail ? ` — ${sourceByUser[r.id].heard_from_detail}` : ""}
+                  </span>
+                )}
               </div>
             </div>
           ))}

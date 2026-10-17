@@ -66,6 +66,32 @@ const testimonyOpenKey = (t, completedMissionIds) =>
 const INVITE_URL  = "https://sendmeglobalmission.org/?from=friend";
 const INVITE_TEXT = "✝ I'm part of SendMe Global Mission Fund — Message believers supporting real missions around the world, one mission at a time. Have a look and join us: ";
 const inviteWhatsAppLink = () => `https://wa.me/?text=${encodeURIComponent(INVITE_TEXT + INVITE_URL)}`;
+// Home banner: three pictures that tell Message believers at a glance that SendMe is Message-based.
+// The image files live in public/images/message/ (served from /images/message/…). If a file is
+// missing the picture simply hides and the headline underneath still shows.
+const MESSAGE_HERO = [
+  { src:"/images/message/cloud-1963.jpg",     alt:"The Cloud, 1963",                          caption:"The Cloud · 1963" },
+  { src:"/images/message/jesus.jpg",          alt:"Jesus Christ",                             caption:"Jesus Christ" },
+  { src:"/images/message/pillar-of-fire.jpg", alt:"William Branham with the Pillar of Fire",  caption:"The Pillar of Fire" },
+];
+const MessageHero = () => (
+  <div style={{ marginBottom:24,borderRadius:20,overflow:"hidden",border:"1px solid rgba(232,179,75,0.28)",background:"linear-gradient(180deg,#0c1628 0%,#08101f 100%)",boxShadow:"0 10px 40px rgba(0,0,0,0.35)" }}>
+    <div style={{ display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:2 }}>
+      {MESSAGE_HERO.map(p => (
+        <figure key={p.src} style={{ position:"relative",margin:0,aspectRatio:"4 / 5",overflow:"hidden",background:"#0a1322" }}>
+          <img src={p.src} alt={p.alt} loading="eager" decoding="async" onError={e=>{e.currentTarget.style.visibility="hidden";}}
+            style={{ display:"block",width:"100%",height:"100%",objectFit:"cover",objectPosition:"center 30%" }}/>
+          <figcaption style={{ position:"absolute",left:0,right:0,bottom:0,padding:"22px 6px 8px",background:"linear-gradient(180deg,transparent,rgba(5,10,20,0.88))",fontSize:11,color:"rgba(255,255,255,0.82)",textAlign:"center",letterSpacing:0.5 }}>{p.caption}</figcaption>
+        </figure>
+      ))}
+    </div>
+    <div style={{ padding:"16px 18px 20px",textAlign:"center" }}>
+      <div style={{ fontSize:10,color:"#e8b34b",letterSpacing:3,textTransform:"uppercase",marginBottom:6 }}>For Message believers</div>
+      <div style={{ fontSize:"clamp(17px,4.8vw,24px)",fontWeight:700,color:"#eef1ff",lineHeight:1.3 }}>Sending the end-time Message to the nations</div>
+      <div style={{ fontSize:13,color:"rgba(255,255,255,0.5)",margin:"6px auto 0",lineHeight:1.6,maxWidth:520 }}>Support verified missionaries and churches who carry the Message — one mission at a time.</div>
+    </div>
+  </div>
+);
 const shortPlace = (m) => [m.city || m.area, m.country].map(v => String(v || "").trim()).filter(Boolean).join(", ");
 
 const mapRow = (row, i) => ({
@@ -1918,6 +1944,7 @@ const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, o
             <span style={{ color:"#e8b34b",fontSize:18 }}>→</span>
           </div>
         )}
+        <MessageHero />
         {/* Active Missions first — on a phone the map used to fill the whole first screen and
             the missions were at the very bottom of the page, so people never saw them. The region
             filter travels with the list it filters; the General Fund banner follows the list
