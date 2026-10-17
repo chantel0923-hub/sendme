@@ -13,14 +13,13 @@
 // why the header badge used to say "1 registered user". If the list shows
 // only one person, that policy is missing.
 import { useState, useEffect } from "react";
+import { supabase } from "./supabase";
 
 // Labels for the sign-up question "How did you hear about us?" (same keys as Auth.js).
 const HEARD_LABELS = {
   friend: "A friend or family member", church: "My church or pastor", whatsapp: "A WhatsApp message or group",
   facebook: "Facebook", youtube: "YouTube", tiktok: "TikTok", google: "Google search", other: "Other",
 };
-import { supabase } from "./supabase";
-
 const PAGE = 1000; // Supabase returns at most 1000 rows per request by default
 
 // Digits for a wa.me link, or "" if the number isn't a usable international number.
