@@ -580,6 +580,14 @@ export default function TestimonyEngine({ onBack, onMission, user, onAddTestimon
                   style={{ flex:1, padding:"10px 0", borderRadius:12, border:"none", background:`linear-gradient(135deg,${t.color},${t.color}cc)`, color:"#000", fontWeight:700, cursor:"pointer", fontSize:13, fontFamily:"Georgia, serif" }}>
                   Read Full Testimony
                 </button>
+                {/* Admin only: jump straight to the editor for this card. A mission card without a story
+                    opens a new testimony already linked to that mission; a card with one opens it for editing. */}
+                {onAddTestimony && (t.isAdminTestimony || t.missionRow) && (
+                  <button onClick={e=>{ e.stopPropagation(); onAddTestimony(t.isAdminTestimony ? { editId: String(t.id).replace(/^at-/, "") } : { missionId: t.id }); }}
+                    style={{ padding:"10px 14px", borderRadius:12, border:"1px solid rgba(232,179,75,0.4)", background:"rgba(232,179,75,0.08)", color:"#e8b34b", fontWeight:700, cursor:"pointer", fontSize:13, fontFamily:"Georgia, serif" }}>
+                    ✏️ {t.isAdminTestimony || t.hasExtra ? "Edit" : "Add story"}
+                  </button>
+                )}
                 <button onClick={e=>{e.stopPropagation();shareTestimony(t);}}
                   style={{ padding:"10px 16px", borderRadius:12, border:"1px solid rgba(37,211,102,0.3)", background:"rgba(37,211,102,0.08)", color:"#25d366", fontWeight:700, cursor:"pointer", fontSize:13, fontFamily:"Georgia, serif" }}>
                   Share

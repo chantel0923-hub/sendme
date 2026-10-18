@@ -2594,6 +2594,15 @@ export default function App() {
   // card; every other way into Testimonies leaves it empty so the normal list shows).
   const [testimonyOpenId, setTestimonyOpenId] = useState(null);
   const openTestimonies = (id = null) => { setTestimonyOpenId(id); setScreen("testimonies"); };
+  // Admin: open the testimony editor, optionally straight onto one testimony ({ editId }) or one mission
+  // ({ missionId }) — used by the "✏️ Edit / Add story" buttons on the Testimonies page cards. The header
+  // "Add / manage" button passes a click event instead, which is treated as "no shortcut".
+  const [testimonyFocus, setTestimonyFocus] = useState(null);
+  const openAdminTestimonies = (f) => {
+    const ok = f && (typeof f.missionId === "string" || typeof f.editId === "string");
+    setTestimonyFocus(ok ? { missionId: f.missionId, editId: f.editId, n: Date.now() } : null);
+    setScreen("admin-testimonies");
+  };
   // An invite link (…/?from=friend) is remembered for this visit so the sign-up form can use it.
   useEffect(() => {
     try {
@@ -2754,7 +2763,7 @@ export default function App() {
   if(screen==="profile")          return withNav(<DonorProfile user={user} onBack={()=>setScreen("home")} userRole={userRole} isAdmin={isAdminUser}/>);
   if(screen==="emergency")        return withNav(guest ? <GuestBlocked title="Registration Required" message="Submitting an emergency mission request requires a SendMe account, so admin can verify and follow up with you directly. Please sign in or register to continue." onBack={()=>setScreen("home")} onRegister={()=>{setGuest(false);setScreen("home");}}/> : <EmergencyRequests onBack={()=>{setSelectedEmergencyId(null);setScreen("home");}} user={user} userRole={userRole} preselectedId={selectedEmergencyId}/>);
   if(screen==="matching")         return withNav(<MissionMatching missions={liveMissions} onMission={openMission} onBack={()=>setScreen("home")}/>);
-  if(screen==="testimonies")      return withNav(<TestimonyEngine openId={testimonyOpenId} onBack={()=>setScreen("home")} onMission={openMission} onAddTestimony={isAdminUser ? ()=>setScreen("admin-testimonies") : undefined}/>);
+  if(screen==="testimonies")      return withNav(<TestimonyEngine openId={testimonyOpenId} onBack={()=>setScreen("home")} onMission={openMission} onAddTestimony={isAdminUser ? openAdminTestimonies : undefined}/>);
   if(screen==="worker")           return withNav(guest ? <GuestBlocked title="Registration Required" message="Posting or responding to a worker request requires a SendMe account, so churches can coordinate and follow up directly. Please sign in or register to continue." onBack={()=>setScreen("home")} onRegister={()=>{setGuest(false);setScreen("home");}}/> : <SendAWorker onBack={()=>setScreen("home")} user={user}/>);
   if(screen==="qr")               return withNav(<QRShare missions={liveMissions} onBack={()=>setScreen("home")}/>);
   if(screen==="milestone-proof")  return withNav(<ProofCenter onBack={()=>setScreen("home")} user={user} isAdmin={isAdminUser} isPastor={isPastor} initialTab="submit"/>);
@@ -2765,7 +2774,7 @@ export default function App() {
   if(screen==="admin-workers")        return withNav(isAdminUser ? <AdminWorkerRequests onBack={()=>setScreen("home")}/> : <FAQScreen onBack={()=>setScreen("home")}/>);
   if(screen==="admin-emergency")      return withNav(isAdminUser ? <AdminEmergencyRequests onBack={()=>setScreen("home")} adminEmail={user?.email}/> : <FAQScreen onBack={()=>setScreen("home")}/>);
   if(screen==="admin-whatsapp-group") return withNav(isAdminUser ? <AdminWhatsAppGroup onBack={()=>setScreen("home")}/> : <FAQScreen onBack={()=>setScreen("home")}/>);
-  if(screen==="admin-testimonies")    return withNav(isAdminUser ? <AdminTestimonies onBack={()=>setScreen("testimonies")}/> : <FAQScreen onBack={()=>setScreen("home")}/>);
+  if(screen==="admin-testimonies")    return withNav(isAdminUser ? <AdminTestimonies focus={testimonyFocus} onFocusDone={()=>setTestimonyFocus(null)} onBack={()=>setScreen("testimonies")}/> : <FAQScreen onBack={()=>setScreen("home")}/>);
   if(screen==="admin-pastors")        return withNav(isAdminUser ? <AdminPastors onBack={()=>setScreen("home")}/> : <FAQScreen onBack={()=>setScreen("home")}/>);
   if(screen==="admin-users")          return withNav(isAdminUser ? <AdminUsers onBack={()=>setScreen("home")}/> : <FAQScreen onBack={()=>setScreen("home")}/>);
   if(screen==="admin-monthly-report") return withNav(isAdminUser ? <AdminMonthlyReport onBack={()=>setScreen("home")} user={user}/> : <FAQScreen onBack={()=>setScreen("home")}/>);

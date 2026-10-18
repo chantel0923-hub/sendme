@@ -118,7 +118,7 @@ const wholeNum = (v) => {
   return Number.isInteger(n) && n >= 0 ? n : NaN;
 };
 
-export default function AdminTestimonies({ onBack }) {
+export default function AdminTestimonies({ onBack, focus, onFocusDone }) {
   const [rows, setRows] = useState([]);
   const [missions, setMissions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -185,6 +185,20 @@ export default function AdminTestimonies({ onBack }) {
   };
 
   const resetForm = () => { setForm(EMPTY); setEditingId(null); setFormError(""); };
+
+  // Arriving from a card on the Testimonies page ("✏️ Edit" / "✏️ Add story"): open straight onto that
+  // testimony. For a mission that already has a testimony this edits it; otherwise it starts a new one
+  // linked to the mission (title, country and missionary filled in from the mission). Applied once.
+  const appliedFocus = useRef(null);
+  useEffect(() => {
+    if (!focus || loading || appliedFocus.current === focus.n) return;
+    appliedFocus.current = focus.n;
+    const existing = focus.editId ? rows.find(x => x.id === focus.editId) : rows.find(x => x.mission_id === focus.missionId);
+    if (existing) startEdit(existing);
+    else if (focus.missionId) { chooseMission(focus.missionId); window.scrollTo?.({ top: 0, behavior: "smooth" }); }
+    if (onFocusDone) onFocusDone();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focus, loading]);
 
   const save = async () => {
     setFormError(""); setNotice("");
