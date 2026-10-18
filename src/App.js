@@ -63,9 +63,17 @@ const testimonyExcerpt = (story, max = 180) => {
 // shown on that mission's own card (id = mission id); any other is its own card (id = "at-<id>").
 const testimonyOpenKey = (t, completedMissionIds) =>
   t.mission_id && completedMissionIds.some(id => String(id) === String(t.mission_id)) ? t.mission_id : `at-${t.id}`;
-const INVITE_URL  = "https://sendmeglobalmission.org/?from=friend";
-const INVITE_TEXT = "✝ I'm part of SendMe Global Mission Fund — Message believers supporting real missions around the world, one mission at a time. Have a look and join us: ";
-const inviteWhatsAppLink = () => `https://wa.me/?text=${encodeURIComponent(INVITE_TEXT + INVITE_URL)}`;
+const INVITE_URL = "https://sendmeglobalmission.org/?from=friend";
+// The ready-made invite message. The SendMe link comes first so WhatsApp's preview card shows the site
+// (logo + title); the Vision & Mission video link follows (it is the same video as on Home).
+// Plain emoji only: the cross symbol ✝ shows as a "?" box on some phones.
+const inviteMessage = () => {
+  const vid = FEATURED_VIDEOS && FEATURED_VIDEOS.missionVision;
+  return "🙏 I'm part of SendMe Global Mission Fund — Message believers supporting real missions around the world, one mission at a time.\n\n" +
+    "Have a look and join us: " + INVITE_URL +
+    (vid ? "\n\n🎥 Watch our vision and mission: https://youtu.be/" + vid : "");
+};
+const inviteWhatsAppLink = () => `https://wa.me/?text=${encodeURIComponent(inviteMessage())}`;
 // Home banner: three pictures that tell Message believers at a glance that SendMe is Message-based.
 // The image files live in public/images/message/ (served from /images/message/…). If a file is
 // missing the picture simply hides and the headline underneath still shows.
@@ -1885,8 +1893,8 @@ const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, o
     fetchLatestTestimony();
   },[]);
   const copyInviteLink = async () => {
-    try { await navigator.clipboard.writeText(INVITE_TEXT + INVITE_URL); setInviteCopied(true); setTimeout(()=>setInviteCopied(false),2500); }
-    catch { window.prompt("Copy this message and send it to a friend:", INVITE_TEXT + INVITE_URL); }
+    try { await navigator.clipboard.writeText(inviteMessage()); setInviteCopied(true); setTimeout(()=>setInviteCopied(false),2500); }
+    catch { window.prompt("Copy this message and send it to a friend:", inviteMessage()); }
   };
   // Admin-only registered-user count, shown top-left next to the logo.
   const [userCount,setUserCount] = useState(null);
