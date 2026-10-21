@@ -32,6 +32,8 @@ import AdminMonthlyReport from './AdminMonthlyReport';
 import AdminUsers from './AdminUsers';
 import AdminPastors from './AdminPastors';
 import AdminTestimonies from './AdminTestimonies';
+import AdminEftDonations from './AdminEftDonations';
+import EftGiving from './EftGiving';
 import AdminMissionEditor from './AdminMissionEditor';
 import NewsletterPrompt from './NewsletterPrompt';
 import NotificationOptIn from './NotificationOptIn';
@@ -825,6 +827,8 @@ const DonateScreen = ({ mission: m, onBack, onPayfast, user, onBrowseMissions })
           </button>
           {error && <div style={{ textAlign:"center",fontSize:13,color:"#e85b5b" }}>{error}</div>}
           <div style={{ textAlign:"center",fontSize:12,color:"rgba(255,255,255,0.2)" }}>🔒 Secure checkout via Paystack · Funds held in escrow · Released only on verified proof of work</div>
+          <div style={{ textAlign:"center",fontSize:12,color:"rgba(255,255,255,0.4)",lineHeight:1.7 }}>Card payments are charged in South African Rand (ZAR). If your bank declines the payment, ask them to allow international payments — or give by bank transfer below.</div>
+          <EftGiving kind="mission" targetId={m.id} targetTitle={m.protected ? m.role : (m.title||m.name)} user={user} defaultAmount={amt} accent={m.color}/>
         </div>}
       </div>
     </div>
@@ -1623,7 +1627,7 @@ const PayoutsDropdown = ({ onPayout, onPastorReview }) => {
 // Emergencies, Approvals, Payouts) that used to sit as separate buttons in
 // the main nav, cluttering the bar for the one person who ever sees them.
 // Same collapsible pattern as NavDropdown ("More") and PayoutsDropdown.
-const AdminDropdown = ({ onAdminChurchVerification, onAdminWorkers, onAdminEmergency, onAdminFamilyNeeds, onAdminGeneralFund, onAdminApprovals, onAdminPayouts, onAdminPipeline, onAdminWhatsAppGroup, onAdminMonthlyReport, onAdminUsers, onAdminPastors, onAdminTestimonies }) => {
+const AdminDropdown = ({ onAdminChurchVerification, onAdminWorkers, onAdminEmergency, onAdminFamilyNeeds, onAdminGeneralFund, onAdminApprovals, onAdminPayouts, onAdminPipeline, onAdminWhatsAppGroup, onAdminMonthlyReport, onAdminUsers, onAdminPastors, onAdminTestimonies, onAdminEft }) => {
   const [open,setOpen] = useState(false);
   const ref = useRef(null);
 
@@ -1647,6 +1651,7 @@ const AdminDropdown = ({ onAdminChurchVerification, onAdminWorkers, onAdminEmerg
     { label:"👤 Registered Users", color:"#5b9cf6", onClick:onAdminUsers },
     { label:"🙏 Pastors", color:"#e8b34b", onClick:onAdminPastors },
     { label:"📖 Testimonies", color:"#3ecf8e", onClick:onAdminTestimonies },
+    { label:"🏦 EFT Donations", color:"#e8b34b", onClick:onAdminEft },
   ];
 
   return (
@@ -1787,7 +1792,7 @@ if (typeof document !== "undefined" && !document.getElementById(_navStyleId)) {
   document.head.appendChild(_navStyle);
 }
 
-const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, onMyChurch, onChurches, onProfile, onEmergency, onEmergencyDetail, onFamilyNeed, onGeneralFund, onMatching, onPray, onTestimonies, onOpenTestimony, onWorker, onQR, onFaq, onPayout, onAdminPayouts, isAdmin, isPastor, onMilestoneProof, onPastorReview, onMissionaryDashboard, onAdminApprovals, onAdminChurchVerification, guest, onSignIn, onDonate, onAdminWorkers, onAdminEmergency, onAdminFamilyNeeds, onAdminGeneralFund, onAdminPipeline, onAdminWhatsAppGroup, onAdminMonthlyReport, onAdminUsers, onAdminPastors, onAdminTestimonies }) => {
+const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, onMyChurch, onChurches, onProfile, onEmergency, onEmergencyDetail, onFamilyNeed, onGeneralFund, onMatching, onPray, onTestimonies, onOpenTestimony, onWorker, onQR, onFaq, onPayout, onAdminPayouts, isAdmin, isPastor, onMilestoneProof, onPastorReview, onMissionaryDashboard, onAdminApprovals, onAdminChurchVerification, guest, onSignIn, onDonate, onAdminWorkers, onAdminEmergency, onAdminFamilyNeeds, onAdminGeneralFund, onAdminPipeline, onAdminWhatsAppGroup, onAdminMonthlyReport, onAdminUsers, onAdminPastors, onAdminTestimonies, onAdminEft }) => {
   const [region,setRegion]       = useState("All");
   const [mapFocus,setMapFocus]   = useState(null);
   const [latestTestimony,setLatestTestimony] = useState(null);   // newest published testimony, for the Home card
@@ -1934,7 +1939,7 @@ const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, o
             onProfile={onProfile} onEmergency={onEmergency} onFamilyNeed={onFamilyNeed} onGeneralFund={onGeneralFund} onTestimonies={onTestimonies}
             onWorker={onWorker} onMatching={onMatching} onQR={onQR} onFaq={onFaq}
           />
-          {isAdmin && <AdminDropdown onAdminChurchVerification={onAdminChurchVerification} onAdminWorkers={onAdminWorkers} onAdminEmergency={onAdminEmergency} onAdminFamilyNeeds={onAdminFamilyNeeds} onAdminGeneralFund={onAdminGeneralFund} onAdminApprovals={onAdminApprovals} onAdminPayouts={onAdminPayouts} onAdminPipeline={onAdminPipeline} onAdminWhatsAppGroup={onAdminWhatsAppGroup} onAdminMonthlyReport={onAdminMonthlyReport} onAdminUsers={onAdminUsers} onAdminPastors={onAdminPastors} onAdminTestimonies={onAdminTestimonies} />}
+          {isAdmin && <AdminDropdown onAdminChurchVerification={onAdminChurchVerification} onAdminWorkers={onAdminWorkers} onAdminEmergency={onAdminEmergency} onAdminFamilyNeeds={onAdminFamilyNeeds} onAdminGeneralFund={onAdminGeneralFund} onAdminApprovals={onAdminApprovals} onAdminPayouts={onAdminPayouts} onAdminPipeline={onAdminPipeline} onAdminWhatsAppGroup={onAdminWhatsAppGroup} onAdminMonthlyReport={onAdminMonthlyReport} onAdminUsers={onAdminUsers} onAdminPastors={onAdminPastors} onAdminTestimonies={onAdminTestimonies} onAdminEft={onAdminEft} />}
           {user&&<button onClick={onSignOut} style={{ background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:10,padding:"8px 14px",color:"rgba(255,255,255,0.4)",cursor:"pointer",fontSize:12 }}>Sign Out</button>}
         </div>
       </div>
@@ -2738,6 +2743,7 @@ export default function App() {
           onAdminWhatsAppGroup:()=>setScreen("admin-whatsapp-group"), onAdminMonthlyReport:()=>setScreen("admin-monthly-report"),
           onAdminUsers:()=>setScreen("admin-users"), onAdminPastors:()=>setScreen("admin-pastors"),
           onAdminTestimonies:()=>setScreen("admin-testimonies"),
+          onAdminEft:()=>setScreen("admin-eft"),
         }}
       />
       {node}
@@ -2774,6 +2780,7 @@ export default function App() {
   if(screen==="admin-workers")        return withNav(isAdminUser ? <AdminWorkerRequests onBack={()=>setScreen("home")}/> : <FAQScreen onBack={()=>setScreen("home")}/>);
   if(screen==="admin-emergency")      return withNav(isAdminUser ? <AdminEmergencyRequests onBack={()=>setScreen("home")} adminEmail={user?.email}/> : <FAQScreen onBack={()=>setScreen("home")}/>);
   if(screen==="admin-whatsapp-group") return withNav(isAdminUser ? <AdminWhatsAppGroup onBack={()=>setScreen("home")}/> : <FAQScreen onBack={()=>setScreen("home")}/>);
+  if(screen==="admin-eft")            return withNav(isAdminUser ? <AdminEftDonations onBack={()=>setScreen("home")}/> : <FAQScreen onBack={()=>setScreen("home")}/>);
   if(screen==="admin-testimonies")    return withNav(isAdminUser ? <AdminTestimonies focus={testimonyFocus} onFocusDone={()=>setTestimonyFocus(null)} onBack={()=>setScreen("testimonies")}/> : <FAQScreen onBack={()=>setScreen("home")}/>);
   if(screen==="admin-pastors")        return withNav(isAdminUser ? <AdminPastors onBack={()=>setScreen("home")}/> : <FAQScreen onBack={()=>setScreen("home")}/>);
   if(screen==="admin-users")          return withNav(isAdminUser ? <AdminUsers onBack={()=>setScreen("home")}/> : <FAQScreen onBack={()=>setScreen("home")}/>);
@@ -2818,6 +2825,7 @@ export default function App() {
       onAdminUsers={()=>setScreen("admin-users")}
       onAdminPastors={()=>setScreen("admin-pastors")}
       onAdminTestimonies={()=>setScreen("admin-testimonies")}
+      onAdminEft={()=>setScreen("admin-eft")}
     />
   );
 }
