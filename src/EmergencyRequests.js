@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { startPaystackEmergencyDonation } from "./paystack";
 import { supabase } from "./supabase";
 import { notifyAdmin } from "./notifications";
+import EftGiving from "./EftGiving";
 import { FEATURED_VIDEOS } from "./sendmeVideos";
 import WatchHowLink from "./WatchHowLink";
 
@@ -413,6 +414,13 @@ export default function EmergencyRequests({ onBack, user, userRole, preselectedI
                   fontSize:15, fontFamily:"Georgia, serif" }}>
                 {respSaving ? (Number(response.amount)>0 ? "Redirecting to Paystack…" : "Submitting...") : (Number(response.amount)>0 ? `💝 Give $${response.amount} via Paystack` : "💝 Submit Response")}
               </button>
+              {/* Bank transfer for donors whose card is declined — only while the emergency is still open for gifts. */}
+              {!((responding.raised||0) >= (responding.collection_target || Math.round((responding.goal||1000)*1.1))) && (
+                <>
+                  <div style={{ textAlign:"center", fontSize:12, color:"rgba(255,255,255,0.4)", lineHeight:1.7, marginTop:14, marginBottom:12 }}>Card payments are charged in South African Rand (ZAR). If your bank declines the payment, ask them to allow international payments — or give by bank transfer below.</div>
+                  <EftGiving kind="emergency" targetId={responding.id} targetTitle={responding.title} user={user} defaultAmount={response.amount} defaultName={response.name} defaultEmail={response.email} accent={u.color}/>
+                </>
+              )}
             </>
           )}
         </div>

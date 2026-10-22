@@ -11,12 +11,17 @@ const ADMIN_INBOX = "sendmemissionfund@gmail.com";
 const field = { width: "100%", padding: "11px 14px", borderRadius: 10, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)", color: "#eef1ff", fontSize: 14, fontFamily: "Georgia, serif", outline: "none", boxSizing: "border-box" };
 const lbl = { fontSize: 11, color: "rgba(255,255,255,0.4)", letterSpacing: 1, textTransform: "uppercase", marginBottom: 4, display: "block" };
 
-export default function EftGiving({ kind = "mission", targetId = null, targetTitle = "", user = null, defaultAmount = "", accent = "#e8b34b" }) {
+export default function EftGiving({ kind = "mission", targetId = null, targetTitle = "", user = null, defaultAmount = "", defaultName = "", defaultEmail = "", accent = "#e8b34b" }) {
   const [open, setOpen]       = useState(false);
-  const [name, setName]       = useState(user?.user_metadata?.full_name || "");
-  const [email, setEmail]     = useState(user?.email || "");
+  // The name, email and amount follow what the donor has already typed on the donate page above,
+  // until they edit them here (then what they typed here wins).
+  const [nameEdit, setNameEdit]     = useState(null);
+  const [emailEdit, setEmailEdit]   = useState(null);
+  const [amountEdit, setAmountEdit] = useState(null);
+  const name   = nameEdit   ?? (user?.user_metadata?.full_name || defaultName || "");
+  const email  = emailEdit  ?? (user?.email || defaultEmail || "");
+  const amount = amountEdit ?? (defaultAmount ? String(defaultAmount) : "");
   const [country, setCountry] = useState("");
-  const [amount, setAmount]   = useState(defaultAmount ? String(defaultAmount) : "");
   const [currency, setCurrency] = useState("USD");
   const [busy, setBusy]       = useState(false);
   const [error, setError]     = useState("");
@@ -66,7 +71,7 @@ export default function EftGiving({ kind = "mission", targetId = null, targetTit
   const D = EFT_DETAILS;
   const detailRows = [
     ["Account holder", D.accountHolder], ["Bank", D.bankName], ["Account number", D.accountNumber, true],
-    ["Account type", D.accountType], ["Branch code", D.branchCode], ["SWIFT / BIC", D.swiftCode, true], ["Bank country", D.bankCountry],
+    ["Account type", D.accountType], ["Branch code", D.branchCode], ["Branch name", D.branchName], ["SWIFT / BIC", D.swiftCode, true], ["Bank country", D.bankCountry], ["Bank address", D.bankAddress],
   ].filter(([, v]) => v && String(v).trim());
 
   return (
@@ -89,11 +94,11 @@ export default function EftGiving({ kind = "mission", targetId = null, targetTit
             </div>
           ) : !result ? (
             <>
-              <div><label style={lbl}>Your name</label><input value={name} onChange={e => setName(e.target.value)} placeholder="Full name" style={field} /></div>
-              <div><label style={lbl}>Email (we'll confirm here when your gift arrives)</label><input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" style={field} /></div>
+              <div><label style={lbl}>Your name</label><input value={name} onChange={e => setNameEdit(e.target.value)} placeholder="Full name" style={field} /></div>
+              <div><label style={lbl}>Email (we'll confirm here when your gift arrives)</label><input type="email" value={email} onChange={e => setEmailEdit(e.target.value)} placeholder="you@example.com" style={field} /></div>
               <div><label style={lbl}>Country (optional)</label><input value={country} onChange={e => setCountry(e.target.value)} placeholder="e.g. United States" style={field} /></div>
               <div style={{ display: "flex", gap: 10 }}>
-                <div style={{ flex: 1 }}><label style={lbl}>Amount (USD)</label><input type="number" min="1" inputMode="decimal" value={amount} onChange={e => setAmount(e.target.value)} placeholder="100" style={field} /></div>
+                <div style={{ flex: 1 }}><label style={lbl}>Amount (USD)</label><input type="number" min="1" inputMode="decimal" value={amount} onChange={e => setAmountEdit(e.target.value)} placeholder="100" style={field} /></div>
                 <div style={{ flex: 1 }}>
                   <label style={lbl}>I will send in</label>
                   <select value={currency} onChange={e => setCurrency(e.target.value)} style={{ ...field, colorScheme: "dark" }}>

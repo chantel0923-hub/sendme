@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { startPaystackFamilyNeedDonation } from "./paystack";
 import { supabase } from "./supabase";
 import { notifyAdmin } from "./notifications";
+import EftGiving from "./EftGiving";
 
 const fmt = (n) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 
@@ -375,6 +376,8 @@ export default function FamilyNeeds({ onBack, user, userRole }) {
               fontSize:15, fontFamily:"Georgia, serif" }}>
             {giveSaving ? "Redirecting to Paystack…" : (Number(gift.amount)>0 ? `💝 Give $${gift.amount} via Paystack` : "💝 Give")}
           </button>
+          <div style={{ textAlign:"center", fontSize:12, color:"rgba(255,255,255,0.4)", lineHeight:1.7, marginTop:14, marginBottom:12 }}>Card payments are charged in South African Rand (ZAR). If your bank declines the payment, ask them to allow international payments — or give by bank transfer below.</div>
+          <EftGiving kind="family_need" targetId={giving.id} targetTitle={`${giving.category || "Family"} need — ${giving.city || giving.country || ""}`.trim()} user={user} defaultAmount={gift.amount} defaultName={gift.name} defaultEmail={gift.email} accent={meta.color}/>
         </div>
       </div>
     );

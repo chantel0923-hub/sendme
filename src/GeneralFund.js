@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { startPaystackGeneralFundDonation } from "./paystack";
 import { supabase } from "./supabase";
+import EftGiving from "./EftGiving";
 
 const fmt = (n) => String(Math.round(n||0)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 
@@ -94,6 +95,8 @@ export default function GeneralFund({ onBack, user }) {
               fontWeight:700, cursor:"pointer", fontSize:15, fontFamily:"Georgia, serif" }}>
             {giveSaving ? "Redirecting to Paystack…" : (Number(gift.amount)>0 ? `💝 Give $${gift.amount} via Paystack` : "💝 Give")}
           </button>
+          <div style={{ textAlign:"center", fontSize:12, color:"rgba(255,255,255,0.4)", lineHeight:1.7, marginTop:14, marginBottom:12 }}>Card payments are charged in South African Rand (ZAR). If your bank declines the payment, ask them to allow international payments — or give by bank transfer below.</div>
+          <EftGiving kind="general_fund" targetId={null} targetTitle="SendMe General Fund" user={user} defaultAmount={gift.amount} defaultName={gift.name} defaultEmail={gift.email} accent="#3ecf8e"/>
         </div>
       </div>
     );

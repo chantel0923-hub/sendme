@@ -828,7 +828,7 @@ const DonateScreen = ({ mission: m, onBack, onPayfast, user, onBrowseMissions })
           {error && <div style={{ textAlign:"center",fontSize:13,color:"#e85b5b" }}>{error}</div>}
           <div style={{ textAlign:"center",fontSize:12,color:"rgba(255,255,255,0.2)" }}>🔒 Secure checkout via Paystack · Funds held in escrow · Released only on verified proof of work</div>
           <div style={{ textAlign:"center",fontSize:12,color:"rgba(255,255,255,0.4)",lineHeight:1.7 }}>Card payments are charged in South African Rand (ZAR). If your bank declines the payment, ask them to allow international payments — or give by bank transfer below.</div>
-          <EftGiving kind="mission" targetId={m.id} targetTitle={m.protected ? m.role : (m.title||m.name)} user={user} defaultAmount={amt} accent={m.color}/>
+          <EftGiving kind="mission" targetId={m.id} targetTitle={m.protected ? m.role : (m.title||m.name)} user={user} defaultAmount={amt} defaultName={guestName} defaultEmail={guestEmail} accent={m.color}/>
         </div>}
       </div>
     </div>
