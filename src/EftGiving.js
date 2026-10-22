@@ -1,6 +1,7 @@
-// "Give by bank transfer (EFT / SWIFT)" — for donors whose card is declined (for example an
-// international card that the bank blocks). The donor registers the gift, gets a unique reference to
-// put on the transfer, and the admin is told. Nothing is credited until the admin confirms the money
+// "Give by bank transfer (EFT / SWIFT)" — a second way to give that sits right under the card button on
+// every donate screen (no card needed; works from anywhere, and for donors whose card is declined — for
+// example an international card that the bank blocks). The donor registers the gift, gets a unique
+// reference to put on the transfer, and the admin is told. Nothing is credited until the admin confirms the money
 // has arrived (Admin → EFT Donations). See eft-donations.sql.
 import { useState } from "react";
 import { supabase } from "./supabase";
@@ -75,17 +76,27 @@ export default function EftGiving({ kind = "mission", targetId = null, targetTit
   ].filter(([, v]) => v && String(v).trim());
 
   return (
-    <div style={{ borderRadius: 14, border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.02)" }}>
+    <div>
+      {/* "or" divider: this sits directly under the card button as the second way to give */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "6px 0 14px" }}>
+        <div style={{ flex: 1, height: 1, background: "rgba(255,255,255,0.1)" }} />
+        <span style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", letterSpacing: 2, textTransform: "uppercase" }}>or</span>
+        <div style={{ flex: 1, height: 1, background: "rgba(255,255,255,0.1)" }} />
+      </div>
+    <div style={{ borderRadius: 14, border: `1px solid ${accent}66`, background: open ? "rgba(255,255,255,0.02)" : `${accent}0d` }}>
       <button onClick={() => setOpen(o => !o)} aria-expanded={open}
-        style={{ width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer", padding: "14px 16px", color: "rgba(255,255,255,0.75)", fontSize: 14, fontFamily: "Georgia, serif", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-        <span>🏦 <strong style={{ color: accent }}>Card declined?</strong> Give by bank transfer (EFT / SWIFT) instead</span>
-        <span style={{ color: "rgba(255,255,255,0.35)" }}>{open ? "▲" : "▼"}</span>
+        style={{ width: "100%", textAlign: "left", background: "none", border: "none", cursor: "pointer", padding: "14px 16px", color: "rgba(255,255,255,0.75)", fontFamily: "Georgia, serif", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+        <span style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <span style={{ fontSize: 15, fontWeight: 700, color: "#eef1ff" }}>🏦 Give by bank transfer (EFT / SWIFT)</span>
+          <span style={{ fontSize: 12, color: "rgba(255,255,255,0.45)" }}>No card needed — works from anywhere in the world</span>
+        </span>
+        <span style={{ color: accent }}>{open ? "▲" : "▼"}</span>
       </button>
 
       {open && (
         <div style={{ padding: "0 16px 16px", display: "flex", flexDirection: "column", gap: 12 }}>
           <div style={{ fontSize: 13, color: "rgba(255,255,255,0.5)", lineHeight: 1.7 }}>
-            Cards are charged in South African Rand (ZAR), so some banks block them as an international payment. You can ask your bank to allow it — or send your gift by bank transfer, which works from anywhere.
+            Send your gift straight from your bank — no card needed, and it works from anywhere in the world. (Card payments are charged in South African Rand, which some banks block as an international payment.)
           </div>
 
           {!eftConfigured() ? (
@@ -152,6 +163,7 @@ export default function EftGiving({ kind = "mission", targetId = null, targetTit
           )}
         </div>
       )}
+    </div>
     </div>
   );
 }
