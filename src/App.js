@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "./supabase";
 import Auth from "./Auth";
+import ResetPassword from "./ResetPassword";
 import "./App.css";
 import MissionaryApplication from "./MissionaryApplication";
 import ChurchRegistration from "./ChurchRegistration";
@@ -2587,6 +2588,10 @@ export default function App() {
   // donate/respond modal instead of landing on the general list.
   const [selectedEmergencyId,setSelectedEmergencyId] = useState(null);
   const [guest,setGuest]                       = useState(false);
+  // True while someone who clicked a "reset password" email link is choosing a new password.
+  const [recovering,setRecovering]               = useState(() => {
+    try { return /type=recovery/.test(window.location.hash) || /type=recovery/.test(window.location.search); } catch { return false; }
+  });
   const [pfReturn,setPfReturn]                 = useState(null);
   const [pendingMissionId,setPendingMissionId] = useState(null);
   // #96 — when set, Prayer Wall opens pre-filtered to just this mission
@@ -2633,7 +2638,8 @@ export default function App() {
       const u = session?.user ?? null;
       setUser(u); loadRole(u); setAuthReady(true);
     });
-    const {data:{subscription}} = supabase.auth.onAuthStateChange((_,session)=>{
+    const {data:{subscription}} = supabase.auth.onAuthStateChange((event,session)=>{
+      if(event==="PASSWORD_RECOVERY") setRecovering(true);
       const u = session?.user ?? null;
       setUser(u); loadRole(u);
     });
@@ -2752,6 +2758,7 @@ export default function App() {
   const handlePayfastDonate = (amt, guestInfo, type = "once") => startPaystackDonation({ mission: selectedMission, amount: amt, user, guestInfo, type });
 
   if(!authReady) return(<div style={{ minHeight:"100vh",background:"#060c18",display:"flex",alignItems:"center",justifyContent:"center" }}><div style={{ fontSize:48,color:"#e8b34b" }}>✝</div></div>);
+  if(recovering && user) return <ResetPassword onDone={()=>{ setRecovering(false); try{ window.history.replaceState({}, "", window.location.pathname); }catch{} }}/>;
   if(pfReturn) return <PayfastResultScreen status={pfReturn.status} amount={pfReturn.amount} onContinue={()=>setPfReturn(null)}/>;
   if(!user && !guest) return <Auth onLogin={(u)=>{ setUser(u); if(!localStorage.getItem("sendme_splash_seen")){ setShowSplash(true); } }} onGuest={()=>setGuest(true)}/>;
   if(showSplash) return <MissionVisionSplash onDone={()=>{ localStorage.setItem("sendme_splash_seen","1"); setShowSplash(false); }}/>;
