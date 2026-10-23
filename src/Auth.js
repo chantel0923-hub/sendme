@@ -266,7 +266,7 @@ export default function Auth({ onLogin, onGuest }) {
     if (!resetEmail) { setError("Please enter your email address."); return; }
     setLoading(true); setError("");
     const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
-      redirectTo: "https://sendme-nine.vercel.app",
+      redirectTo: "https://www.sendmeglobalmission.org",
     });
     setLoading(false);
     if (error) { setError(error.message); return; }
