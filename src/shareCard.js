@@ -238,13 +238,19 @@ export async function buildShareImage(kind, data, env = {}) {
 
 // Opens the phone's share sheet with the picture (choose WhatsApp → My status or a chat). Where that isn't
 // possible (computers, some browsers) the picture is saved to the device instead.
-// Returns "shared" | "cancelled" | "downloaded".
-export async function shareCardImage(blob, { filename, caption }) {
+// Returns "shared" | "cancelled" | "downloaded" | "needs-tap".
+// "needs-tap": the phone refused to open the share sheet because too much time passed since the tap
+// (making the picture takes a few seconds). The picture is ready — the button asks for one more tap,
+// and that tap calls shareCardImage again with allowDownload = true.
+export async function shareCardImage(blob, { filename, caption }, allowDownload = false) {
   try {
     const file = new File([blob], filename, { type: blob.type || "image/jpeg" });
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
       try { await navigator.share({ files: [file], text: caption }); return "shared"; }
-      catch (e) { if (e && e.name === "AbortError") return "cancelled"; }
+      catch (e) {
+        if (e && e.name === "AbortError") return "cancelled";
+        if (!allowDownload && e && e.name === "NotAllowedError") return "needs-tap";
+      }
     }
   } catch (_e) { /* fall through to the download */ }
   const url = URL.createObjectURL(blob);
