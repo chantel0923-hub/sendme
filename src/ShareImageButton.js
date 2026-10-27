@@ -11,6 +11,7 @@ export default function ShareImageButton({ kind, getData, label = "🖼 Share as
   // idle | working | ready (picture made, one more tap to share) | saved | error
   const [state, setState] = useState("idle");
   const [made, setMade] = useState(null);   // { blob, filename, caption } once the picture exists
+  const [copied, setCopied] = useState(false);
   const run = async (e) => {
     if (e && e.stopPropagation) e.stopPropagation();
     if (state === "working") return;
@@ -29,11 +30,23 @@ export default function ShareImageButton({ kind, getData, label = "🖼 Share as
       setState("error");
     }
   };
+  // A picture can't hold a tappable link, so this copies the page address to paste next to the picture.
+  const copyLink = async (e) => {
+    if (e && e.stopPropagation) e.stopPropagation();
+    let link = "";
+    try { link = (getData() || {}).link || ""; } catch (_e) { /* ignore */ }
+    if (!link) return;
+    try { await navigator.clipboard.writeText(link); setCopied(true); setTimeout(() => setCopied(false), 2500); }
+    catch (_e) { window.prompt("Copy this link:", link); }
+  };
   const note = { fontSize: 12, lineHeight: 1.5, maxWidth: 260 };
   return (
     <div style={{ display: block ? "flex" : "inline-flex", flexDirection: "column", gap: 6, alignItems: "stretch", width: block ? "100%" : undefined }}>
       <button onClick={run} disabled={state === "working"} style={{ ...base, ...style, opacity: state === "working" ? 0.7 : 1 }}>
         {state === "working" ? "Preparing the image…" : state === "ready" ? "📲 Image ready — tap to send" : label}
+      </button>
+      <button onClick={copyLink} style={{ background: "none", border: "none", padding: "2px 4px", cursor: "pointer", color: copied ? "#3ecf8e" : "rgba(255,255,255,0.55)", fontSize: 12, fontFamily: "Georgia, serif", textDecoration: copied ? "none" : "underline" }}>
+        {copied ? "✓ Link copied — paste it with the picture" : "🔗 Copy link to send with the picture"}
       </button>
       {state === "ready" && <div style={{ ...note, color: "#e8b34b" }}>Tap once more and choose WhatsApp.</div>}
       {state === "saved" && (isPhone()
