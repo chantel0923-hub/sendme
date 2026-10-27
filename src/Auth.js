@@ -108,12 +108,14 @@ const HEARD_OPTIONS = [
 ];
 // An invite link (…/?from=friend) is remembered by App.js for this visit.
 const readInviteTag = () => { try { return sessionStorage.getItem("sendme_from") || ""; } catch { return ""; } };
+// A church's own invite link/QR code (…/?from=church&c=<8 characters>) is remembered by App.js too.
+const readChurchRef = () => { try { const c = sessionStorage.getItem("sendme_church") || ""; return /^[a-f0-9]{8}$/.test(c) ? c : ""; } catch { return ""; } };
 
 export default function Auth({ onLogin, onGuest }) {
   const [mode, setMode]             = useState("login");
   const [role, setRole]             = useState("");
   const [name, setName]             = useState("");
-  const [heardFrom, setHeardFrom]     = useState(() => (readInviteTag() === "friend" ? "friend" : ""));
+  const [heardFrom, setHeardFrom]     = useState(() => (readChurchRef() ? "church" : readInviteTag() === "friend" ? "friend" : ""));
   const [heardDetail, setHeardDetail] = useState("");
   const [email, setEmail]           = useState("");
   const [password, setPassword]     = useState("");
@@ -195,6 +197,7 @@ export default function Auth({ onLogin, onGuest }) {
         heard_from: heardFrom || null,
         heard_from_detail: heardDetail.trim().slice(0, 120) || null,
         from_param: readInviteTag().slice(0, 30) || null,
+        church_ref: readChurchRef() || null,
       } }
     });
     setLoading(false);
@@ -266,7 +269,7 @@ export default function Auth({ onLogin, onGuest }) {
     if (!resetEmail) { setError("Please enter your email address."); return; }
     setLoading(true); setError("");
     const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
-      redirectTo: "https://www.sendmeglobalmission.org",
+      redirectTo: "https://sendme-nine.vercel.app",
     });
     setLoading(false);
     if (error) { setError(error.message); return; }

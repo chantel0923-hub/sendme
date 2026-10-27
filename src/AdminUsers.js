@@ -13,13 +13,14 @@
 // why the header badge used to say "1 registered user". If the list shows
 // only one person, that policy is missing.
 import { useState, useEffect } from "react";
-import { supabase } from "./supabase";
 
 // Labels for the sign-up question "How did you hear about us?" (same keys as Auth.js).
 const HEARD_LABELS = {
   friend: "A friend or family member", church: "My church or pastor", whatsapp: "A WhatsApp message or group",
   facebook: "Facebook", youtube: "YouTube", tiktok: "TikTok", google: "Google search", other: "Other",
 };
+import { supabase } from "./supabase";
+
 const PAGE = 1000; // Supabase returns at most 1000 rows per request by default
 
 // Digits for a wa.me link, or "" if the number isn't a usable international number.
@@ -52,6 +53,7 @@ export default function AdminUsers({ onBack }) {
   // How people found SendMe — from the optional sign-up question (table signup_sources).
   // null = not available (the SQL step has not been run yet), so the section simply stays hidden.
   const [sources, setSources] = useState(null);
+  const [churchNames, setChurchNames] = useState({});   // { 8-character code: church name }
   const [unverified, setUnverified] = useState(null);   // null = still loading
   const [unvError, setUnvError] = useState("");
   const [unvKey, setUnvKey] = useState(0);               // bump to reload the list
@@ -77,9 +79,16 @@ export default function AdminUsers({ onBack }) {
         setTotal(count ?? (data || []).length);
         try {
           const { data: src, error: srcErr } = await supabase
-            .from("signup_sources").select("user_id, heard_from, heard_from_detail").limit(5000);
+            .from("signup_sources").select("user_id, heard_from, heard_from_detail, church_ref").limit(5000);
           if (srcErr) throw srcErr;
           setSources(src || []);
+          // church names for the church invite links (code = first 8 characters of the church id)
+          try {
+            const { data: chs } = await supabase.from("churches").select("id, name").limit(2000);
+            const map = {};
+            (chs || []).forEach(c => { map[String(c.id).slice(0, 8).toLowerCase()] = c.name; });
+            setChurchNames(map);
+          } catch (_chE) { setChurchNames({}); }
         } catch (srcE) {
           console.log("signup_sources not available:", srcE?.message || srcE);
           setSources(null);
@@ -148,6 +157,10 @@ export default function AdminUsers({ onBack }) {
   (sources || []).forEach(s => { if (s.heard_from) heardCounts[s.heard_from] = (heardCounts[s.heard_from] || 0) + 1; });
   const heardTotal = Object.values(heardCounts).reduce((a, b) => a + b, 0);
   const heardRows = Object.entries(heardCounts).sort((a, b) => b[1] - a[1]);
+  const churchCounts = {};
+  (sources || []).forEach(s => { if (s.church_ref) churchCounts[s.church_ref] = (churchCounts[s.church_ref] || 0) + 1; });
+  const churchRows = Object.entries(churchCounts).sort((a, b) => b[1] - a[1]);
+  const churchLabel = (code) => churchNames[code] || `Church ${code}`;
 
   const joined = (iso) => (iso ? String(iso).slice(0, 10) : "—");
 
@@ -282,6 +295,16 @@ export default function AdminUsers({ onBack }) {
               ))
             )}
             {heardTotal > 0 && <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", marginTop: 6 }}>{heardTotal} answered</div>}
+            {churchRows.length > 0 && (
+              <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#e8b34b", marginBottom: 8 }}>⛪ Joined through a church's link or QR code</div>
+                {churchRows.map(([code, n]) => (
+                  <div key={code} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "rgba(255,255,255,0.7)", padding: "3px 0" }}>
+                    <span>{churchLabel(code)}</span><span style={{ fontWeight: 700, color: "#eef1ff" }}>{n}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -350,6 +373,7 @@ export default function AdminUsers({ onBack }) {
                   </span>
                 )}
                 {r.newsletter_optin && <span style={{ color: "#5b9cf6" }}>✉ Newsletter</span>}
+                {sourceByUser[r.id]?.church_ref && <span style={{ color: "#e8b34b" }}>⛪ via {churchLabel(sourceByUser[r.id].church_ref)}</span>}
                 {sourceByUser[r.id]?.heard_from && (
                   <span style={{ color: "#e8b34b" }}>
                     📣 {HEARD_LABELS[sourceByUser[r.id].heard_from] || sourceByUser[r.id].heard_from}

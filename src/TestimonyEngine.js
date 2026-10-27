@@ -22,6 +22,8 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "./supabase";
+import ShareImageButton from "./ShareImageButton";
+import { testimonyCardData } from "./shareCard";
 
 const fmt = (n) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 
@@ -451,6 +453,9 @@ export default function TestimonyEngine({ onBack, onMission, user, onAddTestimon
               style={{ padding:"14px 0", borderRadius:14, border:"none", background:"linear-gradient(135deg,#e8b34b,#c8942b)", color:"#000", fontWeight:700, cursor:"pointer", fontSize:15, fontFamily:"Georgia, serif", boxShadow:"0 6px 24px rgba(232,179,75,0.4)" }}>
               Support Another Mission
             </button>
+            <div style={{ gridColumn:"1 / -1" }}>
+              <ShareImageButton block kind="testimony" getData={() => testimonyCardData(t)} label="🖼 Share as Image (WhatsApp Status)" style={{ padding:"14px 18px", borderRadius:14 }} />
+            </div>
           </div>
 
           {/* Testimony submission form — shown to logged-in users */}
@@ -592,6 +597,7 @@ export default function TestimonyEngine({ onBack, onMission, user, onAddTestimon
                   style={{ padding:"10px 16px", borderRadius:12, border:"1px solid rgba(37,211,102,0.3)", background:"rgba(37,211,102,0.08)", color:"#25d366", fontWeight:700, cursor:"pointer", fontSize:13, fontFamily:"Georgia, serif" }}>
                   Share
                 </button>
+                <ShareImageButton kind="testimony" getData={() => testimonyCardData(t)} label="🖼 Image" style={{ padding:"10px 14px", borderRadius:12 }} />
               </div>
             </div>
           ))}

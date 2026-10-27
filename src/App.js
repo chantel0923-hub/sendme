@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "./supabase";
 import Auth from "./Auth";
-import ResetPassword from "./ResetPassword";
 import "./App.css";
 import MissionaryApplication from "./MissionaryApplication";
 import ChurchRegistration from "./ChurchRegistration";
@@ -35,6 +34,10 @@ import AdminPastors from './AdminPastors';
 import AdminTestimonies from './AdminTestimonies';
 import AdminEftDonations from './AdminEftDonations';
 import EftGiving from './EftGiving';
+import ChurchFlyer from './ChurchFlyer';
+import ShareImageButton from './ShareImageButton';
+import { missionCardData } from './shareCard';
+import { isChurchRefCode } from './shareConfig';
 import AdminMissionEditor from './AdminMissionEditor';
 import NewsletterPrompt from './NewsletterPrompt';
 import NotificationOptIn from './NotificationOptIn';
@@ -836,7 +839,39 @@ const DonateScreen = ({ mission: m, onBack, onPayfast, user, onBrowseMissions })
   );
 };
 
-const PayfastResultScreen = ({ status, amount, onContinue }) => (
+// After a successful gift: invite the donor to share what they just supported (WhatsApp message and/or the
+// share picture). If the gift was to a mission, that mission is shown; otherwise the general invite is used.
+const SharePrompt = ({ missionId }) => {
+  const [mission,setMission] = useState(null);
+  useEffect(()=>{
+    let cancelled=false;
+    (async()=>{
+      if(!missionId) return;
+      try{
+        const {data,error} = await supabase.from("missions").select("*").eq("id",missionId).maybeSingle();
+        if(error) throw error;
+        if(!cancelled && data) setMission(mapRow(data,0));
+      }catch{}
+    })();
+    return ()=>{cancelled=true;};
+  },[missionId]);
+  const d = mission ? missionCardData(mission) : null;
+  const wa = d
+    ? `https://wa.me/?text=${encodeURIComponent(`🙏 I just gave to this mission on SendMe: ${d.title}\n\nHave a look and join me: ${d.link}`)}`
+    : inviteWhatsAppLink();
+  return (
+    <div style={{ width:"100%",borderTop:"1px solid rgba(255,255,255,0.08)",paddingTop:20 }}>
+      <div style={{ fontSize:16,fontWeight:700,color:"#eef1ff",marginBottom:6 }}>Know someone who would want to be part of this?</div>
+      <div style={{ fontSize:13,color:"rgba(255,255,255,0.45)",lineHeight:1.7,marginBottom:14 }}>Share it with them — every person you invite helps a mission go further.</div>
+      <div style={{ display:"flex",gap:10,flexWrap:"wrap",justifyContent:"center",alignItems:"flex-start" }}>
+        <a href={wa} target="_blank" rel="noopener noreferrer" style={{ padding:"10px 18px",borderRadius:12,background:"linear-gradient(135deg,#25d366,#1da851)",color:"#04210f",fontWeight:700,fontSize:13,textDecoration:"none",fontFamily:"Georgia, serif" }}>📲 Share on WhatsApp</a>
+        {mission && <ShareImageButton kind="mission" getData={()=>missionCardData(mission)} />}
+      </div>
+    </div>
+  );
+};
+
+const PayfastResultScreen = ({ status, amount, missionId, onContinue }) => (
   <div style={{ minHeight:"100vh",background:"#060c18",color:"#eef1ff",fontFamily:"Georgia, serif",display:"flex",alignItems:"center",justifyContent:"center",padding:32 }}>
     <div style={{ textAlign:"center",maxWidth:480,display:"flex",flexDirection:"column",gap:20,alignItems:"center" }}>
       {status==="success" ? (
@@ -849,6 +884,7 @@ const PayfastResultScreen = ({ status, amount, onContinue }) => (
             </div>
             <div style={{ fontSize:13,color:"rgba(255,255,255,0.3)",marginTop:10 }}>It will appear in your Giving History once Paystack confirms the payment — usually within a few minutes.</div>
           </div>
+          <SharePrompt missionId={missionId} />
         </>
       ) : (
         <>
@@ -1100,6 +1136,9 @@ const MissionDetail = ({ mission: m, onBack, onDonate, onLedger, user, userRole,
             <button onClick={onLedger} style={{ padding:"16px 18px",borderRadius:14,border:"1px solid rgba(91,156,246,0.3)",background:"rgba(91,156,246,0.08)",color:"#5b9cf6",fontWeight:700,cursor:"pointer",fontSize:14,fontFamily:"Georgia, serif",whiteSpace:"nowrap" }}>
               View Ledger
             </button>
+            <div style={{ gridColumn:"1 / -1" }}>
+              <ShareImageButton block kind="mission" getData={() => missionCardData(m)} label="🖼 Share as Image (WhatsApp Status)" style={{ padding:"14px 18px",borderRadius:14 }} />
+            </div>
           </div>
         </div>
       </div>
@@ -1501,7 +1540,7 @@ const DonorProfile = ({ user, onBack, userRole, isAdmin }) => {
 };
 
 // ── NAV "MORE" DROPDOWN ──────────────────────────────────────────────────────
-const NavDropdown = ({ user, userRole, guest, onProfile, onEmergency, onFamilyNeed, onGeneralFund, onTestimonies, onWorker, onMatching, onQR, onFaq, onPayout, onMilestoneProof, onPastorReview, onMissionaryDashboard }) => {
+const NavDropdown = ({ user, userRole, guest, onProfile, onEmergency, onFamilyNeed, onGeneralFund, onTestimonies, onWorker, onMatching, onQR, onFlyer, onFaq, onPayout, onMilestoneProof, onPastorReview, onMissionaryDashboard }) => {
   const [open,setOpen] = useState(false);
   const ref = useRef(null);
 
@@ -1520,6 +1559,7 @@ const NavDropdown = ({ user, userRole, guest, onProfile, onEmergency, onFamilyNe
     !guest && { label:"Send Worker",      color:"#b06cf5",                            onClick:onWorker },
     { label:"Find Mission",              color:"#5b9cf6",                            onClick:onMatching },
     { label:"QR Share",                  color:"rgba(255,255,255,0.65)",             onClick:onQR },
+    { label:"📣 Flyer & Invite Link",    color:"#e8b34b",                            onClick:onFlyer },
     { label:"FAQ",                       color:"#e8b34b",                            onClick:onFaq },
   ].filter(Boolean);
 
@@ -1793,11 +1833,12 @@ if (typeof document !== "undefined" && !document.getElementById(_navStyleId)) {
   document.head.appendChild(_navStyle);
 }
 
-const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, onMyChurch, onChurches, onProfile, onEmergency, onEmergencyDetail, onFamilyNeed, onGeneralFund, onMatching, onPray, onTestimonies, onOpenTestimony, onWorker, onQR, onFaq, onPayout, onAdminPayouts, isAdmin, isPastor, onMilestoneProof, onPastorReview, onMissionaryDashboard, onAdminApprovals, onAdminChurchVerification, guest, onSignIn, onDonate, onAdminWorkers, onAdminEmergency, onAdminFamilyNeeds, onAdminGeneralFund, onAdminPipeline, onAdminWhatsAppGroup, onAdminMonthlyReport, onAdminUsers, onAdminPastors, onAdminTestimonies, onAdminEft }) => {
+const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, onMyChurch, onChurches, onProfile, onEmergency, onEmergencyDetail, onFamilyNeed, onGeneralFund, onMatching, onPray, onTestimonies, onOpenTestimony, onWorker, onQR, onFlyer, onFaq, onPayout, onAdminPayouts, isAdmin, isPastor, onMilestoneProof, onPastorReview, onMissionaryDashboard, onAdminApprovals, onAdminChurchVerification, guest, onSignIn, onDonate, onAdminWorkers, onAdminEmergency, onAdminFamilyNeeds, onAdminGeneralFund, onAdminPipeline, onAdminWhatsAppGroup, onAdminMonthlyReport, onAdminUsers, onAdminPastors, onAdminTestimonies, onAdminEft }) => {
   const [region,setRegion]       = useState("All");
   const [mapFocus,setMapFocus]   = useState(null);
   const [latestTestimony,setLatestTestimony] = useState(null);   // newest published testimony, for the Home card
   const [inviteCopied,setInviteCopied] = useState(false);
+  const [invitedBy,setInvitedBy] = useState("");   // name of the church whose invite link/QR brought this visitor
   // "Show on map" on a mission card: scroll up/down to the world map, then zoom to that mission's pin.
   const showOnMap = (m) => {
     const el = document.getElementById("world-map");
@@ -1902,6 +1943,23 @@ const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, o
     try { await navigator.clipboard.writeText(inviteMessage()); setInviteCopied(true); setTimeout(()=>setInviteCopied(false),2500); }
     catch { window.prompt("Copy this message and send it to a friend:", inviteMessage()); }
   };
+  // Invited through a church's link/QR code: look the church up (the code is the first 8 characters of its
+  // id, so a range lookup finds it) and welcome the visitor in its name. Only verified churches are named.
+  useEffect(()=>{
+    let cancelled=false;
+    (async()=>{
+      try{
+        const c = sessionStorage.getItem("sendme_church") || "";
+        if(!isChurchRefCode(c)) return;
+        const {data,error} = await supabase.from("churches").select("name, verified")
+          .gte("id",`${c}-0000-0000-0000-000000000000`).lte("id",`${c}-ffff-ffff-ffff-ffffffffffff`).limit(1);
+        if(error) throw error;
+        const ch = data && data[0];
+        if(!cancelled && ch && ch.verified) setInvitedBy(ch.name||"");
+      }catch{}
+    })();
+    return ()=>{cancelled=true;};
+  },[]);
   // Admin-only registered-user count, shown top-left next to the logo.
   const [userCount,setUserCount] = useState(null);
   useEffect(()=>{
@@ -1938,7 +1996,7 @@ const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, o
           <NavDropdown
             user={user} userRole={userRole} guest={guest}
             onProfile={onProfile} onEmergency={onEmergency} onFamilyNeed={onFamilyNeed} onGeneralFund={onGeneralFund} onTestimonies={onTestimonies}
-            onWorker={onWorker} onMatching={onMatching} onQR={onQR} onFaq={onFaq}
+            onWorker={onWorker} onMatching={onMatching} onQR={onQR} onFlyer={onFlyer} onFaq={onFaq}
           />
           {isAdmin && <AdminDropdown onAdminChurchVerification={onAdminChurchVerification} onAdminWorkers={onAdminWorkers} onAdminEmergency={onAdminEmergency} onAdminFamilyNeeds={onAdminFamilyNeeds} onAdminGeneralFund={onAdminGeneralFund} onAdminApprovals={onAdminApprovals} onAdminPayouts={onAdminPayouts} onAdminPipeline={onAdminPipeline} onAdminWhatsAppGroup={onAdminWhatsAppGroup} onAdminMonthlyReport={onAdminMonthlyReport} onAdminUsers={onAdminUsers} onAdminPastors={onAdminPastors} onAdminTestimonies={onAdminTestimonies} onAdminEft={onAdminEft} />}
           {user&&<button onClick={onSignOut} style={{ background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:10,padding:"8px 14px",color:"rgba(255,255,255,0.4)",cursor:"pointer",fontSize:12 }}>Sign Out</button>}
@@ -1956,6 +2014,11 @@ const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, o
               <div style={{ fontSize:12,color:"rgba(255,255,255,0.55)",marginTop:2,lineHeight:1.5 }}>Tap here to see what to fix, then resubmit — your answers are saved.</div>
             </div>
             <span style={{ color:"#e8b34b",fontSize:18 }}>→</span>
+          </div>
+        )}
+        {invitedBy && (
+          <div style={{ marginBottom:16,background:"rgba(232,179,75,0.08)",border:"1px solid rgba(232,179,75,0.28)",borderRadius:14,padding:"12px 16px",fontSize:14,color:"rgba(255,255,255,0.75)",textAlign:"center" }}>
+            🤝 You were invited by <strong style={{ color:"#e8b34b" }}>{invitedBy}</strong> — welcome to SendMe.
           </div>
         )}
         <MessageHero />
@@ -2588,10 +2651,6 @@ export default function App() {
   // donate/respond modal instead of landing on the general list.
   const [selectedEmergencyId,setSelectedEmergencyId] = useState(null);
   const [guest,setGuest]                       = useState(false);
-  // True while someone who clicked a "reset password" email link is choosing a new password.
-  const [recovering,setRecovering]               = useState(() => {
-    try { return /type=recovery/.test(window.location.hash) || /type=recovery/.test(window.location.search); } catch { return false; }
-  });
   const [pfReturn,setPfReturn]                 = useState(null);
   const [pendingMissionId,setPendingMissionId] = useState(null);
   // #96 — when set, Prayer Wall opens pre-filtered to just this mission
@@ -2616,8 +2675,12 @@ export default function App() {
   // An invite link (…/?from=friend) is remembered for this visit so the sign-up form can use it.
   useEffect(() => {
     try {
-      const from = new URLSearchParams(window.location.search).get("from");
+      const params = new URLSearchParams(window.location.search);
+      const from = params.get("from");
       if (from) sessionStorage.setItem("sendme_from", String(from).slice(0, 30));
+      // a church's own invite link/QR code (?from=church&c=<8 characters>): remember which church
+      const church = String(params.get("c") || "").toLowerCase();
+      if (isChurchRefCode(church)) sessionStorage.setItem("sendme_church", church);
     } catch {}
   }, []);
 
@@ -2638,8 +2701,7 @@ export default function App() {
       const u = session?.user ?? null;
       setUser(u); loadRole(u); setAuthReady(true);
     });
-    const {data:{subscription}} = supabase.auth.onAuthStateChange((event,session)=>{
-      if(event==="PASSWORD_RECOVERY") setRecovering(true);
+    const {data:{subscription}} = supabase.auth.onAuthStateChange((_,session)=>{
       const u = session?.user ?? null;
       setUser(u); loadRole(u);
     });
@@ -2665,7 +2727,7 @@ export default function App() {
         if(stored && String(stored.mission_id)===String(missionId)) amount = stored.amount;
         sessionStorage.removeItem("sendme_pending_donation");
       } catch {}
-      setPfReturn({ status: pf, amount });
+      setPfReturn({ status: pf, amount, missionId });
       window.history.replaceState({}, "", window.location.pathname);
     }
   },[]);
@@ -2739,7 +2801,7 @@ export default function App() {
         nav={{
           onProfile:()=>setScreen("profile"), onEmergency:()=>setScreen("emergency"), onFamilyNeed:()=>setScreen("family-needs"),
           onGeneralFund:()=>setScreen("general-fund"), onTestimonies:()=>openTestimonies(), onWorker:()=>setScreen("worker"),
-          onMatching:()=>setScreen("matching"), onQR:()=>setScreen("qr"), onFaq:()=>setScreen("faq"),
+          onMatching:()=>setScreen("matching"), onQR:()=>setScreen("qr"), onFlyer:()=>setScreen("flyer"), onFaq:()=>setScreen("faq"),
         }}
         adminNav={{
           onAdminChurchVerification:()=>setScreen("admin-church-verification"), onAdminWorkers:()=>setScreen("admin-workers"),
@@ -2758,8 +2820,7 @@ export default function App() {
   const handlePayfastDonate = (amt, guestInfo, type = "once") => startPaystackDonation({ mission: selectedMission, amount: amt, user, guestInfo, type });
 
   if(!authReady) return(<div style={{ minHeight:"100vh",background:"#060c18",display:"flex",alignItems:"center",justifyContent:"center" }}><div style={{ fontSize:48,color:"#e8b34b" }}>✝</div></div>);
-  if(recovering && user) return <ResetPassword onDone={()=>{ setRecovering(false); try{ window.history.replaceState({}, "", window.location.pathname); }catch{} }}/>;
-  if(pfReturn) return <PayfastResultScreen status={pfReturn.status} amount={pfReturn.amount} onContinue={()=>setPfReturn(null)}/>;
+  if(pfReturn) return <PayfastResultScreen status={pfReturn.status} amount={pfReturn.amount} missionId={pfReturn.missionId} onContinue={()=>setPfReturn(null)}/>;
   if(!user && !guest) return <Auth onLogin={(u)=>{ setUser(u); if(!localStorage.getItem("sendme_splash_seen")){ setShowSplash(true); } }} onGuest={()=>setGuest(true)}/>;
   if(showSplash) return <MissionVisionSplash onDone={()=>{ localStorage.setItem("sendme_splash_seen","1"); setShowSplash(false); }}/>;
 
@@ -2778,6 +2839,7 @@ export default function App() {
   if(screen==="matching")         return withNav(<MissionMatching missions={liveMissions} onMission={openMission} onBack={()=>setScreen("home")}/>);
   if(screen==="testimonies")      return withNav(<TestimonyEngine openId={testimonyOpenId} onBack={()=>setScreen("home")} onMission={openMission} onAddTestimony={isAdminUser ? openAdminTestimonies : undefined}/>);
   if(screen==="worker")           return withNav(guest ? <GuestBlocked title="Registration Required" message="Posting or responding to a worker request requires a SendMe account, so churches can coordinate and follow up directly. Please sign in or register to continue." onBack={()=>setScreen("home")} onRegister={()=>{setGuest(false);setScreen("home");}}/> : <SendAWorker onBack={()=>setScreen("home")} user={user}/>);
+  if(screen==="flyer")            return withNav(<ChurchFlyer onBack={()=>setScreen("home")} user={user} isAdmin={isAdminUser}/>);
   if(screen==="qr")               return withNav(<QRShare missions={liveMissions} onBack={()=>setScreen("home")}/>);
   if(screen==="milestone-proof")  return withNav(<ProofCenter onBack={()=>setScreen("home")} user={user} isAdmin={isAdminUser} isPastor={isPastor} initialTab="submit"/>);
   if(screen==="pastor-review")    return withNav((isPastor||isAdminUser) ? <ProofCenter onBack={()=>setScreen("home")} user={user} isAdmin={isAdminUser} isPastor={true} initialTab="approve"/> : <FAQScreen onBack={()=>setScreen("home")}/>);
@@ -2808,7 +2870,7 @@ export default function App() {
       onChurches={()=>setScreen("churches")} onProfile={()=>setScreen("profile")}
       onEmergency={()=>setScreen("emergency")} onEmergencyDetail={(id)=>{ setSelectedEmergencyId(id); setScreen("emergency"); }} onFamilyNeed={()=>setScreen("family-needs")} onGeneralFund={()=>setScreen("general-fund")} onMatching={()=>setScreen("matching")}
       onPray={()=>{ setPrayerWallFilterMissionId(null); setScreen("pray"); }} onTestimonies={()=>openTestimonies()} onOpenTestimony={(id)=>openTestimonies(id)}
-      onWorker={()=>setScreen("worker")} onQR={()=>setScreen("qr")}
+      onWorker={()=>setScreen("worker")} onQR={()=>setScreen("qr")} onFlyer={()=>setScreen("flyer")}
       onFaq={()=>setScreen("faq")}
       onPayout={()=>setScreen("payout")}
       onAdminPayouts={()=>setScreen("admin-payouts")}
