@@ -36,7 +36,7 @@ export default function AdminMonthlyReport({ onBack, user }) {
         const [missionsApproved, missionsCompleted, donations, emergenciesApproved, churchesVerified, optedInCount] = await Promise.all([
           supabase.from("missions").select("id, title, country, goal").eq("status", "active").gte("reviewed_at", rangeStart).lt("reviewed_at", rangeEnd),
           supabase.from("missions").select("id, title, country").eq("status", "complete").gte("reviewed_at", rangeStart).lt("reviewed_at", rangeEnd),
-          supabase.from("donations").select("amount, kind, status").gte("created_at", rangeStart).lt("created_at", rangeEnd).eq("status", "completed"),
+          supabase.from("donations").select("amount, kind, status").gte("created_at", rangeStart).lt("created_at", rangeEnd).in("status", ["complete", "completed"]),   // the Paystack webhook writes "complete"
           supabase.from("emergency_requests").select("id, title, country").eq("status", "active").gte("reviewed_at", rangeStart).lt("reviewed_at", rangeEnd),
           supabase.from("churches").select("id, name, country").eq("verified", true).gte("created_at", rangeStart).lt("created_at", rangeEnd),
           // Newsletter recipient count — shown before sending so admin knows
