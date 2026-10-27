@@ -44,7 +44,16 @@ export default function AdminMonthlyReport({ onBack, user }) {
           supabase.from("profiles").select("id", { count: "exact", head: true }).eq("newsletter_optin", true),
         ]);
 
-        const donationRows = donations.data || [];
+        // Bank-transfer (EFT) gifts live in their own table and only count once the admin has pressed
+        // "Money arrived" — they are never also in `donations`, so adding them here cannot double count.
+        // If that table can't be read, the report still works with card gifts alone.
+        let eftRows = [];
+        try {
+          const eft = await supabase.from("eft_donations").select("confirmed_amount_usd, kind")
+            .eq("status", "confirmed").gte("confirmed_at", rangeStart).lt("confirmed_at", rangeEnd);
+          if (!eft.error) eftRows = (eft.data || []).map(r => ({ amount: r.confirmed_amount_usd, kind: r.kind }));
+        } catch (_e) { /* ignore */ }
+        const donationRows = [...(donations.data || []), ...eftRows];
         const totalRaised = donationRows.reduce((sum, d) => sum + (Number(d.amount) || 0), 0);
         const missionDonations = donationRows.filter(d => d.kind !== "emergency").length;
         const emergencyDonations = donationRows.filter(d => d.kind === "emergency").length;
