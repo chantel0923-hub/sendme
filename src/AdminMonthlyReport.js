@@ -74,7 +74,39 @@ export default function AdminMonthlyReport({ onBack, user }) {
             .filter(t => t.mission && (t.story || t.before_text || t.after_text));
         }
 
+        // "Fruit that remains": missions completed, souls reached, Bibles-Message Books given out and churches
+        // planted — for this month and in total. Souls / books / churches are added up the same way as on the
+        // Testimonies page: a published admin testimony linked to a completed mission replaces that mission's own
+        // figures, and published testimonies not linked to a completed mission add their own on top.
+        let fruit = null;
+        try {
+          const [allDone, adm] = await Promise.all([
+            supabase.from("missions").select("id, souls, bibles, churches_planted").eq("status", "complete"),
+            supabase.from("admin_testimonies").select("id, mission_id, souls, bibles, churches").eq("published", true).order("created_at", { ascending: false }),
+          ]);
+          if (!allDone.error) {
+            const adminRows = adm.error ? [] : (adm.data || []);
+            const enrichFor = {};
+            adminRows.forEach(a => { if (a.mission_id && !enrichFor[a.mission_id]) enrichFor[a.mission_id] = a; });
+            const used = new Set();
+            const missionFigures = (allDone.data || []).map(m => {
+              const a = enrichFor[m.id];
+              if (a) used.add(a.id);
+              return { id: m.id, souls: a?.souls ?? m.souls ?? 0, bibles: a?.bibles ?? m.bibles ?? 0, churches: a?.churches ?? m.churches_planted ?? 0 };
+            });
+            const standAlone = adminRows.filter(a => !used.has(a.id)).map(a => ({ souls: a.souls || 0, bibles: a.bibles || 0, churches: a.churches || 0 }));
+            const add = (list, k) => list.reduce((sum, r) => sum + (Number(r[k]) || 0), 0);
+            const monthIds = new Set(completedMissions.map(m => m.id));
+            const monthFigures = missionFigures.filter(r => monthIds.has(r.id));
+            fruit = {
+              month: { missions: completedMissions.length, souls: add(monthFigures, "souls"), bibles: add(monthFigures, "bibles"), churches: add(monthFigures, "churches") },
+              total: { missions: missionFigures.length, souls: add([...missionFigures, ...standAlone], "souls"), bibles: add([...missionFigures, ...standAlone], "bibles"), churches: add([...missionFigures, ...standAlone], "churches") },
+            };
+          }
+        } catch (_e) { /* the report still works without these figures */ }
+
         setStats({
+          fruit,
           missionsApproved: missionsApproved.data || [],
           missionsCompleted: completedMissions,
           emergenciesApproved: emergenciesApproved.data || [],
@@ -123,6 +155,18 @@ export default function AdminMonthlyReport({ onBack, user }) {
       `⛪ Churches verified this month (${stats.churchesVerified.length}):`,
       ...stats.churchesVerified.map(c => `  • ${c.name} — ${c.country}`),
       "",
+      ...(stats.fruit ? [
+        `🌱 FRUIT THAT REMAINS`,
+        `This month — ${stats.fruit.month.missions} mission${stats.fruit.month.missions !== 1 ? "s" : ""} completed:`,
+        `  🙏 ${fmt(stats.fruit.month.souls)} souls reached`,
+        `  📖 ${fmt(stats.fruit.month.bibles)} Bibles-Message Books given out`,
+        `  ⛪ ${fmt(stats.fruit.month.churches)} church${stats.fruit.month.churches !== 1 ? "es" : ""} planted`,
+        `So far in total — ${stats.fruit.total.missions} mission${stats.fruit.total.missions !== 1 ? "s" : ""} completed:`,
+        `  🙏 ${fmt(stats.fruit.total.souls)} souls reached`,
+        `  📖 ${fmt(stats.fruit.total.bibles)} Bibles-Message Books given out`,
+        `  ⛪ ${fmt(stats.fruit.total.churches)} church${stats.fruit.total.churches !== 1 ? "es" : ""} planted`,
+        "",
+      ] : []),
       `📖 See these testimonies and more, and give toward what God is doing:`,
       `${siteUrl}/testimonies`,
       "",
@@ -192,6 +236,18 @@ export default function AdminMonthlyReport({ onBack, user }) {
 
               <div style="font-size:16px;font-weight:700;color:#eef1ff;margin-bottom:12px;">Missions Completed This Month</div>
               <ul style="font-size:13px;color:rgba(255,255,255,0.7);line-height:1.8;padding-left:20px;margin:0 0 24px;">${missionRows}</ul>
+
+              ${stats.fruit ? `
+              <div style="font-size:16px;font-weight:700;color:#eef1ff;margin-bottom:12px;">Fruit That Remains</div>
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+                <tr>
+                  <td width="25%" align="center" style="padding:12px 4px;border:1px solid rgba(255,255,255,0.08);"><div style="font-size:20px;font-weight:700;color:#3ecf8e;">${stats.fruit.total.missions}</div><div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:4px;">Missions completed</div></td>
+                  <td width="25%" align="center" style="padding:12px 4px;border:1px solid rgba(255,255,255,0.08);"><div style="font-size:20px;font-weight:700;color:#e8b34b;">${fmt(stats.fruit.total.souls)}</div><div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:4px;">Souls reached</div></td>
+                  <td width="25%" align="center" style="padding:12px 4px;border:1px solid rgba(255,255,255,0.08);"><div style="font-size:20px;font-weight:700;color:#5b9cf6;">${fmt(stats.fruit.total.bibles)}</div><div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:4px;">Bibles-Message Books given out</div></td>
+                  <td width="25%" align="center" style="padding:12px 4px;border:1px solid rgba(255,255,255,0.08);"><div style="font-size:20px;font-weight:700;color:#3ecf8e;">${fmt(stats.fruit.total.churches)}</div><div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:4px;">Churches planted</div></td>
+                </tr>
+              </table>
+              <div style="font-size:12px;color:rgba(255,255,255,0.45);margin:-12px 0 24px;text-align:center;">This month: ${fmt(stats.fruit.month.souls)} souls · ${fmt(stats.fruit.month.bibles)} books · ${fmt(stats.fruit.month.churches)} church${stats.fruit.month.churches !== 1 ? "es" : ""} planted</div>` : ""}
 
               ${testimonyBlocks ? `<div style="font-size:16px;font-weight:700;color:#eef1ff;margin-bottom:12px;">Testimonies</div>${testimonyBlocks}` : ""}
 
