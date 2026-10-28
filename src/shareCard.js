@@ -157,7 +157,7 @@ function renderReportCard(ctx, data, qrRows) {
   const m = data.month || {}, t = data.total || {};
   ctx.textAlign = "left";
   ctx.font = `bold 28px ${SERIF}`; spacing(ctx, 6); ctx.fillStyle = GOLD;
-  ctx.fillText("MONTHLY REPORT", 80, 350); spacing(ctx, 0);
+  ctx.fillText("MONTHLY MISSIONARY REPORT", 80, 350); spacing(ctx, 0);
   ctx.fillStyle = INK; ctx.font = `bold 76px ${SERIF}`;
   wrapLines(ctx, data.title || "", 920, 1).forEach((l) => ctx.fillText(l, 80, 432));
 
@@ -284,7 +284,7 @@ export async function buildShareImage(kind, data, env = {}) {
     else reject(new Error("no image"));
   });
   const caption = kind === "report"
-    ? `SendMe monthly report — ${data.title} ✝\n\nSee what God is doing through faithful believers worldwide. Please forward this to a fellow believer, and give toward the work:\n${data.link}`
+    ? `SendMe monthly missionary report — ${data.title} ✝\n\nSee what God is doing through faithful believers worldwide. Please forward this to a fellow believer, and give toward the work:\n${data.link}`
     : kind === "testimony"
     ? `Praise report: ${data.title} 🙏\n\nRead the full testimony and be part of what God is doing:\n${data.link}`
     : `Help support this mission: ${data.title} 🙏\n\nGive by card or bank transfer:\n${data.link}`;

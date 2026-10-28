@@ -153,7 +153,7 @@ export default function AdminMonthlyReport({ onBack, user }) {
     if (!stats) return "";
     const siteUrl = "https://sendmeglobalmission.org";
     const lines = [
-      `✝ SENDME MONTHLY REPORT — ${monthLabel(target).toUpperCase()}`,
+      `✝ SENDME MONTHLY MISSIONARY REPORT — ${monthLabel(target).toUpperCase()}`,
       "",
       `💰 Total raised: $${fmt(stats.totalRaised)} across ${stats.donationCount} gift${stats.donationCount !== 1 ? "s" : ""}`,
       "",
