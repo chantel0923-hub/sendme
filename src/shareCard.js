@@ -107,8 +107,8 @@ function drawTrio(ctx, hero, y, h) {
   });
 }
 
-function drawQrPanel(ctx, qrRows, caption) {
-  const x = 80, y = 1470, w = 920, h = 330;
+function drawQrPanel(ctx, qrRows, caption, panelY = 1470) {
+  const x = 80, y = panelY, w = 920, h = 330;
   ctx.fillStyle = "rgba(255,255,255,0.05)"; roundRect(ctx, x, y, w, h, 30); ctx.fill();
   ctx.strokeStyle = "rgba(232,179,75,0.35)"; ctx.lineWidth = 2; roundRect(ctx, x, y, w, h, 30); ctx.stroke();
   if (qrRows) {
@@ -137,8 +137,56 @@ function drawMeta(ctx, y, place, by) {
   return y;
 }
 
-// kind: "mission" | "testimony". images: { hero: [Image|null ×3], photo: Image|null }
+// One rounded number tile: big value on top, small label under it.
+function drawStatTile(ctx, x, y, w, h, value, label, color) {
+  ctx.fillStyle = "rgba(255,255,255,0.04)"; roundRect(ctx, x, y, w, h, 22); ctx.fill();
+  ctx.strokeStyle = color + "66"; ctx.lineWidth = 2; roundRect(ctx, x, y, w, h, 22); ctx.stroke();
+  ctx.textAlign = "center";
+  ctx.fillStyle = color; ctx.font = `bold 54px ${SERIF}`; ctx.fillText(String(value), x + w / 2, y + h * 0.56);
+  ctx.fillStyle = MUTED; ctx.font = `25px ${SERIF}`; ctx.fillText(label, x + w / 2, y + h - 22);
+  ctx.textAlign = "left";
+}
+
+// The monthly report picture: this month's numbers, the running totals, churches registered, a call to
+// forward it and give, and a QR code.  data: { title, raised, gifts, month:{missions,souls,bibles,churches},
+// total:{missions,souls,bibles,churches}, churchesRegistered, link }
+function renderReportCard(ctx, data, qrRows) {
+  drawBackground(ctx);
+  drawHeader(ctx);
+  const num = (n) => String(Math.round(Number(n) || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  const m = data.month || {}, t = data.total || {};
+  ctx.textAlign = "left";
+  ctx.font = `bold 28px ${SERIF}`; spacing(ctx, 6); ctx.fillStyle = GOLD;
+  ctx.fillText("MONTHLY REPORT", 80, 350); spacing(ctx, 0);
+  ctx.fillStyle = INK; ctx.font = `bold 76px ${SERIF}`;
+  wrapLines(ctx, data.title || "", 920, 1).forEach((l) => ctx.fillText(l, 80, 432));
+
+  // ── this month ──
+  ctx.font = `bold 26px ${SERIF}`; spacing(ctx, 5); ctx.fillStyle = MUTED; ctx.fillText("THIS MONTH", 80, 500); spacing(ctx, 0);
+  drawStatTile(ctx, 80, 520, 920, 128, money(data.raised), `raised from ${num(data.gifts)} gift${Number(data.gifts) === 1 ? "" : "s"}`, GREEN);
+  const half = 448, gap = 24, x2 = 80 + half + gap;
+  drawStatTile(ctx, 80, 672, half, 128, num(m.missions), "Missions completed", GOLD);
+  drawStatTile(ctx, x2, 672, half, 128, num(m.souls), "Souls reached", GOLD);
+  drawStatTile(ctx, 80, 824, half, 128, num(m.bibles), "Bibles-Message Books", GOLD);
+  drawStatTile(ctx, x2, 824, half, 128, num(m.churches), "Churches planted", GOLD);
+
+  // ── so far in total ──
+  ctx.font = `bold 26px ${SERIF}`; spacing(ctx, 5); ctx.fillStyle = MUTED; ctx.fillText("SO FAR IN TOTAL", 80, 1022); spacing(ctx, 0);
+  drawStatTile(ctx, 80, 1042, half, 128, num(t.missions), "Missions completed", "#5b9cf6");
+  drawStatTile(ctx, x2, 1042, half, 128, num(t.souls), "Souls reached", "#5b9cf6");
+  drawStatTile(ctx, 80, 1194, half, 128, num(t.bibles), "Bibles-Message Books", "#5b9cf6");
+  drawStatTile(ctx, x2, 1194, half, 128, num(t.churches), "Churches planted", "#5b9cf6");
+  drawStatTile(ctx, 80, 1346, 920, 128, num(data.churchesRegistered), "Churches registered on SendMe", GREEN);
+
+  ctx.textAlign = "center"; ctx.fillStyle = INK; ctx.font = `bold 32px ${SERIF}`;
+  ctx.fillText("Please forward this to a fellow believer", CARD_W / 2, 1516);
+  ctx.textAlign = "left";
+  drawQrPanel(ctx, qrRows, "Scan to give and read the testimonies", 1538);
+}
+
+// kind: "mission" | "testimony" | "report". images: { hero: [Image|null ×3], photo: Image|null }
 export function renderCard(ctx, kind, data, images = {}, qrRows = null) {
+  if (kind === "report") return renderReportCard(ctx, data, qrRows);
   drawBackground(ctx);
   drawHeader(ctx);
   const isTestimony = kind === "testimony";
@@ -212,7 +260,7 @@ export async function renderCardToCanvas(canvas, kind, data, env = {}) {
   const getQr = env.qrMatrix || qrMatrix;
   canvas.width = CARD_W; canvas.height = CARD_H;
   const [hero, photo, qrRows] = await Promise.all([
-    Promise.all(HERO_IMAGES.map((s) => loadImage(s))),
+    kind === "report" ? Promise.resolve([]) : Promise.all(HERO_IMAGES.map((s) => loadImage(s))),
     kind === "testimony" && data.photo ? loadImage(data.photo) : Promise.resolve(null),
     getQr(data.link).catch(() => null),
   ]);
@@ -230,10 +278,12 @@ export async function buildShareImage(kind, data, env = {}) {
     if (canvas.toBlob) canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("no image"))), "image/jpeg", 0.92);
     else reject(new Error("no image"));
   });
-  const caption = kind === "testimony"
+  const caption = kind === "report"
+    ? `SendMe monthly report — ${data.title} ✝\n\nSee what God is doing through faithful believers worldwide. Please forward this to a fellow believer, and give toward the work:\n${data.link}`
+    : kind === "testimony"
     ? `Praise report: ${data.title} 🙏\n\nRead the full testimony and be part of what God is doing:\n${data.link}`
     : `Help support this mission: ${data.title} 🙏\n\nGive by card or bank transfer:\n${data.link}`;
-  return { blob, filename: `sendme-${slug(data.title)}.jpg`, caption };
+  return { blob, filename: kind === "report" ? `sendme-report-${slug(data.title)}.jpg` : `sendme-${slug(data.title)}.jpg`, caption };
 }
 
 // Opens the phone's share sheet with the picture (choose WhatsApp → My status or a chat). Where that isn't
@@ -289,6 +339,17 @@ export function testimonyCardData(t) {
     ],
     photo: photos[0] || null,
     link: isMission && t.id ? missionLink(t.id) : siteLink(),
+  };
+}
+
+// The monthly report numbers (from the Admin → Monthly Report screen) as card data.
+export function reportCardData({ title, raised, gifts, fruit, churchesRegistered }) {
+  const z = { missions: 0, souls: 0, bibles: 0, churches: 0 };
+  return {
+    title, raised: raised || 0, gifts: gifts || 0,
+    month: (fruit && fruit.month) || z, total: (fruit && fruit.total) || z,
+    churchesRegistered: churchesRegistered || 0,
+    link: siteLink(),
   };
 }
 

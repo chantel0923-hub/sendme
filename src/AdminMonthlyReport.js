@@ -6,6 +6,8 @@
 // and voice stay entirely with whoever writes the report.
 import { useState, useEffect } from "react";
 import { supabase } from "./supabase";
+import ShareImageButton from "./ShareImageButton";
+import { reportCardData } from "./shareCard";
 
 const fmt = (n) => String(Math.round(n || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 
@@ -80,9 +82,11 @@ export default function AdminMonthlyReport({ onBack, user }) {
         // figures, and published testimonies not linked to a completed mission add their own on top.
         let fruit = null;
         try {
-          const [allDone, adm] = await Promise.all([
+          const [allDone, adm, regChurches] = await Promise.all([
             supabase.from("missions").select("id, souls, bibles, churches_planted").eq("status", "complete"),
             supabase.from("admin_testimonies").select("id, mission_id, souls, bibles, churches").eq("published", true).order("created_at", { ascending: false }),
+            // every verified church on SendMe (all time) — the "churches registered" figure
+            supabase.from("churches").select("id", { count: "exact", head: true }).eq("verified", true),
           ]);
           if (!allDone.error) {
             const adminRows = adm.error ? [] : (adm.data || []);
@@ -99,6 +103,7 @@ export default function AdminMonthlyReport({ onBack, user }) {
             const monthIds = new Set(completedMissions.map(m => m.id));
             const monthFigures = missionFigures.filter(r => monthIds.has(r.id));
             fruit = {
+              churchesRegistered: regChurches.error ? 0 : (regChurches.count || 0),
               month: { missions: completedMissions.length, souls: add(monthFigures, "souls"), bibles: add(monthFigures, "bibles"), churches: add(monthFigures, "churches") },
               total: { missions: missionFigures.length, souls: add([...missionFigures, ...standAlone], "souls"), bibles: add([...missionFigures, ...standAlone], "bibles"), churches: add([...missionFigures, ...standAlone], "churches") },
             };
@@ -165,6 +170,7 @@ export default function AdminMonthlyReport({ onBack, user }) {
         `  🙏 ${fmt(stats.fruit.total.souls)} souls reached`,
         `  📖 ${fmt(stats.fruit.total.bibles)} Bibles-Message Books given out`,
         `  ⛪ ${fmt(stats.fruit.total.churches)} church${stats.fruit.total.churches !== 1 ? "es" : ""} planted`,
+        `⛪ ${fmt(stats.fruit.churchesRegistered)} churches registered on SendMe`,
         "",
       ] : []),
       `📖 See these testimonies and more, and give toward what God is doing:`,
@@ -247,7 +253,8 @@ export default function AdminMonthlyReport({ onBack, user }) {
                   <td width="25%" align="center" style="padding:12px 4px;border:1px solid rgba(255,255,255,0.08);"><div style="font-size:20px;font-weight:700;color:#3ecf8e;">${fmt(stats.fruit.total.churches)}</div><div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:4px;">Churches planted</div></td>
                 </tr>
               </table>
-              <div style="font-size:12px;color:rgba(255,255,255,0.45);margin:-12px 0 24px;text-align:center;">This month: ${fmt(stats.fruit.month.souls)} souls · ${fmt(stats.fruit.month.bibles)} books · ${fmt(stats.fruit.month.churches)} church${stats.fruit.month.churches !== 1 ? "es" : ""} planted</div>` : ""}
+              <div style="font-size:12px;color:rgba(255,255,255,0.45);margin:-12px 0 24px;text-align:center;">This month: ${fmt(stats.fruit.month.souls)} souls · ${fmt(stats.fruit.month.bibles)} books · ${fmt(stats.fruit.month.churches)} church${stats.fruit.month.churches !== 1 ? "es" : ""} planted</div>
+              <div style="font-size:12px;color:rgba(255,255,255,0.45);margin:-16px 0 24px;text-align:center;">${fmt(stats.fruit.churchesRegistered)} churches registered on SendMe</div>` : ""}
 
               ${testimonyBlocks ? `<div style="font-size:16px;font-weight:700;color:#eef1ff;margin-bottom:12px;">Testimonies</div>${testimonyBlocks}` : ""}
 
@@ -335,9 +342,20 @@ export default function AdminMonthlyReport({ onBack, user }) {
               </div>
             </div>
 
-            <button onClick={copyReport} style={{ width: "100%", padding: "13px 0", borderRadius: 12, border: "none", background: copied ? "rgba(62,207,142,0.15)" : "linear-gradient(135deg,#e8b34b,#c8942b)", color: copied ? "#3ecf8e" : "#000", fontWeight: 700, cursor: "pointer", fontSize: 14, fontFamily: "Georgia, serif", marginBottom: 24 }}>
+            <button onClick={copyReport} style={{ width: "100%", padding: "13px 0", borderRadius: 12, border: "none", background: copied ? "rgba(62,207,142,0.15)" : "linear-gradient(135deg,#e8b34b,#c8942b)", color: copied ? "#3ecf8e" : "#000", fontWeight: 700, cursor: "pointer", fontSize: 14, fontFamily: "Georgia, serif", marginBottom: 12 }}>
               {copied ? "✓ Copied — paste into WhatsApp" : "📋 Copy Report Draft"}
             </button>
+            {stats.fruit && (
+              <div style={{ marginBottom: 24 }}>
+                <ShareImageButton
+                  block
+                  kind="report"
+                  label="🖼 Share monthly report as image (WhatsApp)"
+                  getData={() => reportCardData({ title: monthLabel(target), raised: stats.totalRaised, gifts: stats.donationCount, fruit: stats.fruit, churchesRegistered: stats.fruit.churchesRegistered })}
+                  style={{ padding: "13px 18px", borderRadius: 12 }}
+                />
+              </div>
+            )}
 
             <div style={{ background: "#0c1628", borderRadius: 14, border: "1px solid rgba(255,255,255,0.07)", padding: "16px 18px", whiteSpace: "pre-wrap", fontSize: 12.5, color: "rgba(255,255,255,0.6)", lineHeight: 1.7, fontFamily: "monospace" }}>
               {buildReportText()}
