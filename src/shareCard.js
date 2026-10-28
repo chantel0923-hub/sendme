@@ -172,6 +172,11 @@ function renderReportCard(ctx, data, qrRows) {
 
   // ── so far in total ──
   ctx.font = `bold 26px ${SERIF}`; spacing(ctx, 5); ctx.fillStyle = MUTED; ctx.fillText("SO FAR IN TOTAL", 80, 1022); spacing(ctx, 0);
+  if (Number(t.selfFunded) > 0) {   // some of the completed missions were paid for from outside SendMe
+    ctx.textAlign = "right"; ctx.font = `24px ${SERIF}`; ctx.fillStyle = MUTED;
+    ctx.fillText(`includes ${num(t.selfFunded)} self-funded`, 1000, 1022);
+    ctx.textAlign = "left";
+  }
   drawStatTile(ctx, 80, 1042, half, 128, num(t.missions), "Missions completed", "#5b9cf6");
   drawStatTile(ctx, x2, 1042, half, 128, num(t.souls), "Souls reached", "#5b9cf6");
   drawStatTile(ctx, 80, 1194, half, 128, num(t.bibles), "Bibles-Message Books", "#5b9cf6");

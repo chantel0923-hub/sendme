@@ -82,11 +82,13 @@ export default function AdminMonthlyReport({ onBack, user }) {
         // figures, and published testimonies not linked to a completed mission add their own on top.
         let fruit = null;
         try {
-          const [allDone, adm, regChurches] = await Promise.all([
-            supabase.from("missions").select("id, souls, bibles, churches_planted").eq("status", "complete"),
+          const [allDone, adm, regChurches, gfLog] = await Promise.all([
+            supabase.from("missions").select("id, souls, bibles, churches_planted, funded_outside").eq("status", "complete"),
             supabase.from("admin_testimonies").select("id, mission_id, souls, bibles, churches").eq("published", true).order("created_at", { ascending: false }),
             // every verified church on SendMe (all time) — the "churches registered" figure
             supabase.from("churches").select("id", { count: "exact", head: true }).eq("verified", true),
+            // General Fund payouts that have a testimony — the Testimonies page counts these as completed missions too
+            supabase.from("general_fund_log").select("id", { count: "exact", head: true }).eq("type", "disbursement"),
           ]);
           if (!allDone.error) {
             const adminRows = adm.error ? [] : (adm.data || []);
@@ -100,12 +102,19 @@ export default function AdminMonthlyReport({ onBack, user }) {
             });
             const standAlone = adminRows.filter(a => !used.has(a.id)).map(a => ({ souls: a.souls || 0, bibles: a.bibles || 0, churches: a.churches || 0 }));
             const add = (list, k) => list.reduce((sum, r) => sum + (Number(r[k]) || 0), 0);
+            // "Missions completed" in total = everything on the Testimonies page: missions marked complete, plus
+            // testimonies written for missions that are not in the missions list, plus General Fund payouts.
+            // Self-funded = carried out with funding from outside SendMe (missions flagged so, and stand-alone testimonies).
+            const gfCount = gfLog.error ? 0 : (gfLog.count || 0);
+            const doneRows = allDone.data || [];
+            const selfFunded = doneRows.filter(m => m.funded_outside).length + standAlone.length;
+            const sendmeFunded = doneRows.filter(m => !m.funded_outside).length;
             const monthIds = new Set(completedMissions.map(m => m.id));
             const monthFigures = missionFigures.filter(r => monthIds.has(r.id));
             fruit = {
               churchesRegistered: regChurches.error ? 0 : (regChurches.count || 0),
               month: { missions: completedMissions.length, souls: add(monthFigures, "souls"), bibles: add(monthFigures, "bibles"), churches: add(monthFigures, "churches") },
-              total: { missions: missionFigures.length, souls: add([...missionFigures, ...standAlone], "souls"), bibles: add([...missionFigures, ...standAlone], "bibles"), churches: add([...missionFigures, ...standAlone], "churches") },
+              total: { missions: missionFigures.length + standAlone.length + gfCount, selfFunded, sendmeFunded, generalFund: gfCount, souls: add([...missionFigures, ...standAlone], "souls"), bibles: add([...missionFigures, ...standAlone], "bibles"), churches: add([...missionFigures, ...standAlone], "churches") },
             };
           }
         } catch (_e) { /* the report still works without these figures */ }
@@ -170,6 +179,9 @@ export default function AdminMonthlyReport({ onBack, user }) {
         `  🙏 ${fmt(stats.fruit.total.souls)} souls reached`,
         `  📖 ${fmt(stats.fruit.total.bibles)} Bibles-Message Books given out`,
         `  ⛪ ${fmt(stats.fruit.total.churches)} church${stats.fruit.total.churches !== 1 ? "es" : ""} planted`,
+        ...(stats.fruit.total.sendmeFunded > 0 ? [`  ✅ ${fmt(stats.fruit.total.sendmeFunded)} funded through SendMe gifts`] : []),
+        ...(stats.fruit.total.generalFund > 0 ? [`  💝 ${fmt(stats.fruit.total.generalFund)} funded from the General Fund`] : []),
+        ...(stats.fruit.total.selfFunded > 0 ? [`  🤝 ${fmt(stats.fruit.total.selfFunded)} self-funded — carried out with funding from outside SendMe`] : []),
         `⛪ ${fmt(stats.fruit.churchesRegistered)} churches registered on SendMe`,
         "",
       ] : []),
@@ -254,7 +266,7 @@ export default function AdminMonthlyReport({ onBack, user }) {
                 </tr>
               </table>
               <div style="font-size:12px;color:rgba(255,255,255,0.45);margin:-12px 0 24px;text-align:center;">This month: ${fmt(stats.fruit.month.souls)} souls · ${fmt(stats.fruit.month.bibles)} books · ${fmt(stats.fruit.month.churches)} church${stats.fruit.month.churches !== 1 ? "es" : ""} planted</div>
-              <div style="font-size:12px;color:rgba(255,255,255,0.45);margin:-16px 0 24px;text-align:center;">${fmt(stats.fruit.churchesRegistered)} churches registered on SendMe</div>` : ""}
+              <div style="font-size:12px;color:rgba(255,255,255,0.45);margin:-16px 0 24px;text-align:center;">${fmt(stats.fruit.churchesRegistered)} churches registered on SendMe${stats.fruit.total.selfFunded > 0 ? `<br/>${fmt(stats.fruit.total.missions)} missions completed in total, including ${fmt(stats.fruit.total.selfFunded)} self-funded` : ""}</div>` : ""}
 
               ${testimonyBlocks ? `<div style="font-size:16px;font-weight:700;color:#eef1ff;margin-bottom:12px;">Testimonies</div>${testimonyBlocks}` : ""}
 
