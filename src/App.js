@@ -640,7 +640,8 @@ const DonateScreen = ({ mission: m, onBack, onPayfast, user, onBrowseMissions })
   // from a stale mission card). Guard here rather than only at the button
   // in MissionDetail, since this screen is the one that actually accepts
   // payment.
-  const isFullyFunded = m.fundingTarget > 0 && m.raised >= m.fundingTarget;
+  const isCompleted = m.status === "complete";   // a finished mission no longer takes gifts
+  const isFullyFunded = isCompleted || (m.fundingTarget > 0 && m.raised >= m.fundingTarget);
   const [donateTab,setDonateTab] = useState("once");   // once | monthly
   const [amt,setAmt]             = useState("");
   const [monthly,setMonthly]     = useState(null);
@@ -702,9 +703,11 @@ const DonateScreen = ({ mission: m, onBack, onPayfast, user, onBrowseMissions })
         <div style={{ maxWidth:600,margin:"0 auto",padding:"32px 20px",display:"flex",flexDirection:"column",gap:20 }}>
           <div style={{ background:"rgba(62,207,142,0.08)",borderRadius:18,border:"1px solid rgba(62,207,142,0.25)",padding:"32px 24px",textAlign:"center" }}>
             <div style={{ fontSize:40,marginBottom:12 }}>🎉</div>
-            <div style={{ fontSize:19,fontWeight:700,color:"#eef1ff",marginBottom:10 }}>This mission's goal has been fully funded!</div>
+            <div style={{ fontSize:19,fontWeight:700,color:"#eef1ff",marginBottom:10 }}>{isCompleted ? "This mission has been completed!" : "This mission's goal has been fully funded!"}</div>
             <div style={{ fontSize:14,color:"rgba(255,255,255,0.5)",lineHeight:1.7,marginBottom:8 }}>
-              Thanks to generous givers like you, <strong style={{ color:"#3ecf8e" }}>{m.protected?"this mission":m.name}</strong> has reached its ${fmt(m.fundingTarget)} goal.
+              {isCompleted
+                ? <><strong style={{ color:"#3ecf8e" }}>{m.protected?"This mission":m.name}</strong> has been carried out and is no longer taking gifts.</>
+                : <>Thanks to generous givers like you, <strong style={{ color:"#3ecf8e" }}>{m.protected?"this mission":m.name}</strong> has reached its ${fmt(m.fundingTarget)} goal.</>}
             </div>
             <div style={{ fontSize:13,color:"rgba(255,255,255,0.35)" }}>Your gift can go even further supporting a mission still in need.</div>
           </div>
@@ -1122,9 +1125,9 @@ const MissionDetail = ({ mission: m, onBack, onDonate, onLedger, user, userRole,
                 another mission instead of continuing to solicit gifts here.
                 (DonateScreen also guards this directly for anyone who gets
                 there another way — this is just the primary path.) */}
-            {m.fundingTarget > 0 && m.raised >= m.fundingTarget ? (
+            {m.status === "complete" || (m.fundingTarget > 0 && m.raised >= m.fundingTarget) ? (
               <button onClick={onBrowseMissions} style={{ padding:"16px 0",borderRadius:14,border:"none",background:"linear-gradient(135deg,#3ecf8e,#2fa06d)",color:"#000",fontWeight:700,cursor:"pointer",fontSize:16,fontFamily:"Georgia, serif",boxShadow:"0 6px 28px rgba(62,207,142,0.3)" }}>
-                🎉 Goal Reached — Support Another Mission
+                {m.status === "complete" ? "✝ Mission Completed — Support Another Mission" : "🎉 Goal Reached — Support Another Mission"}
               </button>
             ) : (
               <button onClick={onDonate} style={{ padding:"16px 0",borderRadius:14,border:"none",background:`linear-gradient(135deg,${m.color},${m.color}cc)`,color:"#000",fontWeight:700,cursor:"pointer",fontSize:16,fontFamily:"Georgia, serif",boxShadow:`0 6px 28px ${m.color}44` }}>

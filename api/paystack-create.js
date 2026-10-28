@@ -81,6 +81,24 @@ export default async function handler(req, res) {
     }
     if (!email) return res.status(400).json({ error: "An email address is required to give via Paystack" });
 
+    // A mission that is no longer "active" (completed, closed early, cancelled…) must not take new gifts,
+    // even if a donor still has an old page or link open. Same rule as confirm_eft_donation for bank transfers.
+    if (!isEmergency && !isFamilyNeed && !isGeneralFund) {
+      try {
+        const sb = createClient(process.env.REACT_APP_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+        const { data: missionRow, error: missionErr } = await sb.from("missions").select("status").eq("id", targetId).maybeSingle();
+        if (missionErr) {
+          console.error("paystack-create: mission status lookup failed (letting the gift through)", missionErr);
+        } else if (!missionRow) {
+          return res.status(404).json({ error: "That mission could not be found." });
+        } else if (missionRow.status !== "active") {
+          return res.status(409).json({ error: "This mission is no longer open for giving. Please choose another mission." });
+        }
+      } catch (guardErr) {
+        console.error("paystack-create: mission status check threw (letting the gift through)", guardErr);
+      }
+    }
+
     let zarAmount;
     try {
       zarAmount = await convertUSDtoZAR(amt);
