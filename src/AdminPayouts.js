@@ -33,6 +33,31 @@ export default function AdminPayouts({ onBack }) {
 
   useEffect(() => { load(); }, []);
 
+  // Today's dollar-to-Rand rate, so each amount to pay also shows roughly what it is in Rand.
+  // Same free rate source the card-payment page uses; tries today, yesterday, then a backup address.
+  const [zar, setZar] = useState(null);   // { rate } once fetched
+  useEffect(() => {
+    let cancelled = false;
+    const day = (d) => d.toISOString().split("T")[0];
+    const urls = [
+      `https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@${day(new Date())}/v1/currencies/usd.json`,
+      `https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@${day(new Date(Date.now() - 86400000))}/v1/currencies/usd.json`,
+      "https://latest.currency-api.pages.dev/v1/currencies/usd.json",
+    ];
+    (async () => {
+      for (const u of urls) {
+        try {
+          const r = await fetch(u);
+          if (!r.ok) continue;
+          const j = await r.json();
+          const rate = j && j.usd && j.usd.zar;
+          if (rate > 0) { if (!cancelled) setZar({ rate }); return; }
+        } catch (_e) { /* try the next address */ }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   const load = async () => {
     setLoading(true);
     setError("");
@@ -321,7 +346,22 @@ export default function AdminPayouts({ onBack }) {
     };
   });
   const closuresToPay = closureRows.filter(r => r.disposition === "pay_pastor" && r.payoutStatus === "pending");
+  // The Early closes tab lists every closure; the Paid tab also lists the early closes that have been paid to the pastor.
+  const closureCards = filter === "paid" ? closureRows.filter(r => r.disposition === "pay_pastor" && r.isPaid) : closureRows;
   const money2 = (n) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtC = (n) => { const v = Math.round((Number(n) || 0) * 100) / 100; return Number.isInteger(v) ? fmt(v) : money2(v); };
+  // "≈ R386.10 at R16.50 per $ · estimate" under a dollar amount that still has to be paid.
+  const zarNote = (usd, extra = {}) => {
+    const amt = Number(usd) || 0;
+    if (amt <= 0) return null;
+    if (!zar) return <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", marginTop:4, ...extra }}>Rand rate not available — check your bank</div>;
+    return (
+      <div style={{ marginTop:4, ...extra }}>
+        <div style={{ fontSize:15, fontWeight:700, color:"#5b9cf6" }}>≈ R{money2(amt * zar.rate)}</div>
+        <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)" }}>at R{zar.rate.toFixed(2)} per $ · estimate</div>
+      </div>
+    );
+  };
 
   // Records-only, like markPaid above: it does NOT send money.
   const markClosurePaid = async (r) => {
@@ -569,8 +609,8 @@ export default function AdminPayouts({ onBack }) {
           {[
             ["✅", approvedRows.filter(r=>!r.isPaid).length, "Pastor Approved", "#3ecf8e"],
             ["⏳", legacyRows.filter(r=>!r.isPaid).length,  "Due (legacy)",    "#e8b34b"],
-            ["💝", "$"+fmt(totalDue),                        "Amount Due",      "#5b9cf6"],
-            ["✓",  "$"+fmt(totalPaid),                       "Total Paid Out",  "#b06cf5"],
+            ["💝", "$"+fmtC(totalDue),                        "Amount Due",      "#5b9cf6"],
+            ["✓",  "$"+fmtC(totalPaid),                       "Total Paid Out",  "#b06cf5"],
           ].map(([icon,val,label,c]) => (
             <div key={label} style={{ background:"rgba(255,255,255,0.03)", borderRadius:14, border:"1px solid rgba(255,255,255,0.07)", padding:"14px 10px", textAlign:"center" }}>
               <div style={{ fontSize:18 }}>{icon}</div>
@@ -688,6 +728,7 @@ export default function AdminPayouts({ onBack }) {
                       </div>
                       <div style={{ textAlign:"right", flexShrink:0 }}>
                         <div style={{ fontSize:26, fontWeight:700, color: r.isPaid ? "#3ecf8e" : "#e8b34b" }}>${fmt(r.amount)}</div>
+                        {!r.isPaid && zarNote(r.amount)}
                         {r.bankingSource && (
                           <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", marginTop:4 }}>
                             {r.bankingSource === "church" ? "🏦 to church" : "🏦 to pastor/church"}
@@ -776,17 +817,17 @@ export default function AdminPayouts({ onBack }) {
         )}
 
         {/* ── EARLY CLOSES (part-funded missions closed when the time limit expired) ── */}
-        {filter === "closed" && (
+        {(filter === "closed" || (filter === "paid" && closureCards.length > 0)) && (
           loading ? (
             <div style={{ textAlign:"center", padding:"40px 0", color:"rgba(255,255,255,0.3)" }}>Loading...</div>
-          ) : closureRows.length === 0 ? (
+          ) : closureCards.length === 0 ? (
             <div style={{ textAlign:"center", padding:"40px 0", color:"rgba(255,255,255,0.3)", fontSize:14, lineHeight:1.7 }}>
               ⏱ No missions have been closed early yet.<br/>
               <span style={{ fontSize:12 }}>Use "Close Early" on an active, part-funded mission in Admin → Approvals.</span>
             </div>
           ) : (
             <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
-              {closureRows.map(r => {
+              {closureCards.map(r => {
                 const needsPayment = r.disposition === "pay_pastor" && r.remainder > 0;
                 const busy = markingClosure === r.id;
                 const stat = (label, val, color) => (
@@ -816,6 +857,7 @@ export default function AdminPayouts({ onBack }) {
                       </div>
                       <div style={{ textAlign:"right", flexShrink:0 }}>
                         <div style={{ fontSize:26, fontWeight:700, color: r.isPaid ? "#3ecf8e" : "#e8b34b" }}>${money2(r.remainder)}</div>
+                        {!r.isPaid && r.disposition === "pay_pastor" && zarNote(r.remainder)}
                         <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", marginTop:4 }}>remainder</div>
                       </div>
                     </div>
@@ -925,6 +967,7 @@ export default function AdminPayouts({ onBack }) {
                       <span style={{ fontSize:12, color:"rgba(255,255,255,0.5)" }}>💸 Amount to pay out to pastor/missionary</span>
                       <span style={{ fontSize:16, fontWeight:700, color:"#e8b34b" }}>${fmt(em.goal||0)}</span>
                     </div>
+                    {!em.paid && zarNote(em.goal||0, { marginTop:-6, marginBottom:12, textAlign:"right" })}
                     {(em.raised||0) > (em.goal||0) && (
                       <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)", marginBottom:12, marginTop:-6 }}>
                         The remaining ${fmt((em.raised||0)-(em.goal||0))} is the platform surcharge — this stays in SendMe's account, do not pay this out.
@@ -948,7 +991,7 @@ export default function AdminPayouts({ onBack }) {
         )}
 
         {/* ── LEGACY ROWS (due / paid / all) ── */}
-        {filter !== "approved" && filter !== "emergency" && filter !== "closed" && (
+        {filter !== "approved" && filter !== "emergency" && filter !== "closed" && !(filter === "paid" && filteredRows.length === 0 && closureCards.length > 0) && (
           loading ? (
             <div style={{ textAlign:"center", padding:"40px 0", color:"rgba(255,255,255,0.3)" }}>Loading payout data...</div>
           ) : filteredRows.length === 0 ? (
@@ -1075,6 +1118,10 @@ export default function AdminPayouts({ onBack }) {
             Each mission's goal is split into 3 milestone payments. Pastor-approved proofs appear in the
             "Pastor Approved" tab. Banking details are pulled from the church account first, falling back
             to the pastor's church account. Funds flow: SendMe → Church → Missionary. Click "Mark as Paid" once the EFT is complete.
+          </div>
+          <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", textAlign:"center", lineHeight:1.7, marginTop:10 }}>
+            Rand amounts are estimates at today's rate. Paying someone overseas from your Rand account? Your bank converts at its own rate and adds fees,
+            so use the bank's quote and make sure the recipient receives the dollar amount shown.
           </div>
         </div>
       </div>
