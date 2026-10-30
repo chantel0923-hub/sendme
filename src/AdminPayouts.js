@@ -351,14 +351,14 @@ export default function AdminPayouts({ onBack }) {
   const money2 = (n) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const fmtC = (n) => { const v = Math.round((Number(n) || 0) * 100) / 100; return Number.isInteger(v) ? fmt(v) : money2(v); };
   // "≈ R386.10 at R16.50 per $ · estimate" under a dollar amount that still has to be paid.
-  const zarNote = (usd, extra = {}) => {
+  const zarNote = (usd, extra = {}, paid = false) => {
     const amt = Number(usd) || 0;
     if (amt <= 0) return null;
     if (!zar) return <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", marginTop:4, ...extra }}>Rand rate not available — check your bank</div>;
     return (
       <div style={{ marginTop:4, ...extra }}>
-        <div style={{ fontSize:15, fontWeight:700, color:"#5b9cf6" }}>≈ R{money2(amt * zar.rate)}</div>
-        <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)" }}>at R{zar.rate.toFixed(2)} per $ · estimate</div>
+        <div style={{ fontSize:15, fontWeight:700, color: paid ? "rgba(91,156,246,0.6)" : "#5b9cf6" }}>≈ R{money2(amt * zar.rate)}</div>
+        <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)" }}>{paid ? "at today's rate" : "at"} R{zar.rate.toFixed(2)} per $ · estimate</div>
       </div>
     );
   };
@@ -728,7 +728,7 @@ export default function AdminPayouts({ onBack }) {
                       </div>
                       <div style={{ textAlign:"right", flexShrink:0 }}>
                         <div style={{ fontSize:26, fontWeight:700, color: r.isPaid ? "#3ecf8e" : "#e8b34b" }}>${fmt(r.amount)}</div>
-                        {!r.isPaid && zarNote(r.amount)}
+                        {zarNote(r.amount, {}, r.isPaid)}
                         {r.bankingSource && (
                           <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", marginTop:4 }}>
                             {r.bankingSource === "church" ? "🏦 to church" : "🏦 to pastor/church"}
@@ -857,7 +857,7 @@ export default function AdminPayouts({ onBack }) {
                       </div>
                       <div style={{ textAlign:"right", flexShrink:0 }}>
                         <div style={{ fontSize:26, fontWeight:700, color: r.isPaid ? "#3ecf8e" : "#e8b34b" }}>${money2(r.remainder)}</div>
-                        {!r.isPaid && r.disposition === "pay_pastor" && zarNote(r.remainder)}
+                        {r.disposition === "pay_pastor" && zarNote(r.remainder, {}, r.isPaid)}
                         <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", marginTop:4 }}>remainder</div>
                       </div>
                     </div>
@@ -967,7 +967,7 @@ export default function AdminPayouts({ onBack }) {
                       <span style={{ fontSize:12, color:"rgba(255,255,255,0.5)" }}>💸 Amount to pay out to pastor/missionary</span>
                       <span style={{ fontSize:16, fontWeight:700, color:"#e8b34b" }}>${fmt(em.goal||0)}</span>
                     </div>
-                    {!em.paid && zarNote(em.goal||0, { marginTop:-6, marginBottom:12, textAlign:"right" })}
+                    {zarNote(em.goal||0, { marginTop:-6, marginBottom:12, textAlign:"right" }, em.paid)}
                     {(em.raised||0) > (em.goal||0) && (
                       <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)", marginBottom:12, marginTop:-6 }}>
                         The remaining ${fmt((em.raised||0)-(em.goal||0))} is the platform surcharge — this stays in SendMe's account, do not pay this out.
