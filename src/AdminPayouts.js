@@ -16,6 +16,18 @@ export const isAdminEmail = (email) => {
 
 const MILESTONE_LABELS = ["Milestone 1", "Milestone 2", "Milestone 3"];
 
+// A mission's goal already includes SendMe's 10% (goal = what the pastor asked for × 1.1), so the pastor's
+// share is goal ÷ 1.1, paid in three parts. The funding check below still uses the full goal.
+const PLATFORM_MARKUP = 1.1;
+// Below this many Rand a milestone is held and paid together with the next one, so bank fees don't eat it.
+const MIN_PAYOUT_ZAR = 1000;
+const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+const payoutUsd = (goal, milestoneNum) => {
+  const total = round2((Number(goal) || 0) / PLATFORM_MARKUP);
+  const third = Math.floor((total / 3) * 100) / 100;
+  return milestoneNum < 3 ? third : round2(total - third * 2);
+};
+
 export default function AdminPayouts({ onBack }) {
   const [missions, setMissions]           = useState([]);
   const [payoutDetails, setPayoutDetails] = useState({});
@@ -30,6 +42,7 @@ export default function AdminPayouts({ onBack }) {
   const [closures, setClosures]           = useState([]);     // early-closed missions (see early-close.sql)
   const [markingClosure, setMarkingClosure] = useState(null);
   const [error, setError]                 = useState("");
+  const [missionRates, setMissionRates]   = useState({});     // per mission: rands actually received for the dollars given
 
   useEffect(() => { load(); }, []);
 
@@ -110,6 +123,31 @@ export default function AdminPayouts({ onBack }) {
         .order("created_at", { ascending: false });
       if (emData) setEmergencies(emData);
     } catch (e) { console.log("Emergency fetch error:", e); }
+    // Rands actually received per mission (saved on each donation by the Paystack webhook — see zar-received.sql).
+    // If this fails the screen simply falls back to today's-rate estimates.
+    try {
+      const { data: gifts, error: giftErr } = await supabase
+        .from("donations")
+        .select("mission_id, amount, zar_amount")
+        .eq("status", "complete")
+        .not("mission_id", "is", null)
+        .not("zar_amount", "is", null);
+      if (giftErr) throw giftErr;
+      const map = {};
+      (gifts || []).forEach(g => {
+        const usd = Number(g.amount) || 0;
+        const z = Number(g.zar_amount) || 0;
+        if (usd <= 0 || z <= 0) return;
+        const e = map[g.mission_id] || (map[g.mission_id] = { usd: 0, zar: 0 });
+        e.usd += usd;
+        e.zar += z;
+      });
+      Object.keys(map).forEach(k => { map[k].rate = map[k].zar / map[k].usd; });
+      setMissionRates(map);
+    } catch (e) {
+      console.log("Could not load received rand amounts:", e);
+      setMissionRates({});
+    }
     setLoading(false);
   };
 
@@ -135,7 +173,29 @@ export default function AdminPayouts({ onBack }) {
     return goalNum - third * 2;
   };
 
-  const markPaid = async (missionId, milestoneNum, amount, isPaid, missionTitle, missionaryEmail, recipientName) => {
+  // Rands for a dollar amount of one mission, at the blended rate that mission's gifts actually brought in.
+  const payZarFor = (missionId, usd) => {
+    const mr = missionRates[missionId];
+    return mr ? round2((Number(usd) || 0) * mr.rate) : null;
+  };
+  // Rands of earlier milestones on the same mission that are still unpaid (held for a combined payment).
+  const heldZarFor = (missionId, goal, upToMilestone) => {
+    let sum = 0;
+    for (let i = 1; i < upToMilestone; i++) {
+      if (payoutRecords[missionId]?.[i]?.status === "paid") continue;
+      const z = payZarFor(missionId, payoutUsd(goal, i));
+      if (z) sum += z;
+    }
+    return round2(sum);
+  };
+  // Share of the dollars raised that have a saved rand amount (EFT and older gifts do not).
+  const coverageFor = (missionId) => {
+    const mr = missionRates[missionId];
+    const raised = Number(missions.find(x => x.id === missionId)?.raised) || 0;
+    return mr && raised > 0 ? mr.usd / raised : null;
+  };
+
+  const markPaid = async (missionId, milestoneNum, amount, isPaid, missionTitle, missionaryEmail, recipientName, extra = {}) => {
     const newStatus = isPaid ? "pending" : "paid";
     // Hard block — do not allow marking a milestone paid unless enough has
     // actually been raised to cover it. Checks the CUMULATIVE amount owed
@@ -171,10 +231,17 @@ export default function AdminPayouts({ onBack }) {
     // here) — confirm before flipping to "paid" so nobody assumes clicking
     // it sends money, and to avoid an accidental double-payment if someone
     // forgets whether they already did the EFT.
+    if (newStatus === "paid" && extra.belowMin) {
+      const goOn = window.confirm(
+        `This payment is only R${Number(extra.zar).toFixed(2)} — under your R${MIN_PAYOUT_ZAR} minimum.\n\n` +
+        `Normally it is held and paid together with the next milestone so bank fees don't eat into it. Mark it as paid anyway?`
+      );
+      if (!goOn) return;
+    }
     if (newStatus === "paid") {
       const ok = window.confirm(
         `This only updates SendMe's records — it does NOT send any money.\n\n` +
-        `Have you already completed the EFT transfer of $${amount} to ${recipientName || "the church/pastor"} for "${missionTitle}" (milestone ${milestoneNum}) from your own banking app?\n\n` +
+        `Have you already completed the EFT transfer of $${amount}${extra.zar != null ? ` (R${Number(extra.zar).toFixed(2)})` : ""} to ${recipientName || "the church/pastor"} for "${missionTitle}" (milestone ${milestoneNum}) from your own banking app?\n\n` +
         `Click OK only if that transfer is already done.`
       );
       if (!ok) return;
@@ -194,6 +261,16 @@ export default function AdminPayouts({ onBack }) {
         .from("payout_records")
         .upsert(payload, { onConflict: "mission_id,milestone_number" });
       if (error) throw error;
+      // Best-effort audit trail of the rands paid (needs the zar_paid column — see payout-zar-paid.sql).
+      // A failure here is logged only and never blocks the payment record above.
+      if (newStatus !== "paid" || extra.zar != null) {
+        const { error: zErr } = await supabase
+          .from("payout_records")
+          .update({ zar_paid: newStatus === "paid" ? extra.zar : null })
+          .eq("mission_id", missionId)
+          .eq("milestone_number", milestoneNum);
+        if (zErr) console.log("Could not save rands paid:", zErr.message);
+      }
       setPayoutRecords(prev => ({
         ...prev,
         [missionId]: { ...(prev[missionId] || {}), [milestoneNum]: payload },
@@ -240,7 +317,10 @@ export default function AdminPayouts({ onBack }) {
       churchId:     m.church_id || null,
       country:      m.country || m.city || "",
       milestoneNum: proof.milestone_number,
-      amount:       milestoneAmount(m.goal, proof.milestone_number),
+      amount:       payoutUsd(m.goal, proof.milestone_number),
+      payZar:       payZarFor(proof.mission_id, payoutUsd(m.goal, proof.milestone_number)),
+      heldZar:      heldZarFor(proof.mission_id, m.goal, proof.milestone_number),
+      coverage:     coverageFor(proof.mission_id),
       requiresFullFunding: !!m.requires_full_funding,
       isPaid,
       paidAt:       record?.paid_at,
@@ -262,7 +342,7 @@ export default function AdminPayouts({ onBack }) {
     const { details, source } = getBankingDetails(m);
     const records = payoutRecords[m.id] || {};
     for (let i = 1; i <= currentMilestone; i++) {
-      const amount  = milestoneAmount(m.goal, i);
+      const amount  = payoutUsd(m.goal, i);
       const record  = records[i];
       const isPaid  = record?.status === "paid";
       if (closedIds.has(m.id) && !isPaid) continue; // replaced by the early-close payout
@@ -281,6 +361,9 @@ export default function AdminPayouts({ onBack }) {
         status:       m.status || "pending",
         milestoneNum: i,
         amount,
+        payZar:       payZarFor(m.id, amount),
+        heldZar:      heldZarFor(m.id, m.goal, i),
+        coverage:     coverageFor(m.id),
         isPaid,
         paidAt:       record?.paid_at,
         details,
@@ -365,6 +448,44 @@ export default function AdminPayouts({ onBack }) {
       </div>
     );
   };
+
+  // Rands for a milestone: exact (from the rands actually received) when we have them, otherwise today's-rate estimate.
+  const payNote = (r) => {
+    const mr = missionRates[r.missionId];
+    if (!mr || r.payZar == null) return zarNote(r.amount, {}, r.isPaid);
+    const belowMin = !r.isPaid && r.milestoneNum < 3 && r.payZar < MIN_PAYOUT_ZAR;
+    const combined = !r.isPaid && r.heldZar > 0 ? round2(r.payZar + r.heldZar) : null;
+    return (
+      <div style={{ marginTop:4 }}>
+        <div style={{ fontSize:15, fontWeight:700, color: r.isPaid ? "rgba(91,156,246,0.6)" : "#5b9cf6" }}>R{money2(r.payZar)}</div>
+        <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)" }}>from rands actually received · R{mr.rate.toFixed(2)} per $</div>
+        {r.coverage != null && r.coverage < 0.99 && (
+          <div style={{ fontSize:10, color:"#e8b34b", marginTop:3 }}>Based on {Math.round(r.coverage * 100)}% of this mission's dollars — the rest has no saved rand amount</div>
+        )}
+        {belowMin && (
+          <div style={{ fontSize:11, color:"#e8b34b", marginTop:3 }}>Under R{fmt(MIN_PAYOUT_ZAR)} — hold and pay together with the next milestone</div>
+        )}
+        {combined && (
+          <div style={{ fontSize:11, color:"#5b9cf6", marginTop:3 }}>Pay together with earlier unpaid milestone(s): R{money2(combined)}</div>
+        )}
+      </div>
+    );
+  };
+  // Same idea for an early-close remainder.
+  const closureNote = (r) => {
+    const mr = missionRates[r.missionId];
+    if (!mr) return zarNote(r.remainder, {}, r.isPaid);
+    return (
+      <div style={{ marginTop:4 }}>
+        <div style={{ fontSize:15, fontWeight:700, color: r.isPaid ? "rgba(91,156,246,0.6)" : "#5b9cf6" }}>R{money2(r.remainder * mr.rate)}</div>
+        <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)" }}>from rands actually received · R{mr.rate.toFixed(2)} per $</div>
+      </div>
+    );
+  };
+  const payExtra = (r) => ({
+    zar: r.payZar,
+    belowMin: r.payZar != null && r.milestoneNum < 3 && r.payZar < MIN_PAYOUT_ZAR,
+  });
 
   // Records-only, like markPaid above: it does NOT send money.
   const markClosurePaid = async (r) => {
@@ -523,7 +644,7 @@ export default function AdminPayouts({ onBack }) {
         : filter === "paid"  ? legacyRows.filter(r =>  r.isPaid)
         : legacyRows;
 
-      headers = ["Date Approved","Mission Title","Church","Country","Milestone","Amount (USD)","Status","Paid At","Recipient","Bank","Account No","Branch Code","SWIFT","Banking Source"];
+      headers = ["Date Approved","Mission Title","Church","Country","Milestone","Amount (USD)","Rands (from gifts received)","Status","Paid At","Recipient","Bank","Account No","Branch Code","SWIFT","Banking Source"];
       currencyCols = [5];
       dataRows = sourceRows.map(r => ([
         r.reviewedAt ? new Date(r.reviewedAt).toLocaleDateString("en-GB") : "",
@@ -532,6 +653,7 @@ export default function AdminPayouts({ onBack }) {
         r.country || "",
         `Milestone ${r.milestoneNum}`,
         r.amount || 0,
+        r.payZar != null ? r.payZar : "",
         r.isPaid ? "Paid" : "Due",
         r.paidAt ? new Date(r.paidAt).toLocaleDateString("en-GB") : "",
         r.details?.recipient_name || "",
@@ -732,8 +854,9 @@ export default function AdminPayouts({ onBack }) {
                         <div style={{ fontSize:12, color:"rgba(255,255,255,0.35)", marginTop:2 }}>📍 {r.country}</div>
                       </div>
                       <div style={{ textAlign:"right", flexShrink:0 }}>
-                        <div style={{ fontSize:26, fontWeight:700, color: r.isPaid ? "#3ecf8e" : "#e8b34b" }}>${fmt(r.amount)}</div>
-                        {zarNote(r.amount, {}, r.isPaid)}
+                        <div style={{ fontSize:26, fontWeight:700, color: r.isPaid ? "#3ecf8e" : "#e8b34b" }}>${fmtC(r.amount)}</div>
+                        <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)" }}>pastor's share (goal includes SendMe's 10%)</div>
+                        {payNote(r)}
                         {r.bankingSource && (
                           <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", marginTop:4 }}>
                             {r.bankingSource === "church" ? "🏦 to church" : "🏦 to pastor/church"}
@@ -799,7 +922,7 @@ export default function AdminPayouts({ onBack }) {
                     </div>
 
                     {/* Mark paid button */}
-                    <button onClick={()=>markPaid(r.missionId, r.milestoneNum, r.amount, r.isPaid, r.missionTitle, r.missionaryEmail, r.details?.recipient_name)}
+                    <button onClick={()=>markPaid(r.missionId, r.milestoneNum, r.amount, r.isPaid, r.missionTitle, r.missionaryEmail, r.details?.recipient_name, payExtra(r))}
                       disabled={isActing}
                       style={{ padding:"10px 24px", borderRadius:10, border:"none",
                         background: r.isPaid ? "rgba(255,255,255,0.06)" : "linear-gradient(135deg,#3ecf8e,#2aaf74)",
@@ -862,7 +985,7 @@ export default function AdminPayouts({ onBack }) {
                       </div>
                       <div style={{ textAlign:"right", flexShrink:0 }}>
                         <div style={{ fontSize:26, fontWeight:700, color: r.isPaid ? "#3ecf8e" : "#e8b34b" }}>${money2(r.remainder)}</div>
-                        {r.disposition === "pay_pastor" && zarNote(r.remainder, {}, r.isPaid)}
+                        {r.disposition === "pay_pastor" && closureNote(r)}
                         <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", marginTop:4 }}>remainder</div>
                       </div>
                     </div>
@@ -1058,7 +1181,9 @@ export default function AdminPayouts({ onBack }) {
                         </div>
                       </div>
                       <div style={{ textAlign:"right" }}>
-                        <div style={{ fontSize:22, fontWeight:700, color:r.isPaid?"#3ecf8e":"#e8b34b" }}>${fmt(r.amount)}</div>
+                        <div style={{ fontSize:22, fontWeight:700, color:r.isPaid?"#3ecf8e":"#e8b34b" }}>${fmtC(r.amount)}</div>
+                        <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)" }}>pastor's share (goal includes SendMe's 10%)</div>
+                        {payNote(r)}
                       </div>
                     </div>
 
@@ -1100,7 +1225,7 @@ export default function AdminPayouts({ onBack }) {
                     </div>
 
                     <div style={{ marginTop:14 }}>
-                      <button onClick={()=>markPaid(r.missionId, r.milestoneNum, r.amount, r.isPaid, r.missionTitle, r.missionaryEmail, r.details?.recipient_name)}
+                      <button onClick={()=>markPaid(r.missionId, r.milestoneNum, r.amount, r.isPaid, r.missionTitle, r.missionaryEmail, r.details?.recipient_name, payExtra(r))}
                         disabled={isActing}
                         style={{ padding:"9px 20px", borderRadius:10, border:"none",
                           background:r.isPaid?"rgba(255,255,255,0.06)":"linear-gradient(135deg,#3ecf8e,#2aaf74)",
@@ -1120,12 +1245,12 @@ export default function AdminPayouts({ onBack }) {
 
         <div style={{ textAlign:"center", padding:"32px 0 0", borderTop:"1px solid rgba(255,255,255,0.05)", marginTop:32 }}>
           <div style={{ fontSize:12, color:"rgba(255,255,255,0.3)", lineHeight:1.7 }}>
-            Each mission's goal is split into 3 milestone payments. Pastor-approved proofs appear in the
+            Each mission's goal includes SendMe's 10%; the pastor's share (goal ÷ 1.1) is split into 3 milestone payments. Pastor-approved proofs appear in the
             "Pastor Approved" tab. Banking details are pulled from the church account first, falling back
             to the pastor's church account. Funds flow: SendMe → Church → Missionary. Click "Mark as Paid" once the EFT is complete.
           </div>
           <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", textAlign:"center", lineHeight:1.7, marginTop:10 }}>
-            Rand amounts are estimates at today's rate. Paying someone overseas from your Rand account? Your bank converts at its own rate and adds fees,
+            Rand amounts marked "from rands actually received" are exact; any others are estimates at today's rate. Paying someone overseas from your Rand account? Your bank converts at its own rate and adds fees,
             so use the bank's quote and make sure the recipient receives the dollar amount shown.
           </div>
         </div>
