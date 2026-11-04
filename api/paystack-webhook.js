@@ -176,6 +176,39 @@ export default async function handler(req, res) {
       return res.status(200).send("OK");
     }
 
+    // RECORD THE RANDS WE ACTUALLY RECEIVED.
+    // `raised` and the donations.amount column are USD figures, but the donor
+    // was charged in rands and that rand amount is what settles into the bank.
+    // Saving it per donation means payouts can be worked out from real rands
+    // received instead of re-converting USD at a later (different) rate.
+    // This is deliberately a separate, best-effort update: if it ever fails
+    // (e.g. a column is missing) it is logged and the donation is still
+    // credited as normal.
+    try {
+      const chargedCurrency = event.data.currency || "ZAR";
+      const chargedAmount = Number(amountCents) / 100;
+      const paystackFee = event.data.fees != null && !Number.isNaN(Number(event.data.fees))
+        ? Number(event.data.fees) / 100
+        : null;
+      const zarFields = { charged_currency: chargedCurrency };
+      if (chargedCurrency === "ZAR") {
+        zarFields.zar_amount = chargedAmount;
+        zarFields.zar_fee = paystackFee;
+        if (usdAmount && Number(usdAmount) > 0) {
+          zarFields.fx_rate_used = Number((chargedAmount / Number(usdAmount)).toFixed(4));
+        }
+      } else {
+        console.error("paystack-webhook: charge was not in ZAR, zar_amount not recorded", { reference, chargedCurrency });
+      }
+      const { error: zarError } = await supabase
+        .from("donations")
+        .update(zarFields)
+        .eq("paystack_reference", reference);
+      if (zarError) console.error("paystack-webhook: failed to record ZAR amount", reference, zarError);
+    } catch (zarErr) {
+      console.error("paystack-webhook: recording ZAR amount threw", reference, zarErr);
+    }
+
     const kind = donationRow?.kind || metadata?.kind || "mission";
     const isFamilyNeed  = kind === "family_need";
     const isEmergency   = kind === "emergency";
