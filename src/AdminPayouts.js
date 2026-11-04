@@ -266,6 +266,9 @@ export default function AdminPayouts({ onBack }) {
       const record  = records[i];
       const isPaid  = record?.status === "paid";
       if (closedIds.has(m.id) && !isPaid) continue; // replaced by the early-close payout
+      // Nothing is owed on a mission that was rejected, cancelled or is still waiting for approval — only active or
+      // completed missions can have a payment due. (A payment that was already made stays in the Paid list.)
+      if (!isPaid && m.status !== "active" && m.status !== "complete") continue;
       legacyRows.push({
         missionId:    m.id,
         missionTitle: m.title || "Untitled Mission",
@@ -423,6 +426,8 @@ export default function AdminPayouts({ onBack }) {
   const approvedUnpaid = approvedRows.filter(r => !r.isPaid).length;
 
   const missingBanking = missions.filter(m => {
+    if (m.status !== "active" && m.status !== "complete") return false;   // rejected / cancelled / pending: nothing to pay
+    if (closedIds.has(m.id)) return false;                                // closed early: handled on the Early closes tab
     if (m.funded_outside) return false;
     if ((m.current_milestone || m.milestone || 0) === 0) return false;
     const { details } = getBankingDetails(m);

@@ -1544,7 +1544,7 @@ const DonorProfile = ({ user, onBack, userRole, isAdmin }) => {
 };
 
 // ── NAV "MORE" DROPDOWN ──────────────────────────────────────────────────────
-const NavDropdown = ({ user, userRole, guest, onProfile, onEmergency, onFamilyNeed, onGeneralFund, onTestimonies, onWorker, onMatching, onQR, onFlyer, onFaq, onPayout, onMilestoneProof, onPastorReview, onMissionaryDashboard }) => {
+const NavDropdown = ({ user, userRole, guest, onProfile, onEmergency, onFamilyNeed, onGeneralFund, onTestimonies, onWorker, onMatching, onQR, onFlyer, onFaq, onPayout, onMilestoneProof, onPastorReview, onMissionaryDashboard, onApply }) => {
   const [open,setOpen] = useState(false);
   const ref = useRef(null);
 
@@ -1556,6 +1556,11 @@ const NavDropdown = ({ user, userRole, guest, onProfile, onEmergency, onFamilyNe
 
   const items = [
     user && { label:"My Profile",        icon:"✝",  color:"#e8b34b",                onClick:onProfile },
+    // The Home screen shows these as buttons; on every other screen they live here, so a missionary
+    // can always reach them. Same rules as the Home buttons: donors never see Apply.
+    !guest && user && userRole && userRole!=="donor" && onApply && { label:"📝 Apply for a Mission", color:"#e8b34b", onClick:onApply },
+    user && userRole==="missionary" && onMilestoneProof && { label:"📋 Submit Proof",          color:"#5b9cf6", onClick:onMilestoneProof },
+    user && userRole==="missionary" && onMissionaryDashboard && { label:"📊 My Missions",       color:"#e8b34b", onClick:onMissionaryDashboard },
     !guest && { label:"🚨 Emergency",     color:"#e85b5b",                            onClick:onEmergency },
     { label:"🤝 Family In Need",         color:"#3ecf8e",                            onClick:onFamilyNeed },
     { label:"🌐 General Fund",           color:"#3ecf8e",                            onClick:onGeneralFund },
@@ -2811,6 +2816,8 @@ export default function App() {
           onProfile:()=>setScreen("profile"), onEmergency:()=>setScreen("emergency"), onFamilyNeed:()=>setScreen("family-needs"),
           onGeneralFund:()=>setScreen("general-fund"), onTestimonies:()=>openTestimonies(), onWorker:()=>setScreen("worker"),
           onMatching:()=>setScreen("matching"), onQR:()=>setScreen("qr"), onFlyer:()=>setScreen("flyer"), onFaq:()=>setScreen("faq"),
+          onApply:()=>{ setEditingMission(null); setScreen("apply"); },
+          onMilestoneProof:()=>setScreen("milestone-proof"), onMissionaryDashboard:()=>setScreen("missionary-dashboard"),
         }}
         adminNav={{
           onAdminChurchVerification:()=>setScreen("admin-church-verification"), onAdminWorkers:()=>setScreen("admin-workers"),
