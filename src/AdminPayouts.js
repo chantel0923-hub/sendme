@@ -16,14 +16,13 @@ export const isAdminEmail = (email) => {
 
 const MILESTONE_LABELS = ["Milestone 1", "Milestone 2", "Milestone 3"];
 
-// A mission's goal already includes SendMe's 10% (goal = what the pastor asked for × 1.1), so the pastor's
-// share is goal ÷ 1.1, paid in three parts. The funding check below still uses the full goal.
-const PLATFORM_MARKUP = 1.1;
+// A mission's goal is what the pastor asked for. SendMe's 10% is added on top for donors
+// (collection_target = goal × 1.1), so the pastor's share is the whole goal, paid in three parts.
 // Below this many Rand a milestone is held and paid together with the next one, so bank fees don't eat it.
 const MIN_PAYOUT_ZAR = 1000;
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 const payoutUsd = (goal, milestoneNum) => {
-  const total = round2((Number(goal) || 0) / PLATFORM_MARKUP);
+  const total = round2(Number(goal) || 0);
   const third = Math.floor((total / 3) * 100) / 100;
   return milestoneNum < 3 ? third : round2(total - third * 2);
 };
@@ -171,6 +170,18 @@ export default function AdminPayouts({ onBack }) {
     const third = Math.floor(goalNum / 3);
     if (milestoneNum < 3) return third;
     return goalNum - third * 2;
+  };
+
+  // Not enough raised yet to pay this milestone? Same rule markPaid enforces: the cumulative amount through this
+  // milestone (or the full goal for "needs everything upfront" missions) must already be in. null = fine to pay.
+  const shortfallFor = (missionId, milestoneNum) => {
+    const mission = missions.find(m => m.id === missionId);
+    if (!mission) return null;
+    const raised = Number(mission.raised) || 0;
+    let required = 0;
+    if (mission.requires_full_funding) required = Number(mission.goal) || 0;
+    else for (let i = 1; i <= milestoneNum; i++) required += milestoneAmount(mission.goal, i);
+    return raised < required ? { raised, required } : null;
   };
 
   // Rands for a dollar amount of one mission, at the blended rate that mission's gifts actually brought in.
@@ -321,6 +332,7 @@ export default function AdminPayouts({ onBack }) {
       payZar:       payZarFor(proof.mission_id, payoutUsd(m.goal, proof.milestone_number)),
       heldZar:      heldZarFor(proof.mission_id, m.goal, proof.milestone_number),
       coverage:     coverageFor(proof.mission_id),
+      shortfall:    isPaid ? null : shortfallFor(proof.mission_id, proof.milestone_number),
       requiresFullFunding: !!m.requires_full_funding,
       isPaid,
       paidAt:       record?.paid_at,
@@ -364,6 +376,7 @@ export default function AdminPayouts({ onBack }) {
         payZar:       payZarFor(m.id, amount),
         heldZar:      heldZarFor(m.id, m.goal, i),
         coverage:     coverageFor(m.id),
+        shortfall:    isPaid ? null : shortfallFor(m.id, i),
         isPaid,
         paidAt:       record?.paid_at,
         details,
@@ -451,6 +464,13 @@ export default function AdminPayouts({ onBack }) {
 
   // Rands for a milestone: exact (from the rands actually received) when we have them, otherwise today's-rate estimate.
   const payNote = (r) => {
+    if (r.shortfall && !r.isPaid) {
+      return (
+        <div style={{ marginTop:6, fontSize:12, color:"#e8b34b", lineHeight:1.5, maxWidth:260, textAlign:"right" }}>
+          ⏳ Not funded yet — ${fmt(r.shortfall.raised)} raised, ${fmt(r.shortfall.required)} needed before this can be paid
+        </div>
+      );
+    }
     const mr = missionRates[r.missionId];
     if (!mr || r.payZar == null) return zarNote(r.amount, {}, r.isPaid);
     const belowMin = !r.isPaid && r.milestoneNum < 3 && r.payZar < MIN_PAYOUT_ZAR;
@@ -540,7 +560,7 @@ export default function AdminPayouts({ onBack }) {
     ? legacyRows.filter(r => r.isPaid)
     : legacyRows;
 
-  const totalDue      = legacyRows.filter(r => !r.isPaid).reduce((acc, r) => acc + r.amount, 0)
+  const totalDue      = legacyRows.filter(r => !r.isPaid && !r.shortfall).reduce((acc, r) => acc + r.amount, 0)
                       + closuresToPay.reduce((acc, r) => acc + r.remainder, 0);
   const totalPaid     = legacyRows.filter(r =>  r.isPaid).reduce((acc, r) => acc + r.amount, 0)
                       + closureRows.filter(r => r.disposition === "pay_pastor" && r.isPaid).reduce((acc, r) => acc + r.remainder, 0);
@@ -923,14 +943,14 @@ export default function AdminPayouts({ onBack }) {
 
                     {/* Mark paid button */}
                     <button onClick={()=>markPaid(r.missionId, r.milestoneNum, r.amount, r.isPaid, r.missionTitle, r.missionaryEmail, r.details?.recipient_name, payExtra(r))}
-                      disabled={isActing}
+                      disabled={isActing || (!!r.shortfall && !r.isPaid)}
                       style={{ padding:"10px 24px", borderRadius:10, border:"none",
-                        background: r.isPaid ? "rgba(255,255,255,0.06)" : "linear-gradient(135deg,#3ecf8e,#2aaf74)",
-                        color: r.isPaid ? "rgba(255,255,255,0.5)" : "#000",
-                        fontWeight:700, cursor: isActing ? "default" : "pointer",
+                        background: (r.isPaid || r.shortfall) ? "rgba(255,255,255,0.06)" : "linear-gradient(135deg,#3ecf8e,#2aaf74)",
+                        color: (r.isPaid || r.shortfall) ? "rgba(255,255,255,0.5)" : "#000",
+                        fontWeight:700, cursor: (isActing || r.shortfall) && !r.isPaid ? "default" : "pointer",
                         fontSize:13, fontFamily:"Georgia, serif",
                         opacity: isActing ? 0.7 : 1 }}>
-                      {isActing ? "Saving..." : r.isPaid ? "↩ Mark as Unpaid" : "✓ Mark as Paid (EFT Done)"}
+                      {isActing ? "Saving..." : r.isPaid ? "↩ Mark as Unpaid" : r.shortfall ? "⏳ Waiting for funds" : "✓ Mark as Paid (EFT Done)"}
                     </button>
                     {r.isPaid && r.paidAt && (
                       <span style={{ marginLeft:12, fontSize:12, color:"rgba(255,255,255,0.3)" }}>
@@ -1226,14 +1246,14 @@ export default function AdminPayouts({ onBack }) {
 
                     <div style={{ marginTop:14 }}>
                       <button onClick={()=>markPaid(r.missionId, r.milestoneNum, r.amount, r.isPaid, r.missionTitle, r.missionaryEmail, r.details?.recipient_name, payExtra(r))}
-                        disabled={isActing}
+                        disabled={isActing || (!!r.shortfall && !r.isPaid)}
                         style={{ padding:"9px 20px", borderRadius:10, border:"none",
-                          background:r.isPaid?"rgba(255,255,255,0.06)":"linear-gradient(135deg,#3ecf8e,#2aaf74)",
-                          color:r.isPaid?"rgba(255,255,255,0.5)":"#000", fontWeight:700,
-                          cursor: isActing ? "default" : "pointer",
+                          background:(r.isPaid || r.shortfall)?"rgba(255,255,255,0.06)":"linear-gradient(135deg,#3ecf8e,#2aaf74)",
+                          color:(r.isPaid || r.shortfall)?"rgba(255,255,255,0.5)":"#000", fontWeight:700,
+                          cursor: (isActing || r.shortfall) && !r.isPaid ? "default" : "pointer",
                           fontSize:13, fontFamily:"Georgia, serif",
                           opacity: isActing ? 0.7 : 1 }}>
-                        {isActing ? "Saving..." : r.isPaid ? "Mark as Unpaid" : "✓ Mark as Paid"}
+                        {isActing ? "Saving..." : r.isPaid ? "Mark as Unpaid" : r.shortfall ? "⏳ Waiting for funds" : "✓ Mark as Paid"}
                       </button>
                     </div>
                   </div>
@@ -1245,7 +1265,7 @@ export default function AdminPayouts({ onBack }) {
 
         <div style={{ textAlign:"center", padding:"32px 0 0", borderTop:"1px solid rgba(255,255,255,0.05)", marginTop:32 }}>
           <div style={{ fontSize:12, color:"rgba(255,255,255,0.3)", lineHeight:1.7 }}>
-            Each mission's goal includes SendMe's 10%; the pastor's share (goal ÷ 1.1) is split into 3 milestone payments. Pastor-approved proofs appear in the
+            Donors fund each mission's goal plus SendMe's 10%; the pastor's share (the full goal) is split into 3 milestone payments. Pastor-approved proofs appear in the
             "Pastor Approved" tab. Banking details are pulled from the church account first, falling back
             to the pastor's church account. Funds flow: SendMe → Church → Missionary. Click "Mark as Paid" once the EFT is complete.
           </div>
