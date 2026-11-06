@@ -988,7 +988,7 @@ export default function AdminPayouts({ onBack }) {
                       </div>
                       <div style={{ textAlign:"right", flexShrink:0 }}>
                         <div style={{ fontSize:26, fontWeight:700, color: r.isPaid ? "#3ecf8e" : "#e8b34b" }}>${fmtC(r.amount)}</div>
-                        <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)" }}>pastor's share (goal includes SendMe's 10%)</div>
+                        <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)" }}>pastor's share (the full goal — SendMe's 10% is added on top)</div>
                         {payNote(r)}
                         {r.bankingSource && (
                           <div style={{ fontSize:11, color:"rgba(255,255,255,0.3)", marginTop:4 }}>
@@ -1315,7 +1315,7 @@ export default function AdminPayouts({ onBack }) {
                       </div>
                       <div style={{ textAlign:"right" }}>
                         <div style={{ fontSize:22, fontWeight:700, color:r.isPaid?"#3ecf8e":"#e8b34b" }}>${fmtC(r.amount)}</div>
-                        <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)" }}>pastor's share (goal includes SendMe's 10%)</div>
+                        <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)" }}>pastor's share (the full goal — SendMe's 10% is added on top)</div>
                         {payNote(r)}
                       </div>
                     </div>
