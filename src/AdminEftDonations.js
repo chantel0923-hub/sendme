@@ -19,6 +19,7 @@ export default function AdminEftDonations({ onBack }) {
   const [loadError, setLoadError] = useState("");
   const [filter, setFilter]   = useState("awaiting");
   const [amounts, setAmounts] = useState({});     // { [id]: string } — the amount that actually arrived
+  const [zars, setZars]       = useState({});     // { [id]: string } — the RANDS that actually reached the bank (optional, recommended)
   const [notes, setNotes]     = useState({});     // { [id]: string }
   const [busyId, setBusyId]   = useState(null);
   const [error, setError]     = useState("");
@@ -39,9 +40,13 @@ export default function AdminEftDonations({ onBack }) {
   const confirm = async (r) => {
     const amt = Number(amounts[r.id] ?? r.amount_usd);
     if (!(amt > 0)) { setError("Enter the amount that actually arrived (in USD)."); return; }
+    const zarRaw = String(zars[r.id] ?? "").trim();
+    const zar = zarRaw === "" ? null : Number(zarRaw);
+    if (zar !== null && !(zar > 0)) { setError("The rands that arrived must be a number above 0 — or leave it empty."); return; }
     const ok = window.confirm(
-      `Confirm that the money has ARRIVED in the bank account?\\n\\n` +
-      `Reference: ${r.reference}\\nFrom: ${r.donor_name}\\nFor: ${r.target_title || KIND[r.kind]}\\nAmount to credit: $${money2(amt)} (promised: $${money2(r.amount_usd)})\\n\\n` +
+      `Confirm that the money has ARRIVED in the bank account?\n\n` +
+      `Reference: ${r.reference}\nFrom: ${r.donor_name}\nFor: ${r.target_title || KIND[r.kind]}\nAmount to credit: $${money2(amt)} (promised: $${money2(r.amount_usd)})\n` +
+      (zar !== null ? `Rands that reached the bank: R${money2(zar)}\n\n` : `Rands that reached the bank: NOT entered (this mission's payout rate will then lean on its other gifts)\n\n`) +
       `The gift is credited immediately and the donor is emailed. This cannot be undone.`
     );
     if (!ok) return;
@@ -53,7 +58,14 @@ export default function AdminEftDonations({ onBack }) {
         donorName: r.donor_name, reference: r.reference, amount: data.amount_usd,
         target: r.target_title || KIND[r.kind], siteUrl: window.location.origin + "/",
       });
-      setNotice(`✓ $${money2(data.amount_usd)} credited to "${r.target_title || KIND[r.kind]}" and ${r.donor_name} was emailed.`);
+      let zarNote = "";
+      if (zar !== null) {
+        // Save the rands separately so the payout screen can pay the pastor from rands actually received.
+        // The gift is already credited at this point — a failure here only means the rands were not saved.
+        const { error: zErr } = await supabase.rpc("set_eft_confirmed_zar", { p_id: r.id, p_zar: zar });
+        zarNote = zErr ? ` ⚠ The rands (R${money2(zar)}) could not be saved: ${zErr.message || "unknown error"} — run eft-zar.sql in Supabase.` : ` R${money2(zar)} saved as received.`;
+      }
+      setNotice(`✓ $${money2(data.amount_usd)} credited to "${r.target_title || KIND[r.kind]}" and ${r.donor_name} was emailed.${zarNote}`);
       await load();
     } catch (e) {
       setError("Could not confirm this gift. (" + (e.message || "") + ")");
@@ -62,7 +74,7 @@ export default function AdminEftDonations({ onBack }) {
   };
 
   const cancel = async (r) => {
-    if (!window.confirm(`Mark ${r.reference} (${r.donor_name}, $${money2(r.amount_usd)}) as NOT received / cancelled?\\n\\nNothing is credited. This cannot be undone.`)) return;
+    if (!window.confirm(`Mark ${r.reference} (${r.donor_name}, $${money2(r.amount_usd)}) as NOT received / cancelled?\n\nNothing is credited. This cannot be undone.`)) return;
     setBusyId(r.id); setError(""); setNotice("");
     try {
       const { error: rpcError } = await supabase.rpc("cancel_eft_donation", { p_id: r.id, p_notes: (notes[r.id] || "").trim() || null });
@@ -79,6 +91,7 @@ export default function AdminEftDonations({ onBack }) {
   const awaiting = list.filter(r => r.status === "awaiting");
   const shown = filter === "all" ? list : list.filter(r => r.status === filter);
   const totalConfirmed = list.filter(r => r.status === "confirmed").reduce((a, r) => a + Number(r.confirmed_amount_usd || 0), 0);
+  const totalConfirmedZar = list.filter(r => r.status === "confirmed").reduce((a, r) => a + Number(r.confirmed_zar || 0), 0);
   const badge = (s) => s === "confirmed" ? ["✓ Confirmed", "#3ecf8e"] : s === "cancelled" ? ["Cancelled", "rgba(255,255,255,0.4)"] : ["⏳ Awaiting transfer", "#e8b34b"];
 
   return (
@@ -93,7 +106,7 @@ export default function AdminEftDonations({ onBack }) {
 
       <div style={{ maxWidth: 760, margin: "0 auto", padding: "24px 20px 60px" }}>
         <div style={{ fontSize: 12, color: "rgba(255,255,255,0.45)", lineHeight: 1.7, marginBottom: 16 }}>
-          A donor registers a bank-transfer gift and gets a reference (like SM-4F9A2C). Look for that reference in your bank statement. Only when the money has arrived, press <strong style={{ color: "#eef1ff" }}>Money arrived</strong>: the gift is then credited, once, and the donor is emailed. Enter the amount that actually arrived — it can differ from what they promised.
+          A donor registers a bank-transfer gift and gets a reference (like SM-4F9A2C). Look for that reference in your bank statement. Only when the money has arrived, press <strong style={{ color: "#eef1ff" }}>Money arrived</strong>: the gift is then credited, once, and the donor is emailed. Enter the amount that actually arrived — it can differ from what they promised — and, from your FNB statement, the <strong style={{ color: "#eef1ff" }}>rands</strong> that reached the account, so the pastor can later be paid from rands actually received.
         </div>
 
         {error && <div style={{ background: "rgba(240,82,82,0.1)", border: "1px solid rgba(240,82,82,0.3)", borderRadius: 10, padding: "10px 14px", marginBottom: 16, fontSize: 13, color: "#f05252" }}>⚠ {error}</div>}
@@ -108,7 +121,7 @@ export default function AdminEftDonations({ onBack }) {
             </button>
           ))}
         </div>
-        {totalConfirmed > 0 && <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginBottom: 14 }}>Total confirmed by bank transfer: <strong style={{ color: "#3ecf8e" }}>${money2(totalConfirmed)}</strong></div>}
+        {totalConfirmed > 0 && <div style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", marginBottom: 14 }}>Total confirmed by bank transfer: <strong style={{ color: "#3ecf8e" }}>${money2(totalConfirmed)}</strong>{totalConfirmedZar > 0 && <> · rands received: <strong style={{ color: "#5b9cf6" }}>R{money2(totalConfirmedZar)}</strong></>}</div>}
 
         {rows === null ? (
           <div style={{ textAlign: "center", padding: "40px 0", color: "rgba(255,255,255,0.3)" }}>Loading...</div>
@@ -142,6 +155,7 @@ export default function AdminEftDonations({ onBack }) {
                   {r.status !== "awaiting" && (
                     <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginTop: 8, lineHeight: 1.6 }}>
                       {r.status === "confirmed" ? "Confirmed" : "Cancelled"} {r.confirmed_at ? new Date(r.confirmed_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : ""}{r.confirmed_by ? ` by ${r.confirmed_by}` : ""}
+                      {r.status === "confirmed" && r.confirmed_zar ? <><br />Rands received: R{money2(r.confirmed_zar)}</> : null}
                       {r.admin_notes ? <><br />Note: {r.admin_notes}</> : null}
                     </div>
                   )}
@@ -151,6 +165,11 @@ export default function AdminEftDonations({ onBack }) {
                         <div style={{ flex: "1 1 150px" }}>
                           <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginBottom: 4 }}>Amount that arrived (USD)</div>
                           <input type="number" min="0" step="0.01" value={amounts[r.id] ?? String(r.amount_usd)} onChange={e => setAmounts(a => ({ ...a, [r.id]: e.target.value }))}
+                            style={{ width: "100%", padding: "9px 12px", borderRadius: 8, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)", color: "#eef1ff", fontSize: 14, fontFamily: "Georgia, serif", outline: "none", boxSizing: "border-box" }} />
+                        </div>
+                        <div style={{ flex: "1 1 150px" }}>
+                          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginBottom: 4 }}>Rands that arrived (ZAR)</div>
+                          <input type="number" min="0" step="0.01" value={zars[r.id] ?? ""} onChange={e => setZars(z => ({ ...z, [r.id]: e.target.value }))} placeholder="from your FNB statement"
                             style={{ width: "100%", padding: "9px 12px", borderRadius: 8, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)", color: "#eef1ff", fontSize: 14, fontFamily: "Georgia, serif", outline: "none", boxSizing: "border-box" }} />
                         </div>
                         <div style={{ flex: "2 1 220px" }}>

@@ -141,6 +141,27 @@ export default function AdminPayouts({ onBack }) {
         e.usd += usd;
         e.zar += z;
       });
+      // Bank-transfer gifts: the rands that actually reached FNB, saved when the admin confirmed each gift
+      // (needs eft_donations.confirmed_zar — see eft-zar.sql). If this fails, those gifts simply have no saved rands.
+      try {
+        const { data: eftGifts, error: eftErr } = await supabase
+          .from("eft_donations")
+          .select("target_id, confirmed_amount_usd, confirmed_zar")
+          .eq("status", "confirmed")
+          .eq("kind", "mission")
+          .not("confirmed_zar", "is", null);
+        if (eftErr) throw eftErr;
+        (eftGifts || []).forEach(g => {
+          const usd = Number(g.confirmed_amount_usd) || 0;
+          const z = Number(g.confirmed_zar) || 0;
+          if (!g.target_id || usd <= 0 || z <= 0) return;
+          const e = map[g.target_id] || (map[g.target_id] = { usd: 0, zar: 0 });
+          e.usd += usd;
+          e.zar += z;
+        });
+      } catch (eftEx) {
+        console.log("Could not load bank-transfer rand amounts:", eftEx);
+      }
       Object.keys(map).forEach(k => { map[k].rate = map[k].zar / map[k].usd; });
       setMissionRates(map);
     } catch (e) {
@@ -172,16 +193,42 @@ export default function AdminPayouts({ onBack }) {
     return goalNum - third * 2;
   };
 
-  // Not enough raised yet to pay this milestone? Same rule markPaid enforces: the cumulative amount through this
-  // milestone (or the full goal for "needs everything upfront" missions) must already be in. null = fine to pay.
+  // PAY ONCE. A pastor is paid in one transfer, when the mission is fully funded (raised has reached the donor
+  // target = goal + SendMe's 10%). The three milestones stay for proof and reporting; they no longer release money
+  // one by one. Releasing earlier is the exception ("Release early", admin's choice) and still needs the money
+  // for that milestone to be in.
+  const fundingTargetOf = (m) => Number(m?.collection_target) || Math.round((Number(m?.goal) || 0) * 1.1);
+  const isFullyFunded = (m) => !!m && Number(m.goal) > 0 && (Number(m.raised) || 0) >= fundingTargetOf(m);
+  // null = fully funded, fine to pay. Otherwise { raised, target, earlyOk } — earlyOk: enough is in to release this
+  // milestone early (the old cumulative rule), if you decide to.
   const shortfallFor = (missionId, milestoneNum) => {
     const mission = missions.find(m => m.id === missionId);
-    if (!mission) return null;
+    if (!mission || isFullyFunded(mission)) return null;
     const raised = Number(mission.raised) || 0;
     let required = 0;
     if (mission.requires_full_funding) required = Number(mission.goal) || 0;
     else for (let i = 1; i <= milestoneNum; i++) required += milestoneAmount(mission.goal, i);
-    return raised < required ? { raised, required } : null;
+    return { raised, required: fundingTargetOf(mission), earlyOk: raised >= required };
+  };
+  // For a fully funded mission, the unpaid milestone rows become ONE row that pays everything remaining together.
+  const collapseFunded = (rows) => {
+    const seen = new Set();
+    const kept = rows.filter(r => {
+      if (r.isPaid) return true;
+      const m = missions.find(x => x.id === r.missionId);
+      if (!isFullyFunded(m)) return true;
+      if (seen.has(r.missionId)) return false;
+      seen.add(r.missionId);
+      return true;
+    });
+    return kept.map(r => {
+      if (r.isPaid) return r;
+      const m = missions.find(x => x.id === r.missionId);
+      if (!isFullyFunded(m)) return r;
+      const remaining = [1, 2, 3].filter(n => payoutRecords[r.missionId]?.[n]?.status !== "paid");
+      const usd = round2(remaining.reduce((a, n) => a + payoutUsd(m.goal, n), 0));
+      return { ...r, lump: true, amount: usd, payZar: payZarFor(r.missionId, usd), heldZar: 0 };
+    });
   };
 
   // Rands for a dollar amount of one mission, at the blended rate that mission's gifts actually brought in.
@@ -199,7 +246,7 @@ export default function AdminPayouts({ onBack }) {
     }
     return round2(sum);
   };
-  // Share of the dollars raised that have a saved rand amount (EFT and older gifts do not).
+  // Share of the dollars raised that have a saved rand amount (older gifts and bank transfers confirmed without rands do not).
   const coverageFor = (missionId) => {
     const mr = missionRates[missionId];
     const raised = Number(missions.find(x => x.id === missionId)?.raised) || 0;
@@ -208,6 +255,18 @@ export default function AdminPayouts({ onBack }) {
 
   const markPaid = async (missionId, milestoneNum, amount, isPaid, missionTitle, missionaryEmail, recipientName, extra = {}) => {
     const newStatus = isPaid ? "pending" : "paid";
+    // PAY ONCE: a fully funded mission is paid in one transfer for everything still owed. A mission that is not
+    // fully funded is only paid early when the admin asks for it ("Release early").
+    if (newStatus === "paid" && !extra.early) {
+      const fm = missions.find(m => m.id === missionId);
+      if (isFullyFunded(fm)) return markLumpPaid(missionId, missionTitle, missionaryEmail, recipientName);
+      window.alert(
+        `⏳ "${missionTitle}" is not fully funded yet.\n\n` +
+        `Pastors are paid once, in one transfer, when the mission is fully funded. ` +
+        `If this payment really must go out earlier, use the "Release early" button instead.`
+      );
+      return;
+    }
     // Hard block — do not allow marking a milestone paid unless enough has
     // actually been raised to cover it. Checks the CUMULATIVE amount owed
     // through this milestone (milestone 2 needs milestones 1+2 covered,
@@ -306,8 +365,46 @@ export default function AdminPayouts({ onBack }) {
     setMarkingPaid(null);
   };
 
+  // Records-only, like markPaid: it does NOT send money. Marks every milestone that is still unpaid as paid in
+  // one go, because the pastor is paid the whole amount in a single transfer.
+  const markLumpPaid = async (missionId, missionTitle, missionaryEmail, recipientName) => {
+    const mission = missions.find(m => m.id === missionId);
+    const remaining = [1, 2, 3].filter(n => payoutRecords[missionId]?.[n]?.status !== "paid");
+    if (!mission || remaining.length === 0) return;
+    const parts = remaining.map(n => { const usd = payoutUsd(mission.goal, n); return { n, usd, zar: payZarFor(missionId, usd) }; });
+    const totalUsd = round2(parts.reduce((a, p) => a + p.usd, 0));
+    const totalZar = parts.every(p => p.zar != null) ? round2(parts.reduce((a, p) => a + p.zar, 0)) : null;
+    const ok = window.confirm(
+      `This only updates SendMe's records — it does NOT send any money.\n\n` +
+      `"${missionTitle}" is fully funded. Have you already completed the EFT of the FULL remaining amount, ` +
+      `$${money2(totalUsd)}${totalZar != null ? ` (R${totalZar.toFixed(2)})` : ""}, to ${recipientName || "the church/pastor"} from your FNB account?\n\n` +
+      `This marks ${remaining.length === 3 ? "all 3 milestones" : `the remaining ${remaining.length} milestone${remaining.length > 1 ? "s" : ""}`} as paid. Click OK only if that transfer is already done.`
+    );
+    if (!ok) return;
+    setMarkingPaid(`${missionId}-${remaining[0]}`);
+    setError("");
+    const paidAt = new Date().toISOString();
+    const payloads = parts.map(p => ({ mission_id: missionId, milestone_number: p.n, amount: p.usd, status: "paid", paid_at: paidAt, paid_via: "EFT" }));
+    try {
+      const { error } = await supabase.from("payout_records").upsert(payloads, { onConflict: "mission_id,milestone_number" });
+      if (error) throw error;
+      // best-effort audit of the rands paid (needs the zar_paid column); never blocks the record above
+      for (const p of parts) {
+        if (p.zar == null) continue;
+        const { error: zErr } = await supabase.from("payout_records").update({ zar_paid: p.zar }).eq("mission_id", missionId).eq("milestone_number", p.n);
+        if (zErr) console.log("Could not save rands paid:", zErr.message);
+      }
+      setPayoutRecords(prev => ({ ...prev, [missionId]: { ...(prev[missionId] || {}), ...Object.fromEntries(payloads.map(pl => [pl.milestone_number, pl])) } }));
+      sendNotification("payout_sent", missionaryEmail, { missionTitle, amount: totalUsd, recipientName });
+      notifyAdmin("payout_processed", { missionTitle, amount: totalUsd, recipientName: recipientName || "pastor/church", milestone: "all" });
+    } catch (e) {
+      setError("Could not update payment status: " + (e.message || ""));
+    }
+    setMarkingPaid(null);
+  };
+
   // ── Build approved-proof rows (the new "Ready to Pay" queue) ──────────────
-  const approvedRows = approvedProofs.filter(proof =>
+  const approvedRowsRaw = approvedProofs.filter(proof =>
     !closedIds.has(proof.mission_id) || payoutRecords[proof.mission_id]?.[proof.milestone_number]?.status === "paid"
   ).map(proof => {
     const m = proof.missions || {};
@@ -344,24 +441,26 @@ export default function AdminPayouts({ onBack }) {
       mediaUrl:     proof.media_url,
     };
   });
+  const approvedRows = collapseFunded(approvedRowsRaw);
 
   // ── Build legacy milestone rows (from missions.current_milestone) ─────────
-  const legacyRows = [];
+  const legacyRowsRaw = [];
   missions.forEach(m => {
     if (m.funded_outside) return; // completed with funding from outside SendMe — nothing to pay out from here
     // Use current_milestone (new column); fall back to old milestone field
     const currentMilestone = m.current_milestone || m.milestone || 0;
     const { details, source } = getBankingDetails(m);
     const records = payoutRecords[m.id] || {};
-    for (let i = 1; i <= currentMilestone; i++) {
+    for (let i = 1; i <= 3; i++) {
       const amount  = payoutUsd(m.goal, i);
       const record  = records[i];
       const isPaid  = record?.status === "paid";
+      if (i > currentMilestone && !isPaid) continue;   // milestones not reached yet — unless already paid (one-transfer payout)
       if (closedIds.has(m.id) && !isPaid) continue; // replaced by the early-close payout
       // Nothing is owed on a mission that was rejected, cancelled or is still waiting for approval — only active or
       // completed missions can have a payment due. (A payment that was already made stays in the Paid list.)
       if (!isPaid && m.status !== "active" && m.status !== "complete") continue;
-      legacyRows.push({
+      legacyRowsRaw.push({
         missionId:    m.id,
         missionTitle: m.title || "Untitled Mission",
         requiresFullFunding: !!m.requires_full_funding,
@@ -386,6 +485,8 @@ export default function AdminPayouts({ onBack }) {
       });
     }
   });
+
+  const legacyRows = collapseFunded(legacyRowsRaw);
 
   const markEmPaid = async (em) => {
     const newStatus = em.paid ? "unpaid" : "paid";
@@ -467,18 +568,30 @@ export default function AdminPayouts({ onBack }) {
     if (r.shortfall && !r.isPaid) {
       return (
         <div style={{ marginTop:6, fontSize:12, color:"#e8b34b", lineHeight:1.5, maxWidth:260, textAlign:"right" }}>
-          ⏳ Not funded yet — ${fmt(r.shortfall.raised)} raised, ${fmt(r.shortfall.required)} needed before this can be paid
+          ⏳ Paid once the mission is fully funded — ${fmt(r.shortfall.raised)} of ${fmt(r.shortfall.required)} raised
+          {r.shortfall.earlyOk && (
+            <div style={{ marginTop:6 }}>
+              <button
+                onClick={() => markPaid(r.missionId, r.milestoneNum, r.amount, r.isPaid, r.missionTitle, r.missionaryEmail, r.details?.recipient_name, { ...payExtra(r), early: true })}
+                style={{ background:"none", border:"1px solid rgba(232,179,75,0.5)", color:"#e8b34b", borderRadius:8, padding:"4px 10px", fontSize:11, cursor:"pointer", fontFamily:"Georgia, serif" }}>
+                Release early (on request)…
+              </button>
+            </div>
+          )}
         </div>
       );
     }
     const mr = missionRates[r.missionId];
     if (!mr || r.payZar == null) return zarNote(r.amount, {}, r.isPaid);
-    const belowMin = !r.isPaid && r.milestoneNum < 3 && r.payZar < MIN_PAYOUT_ZAR;
+    const belowMin = !r.isPaid && !r.lump && r.milestoneNum < 3 && r.payZar < MIN_PAYOUT_ZAR;
     const combined = !r.isPaid && r.heldZar > 0 ? round2(r.payZar + r.heldZar) : null;
     return (
       <div style={{ marginTop:4 }}>
         <div style={{ fontSize:15, fontWeight:700, color: r.isPaid ? "rgba(91,156,246,0.6)" : "#5b9cf6" }}>R{money2(r.payZar)}</div>
         <div style={{ fontSize:10, color:"rgba(255,255,255,0.3)" }}>from rands actually received · R{mr.rate.toFixed(2)} per $</div>
+        {r.lump && !r.isPaid && (
+          <div style={{ fontSize:11, color:"#3ecf8e", marginTop:3 }}>✓ Fully funded — pay the whole amount in one transfer</div>
+        )}
         {r.coverage != null && r.coverage < 0.99 && (
           <div style={{ fontSize:10, color:"#e8b34b", marginTop:3 }}>Based on {Math.round(r.coverage * 100)}% of this mission's dollars — the rest has no saved rand amount</div>
         )}
@@ -504,7 +617,7 @@ export default function AdminPayouts({ onBack }) {
   };
   const payExtra = (r) => ({
     zar: r.payZar,
-    belowMin: r.payZar != null && r.milestoneNum < 3 && r.payZar < MIN_PAYOUT_ZAR,
+    belowMin: !r.lump && r.payZar != null && r.milestoneNum < 3 && r.payZar < MIN_PAYOUT_ZAR,
   });
 
   // Records-only, like markPaid above: it does NOT send money.
@@ -950,7 +1063,7 @@ export default function AdminPayouts({ onBack }) {
                         fontWeight:700, cursor: (isActing || r.shortfall) && !r.isPaid ? "default" : "pointer",
                         fontSize:13, fontFamily:"Georgia, serif",
                         opacity: isActing ? 0.7 : 1 }}>
-                      {isActing ? "Saving..." : r.isPaid ? "↩ Mark as Unpaid" : r.shortfall ? "⏳ Waiting for funds" : "✓ Mark as Paid (EFT Done)"}
+                      {isActing ? "Saving..." : r.isPaid ? "↩ Mark as Unpaid" : r.shortfall ? "⏳ Waiting for funds" : r.lump ? "✓ Mark Full Amount as Paid (EFT Done)" : "✓ Mark as Paid (EFT Done)"}
                     </button>
                     {r.isPaid && r.paidAt && (
                       <span style={{ marginLeft:12, fontSize:12, color:"rgba(255,255,255,0.3)" }}>
@@ -1253,7 +1366,7 @@ export default function AdminPayouts({ onBack }) {
                           cursor: (isActing || r.shortfall) && !r.isPaid ? "default" : "pointer",
                           fontSize:13, fontFamily:"Georgia, serif",
                           opacity: isActing ? 0.7 : 1 }}>
-                        {isActing ? "Saving..." : r.isPaid ? "Mark as Unpaid" : r.shortfall ? "⏳ Waiting for funds" : "✓ Mark as Paid"}
+                        {isActing ? "Saving..." : r.isPaid ? "Mark as Unpaid" : r.shortfall ? "⏳ Waiting for funds" : r.lump ? "✓ Mark Full Amount as Paid" : "✓ Mark as Paid"}
                       </button>
                     </div>
                   </div>
