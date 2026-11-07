@@ -24,7 +24,7 @@ const STEPS = [
   { number:6, label:"Banking",      icon:"🏦" },
 ];
 
-const COUNTRIES = [
+export const COUNTRIES = [
   "South Africa","Nigeria","Kenya","Ghana","Ethiopia","Zimbabwe","Uganda","Tanzania","Zambia","Mozambique",
   "Malawi","Botswana","Namibia","Lesotho","Eswatini","Angola","Rwanda","Burundi","DR Congo","Republic of Congo",
   "Cameroon","Ivory Coast","Senegal","Sierra Leone","Liberia","Togo","Benin","Burkina Faso","Mali","Niger",
@@ -41,7 +41,7 @@ const COUNTRIES = [
   "Haiti","Dominican Republic","Jamaica","Cuba","Trinidad and Tobago","Guatemala","Honduras","El Salvador","Nicaragua","Costa Rica","Panama",
   "Other"
 ];
-const SIZES     = ["Under 50","50 – 100","100 – 300","300 – 500","500 – 1,000","Over 1,000"];
+export const SIZES     = ["Under 50","50 – 100","100 – 300","300 – 500","500 – 1,000","Over 1,000"];
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_RE = /^\+?[0-9\s\-()]{7,20}$/;
@@ -49,7 +49,7 @@ const PHONE_RE = /^\+?[0-9\s\-()]{7,20}$/;
 // References are contacted by admin on WhatsApp, so each one must be a full
 // international number (+ and country code). Returns "+27821234567" style,
 // or "" if it isn't usable.
-const normalizeWhatsApp = (raw) => {
+export const normalizeWhatsApp = (raw) => {
   const t = String(raw || "").trim();
   if (!t.startsWith("+")) return "";
   const d = t.replace(/\D/g, "");
@@ -63,7 +63,7 @@ const normalizeWhatsApp = (raw) => {
 const MAPBOX_TOKEN = process.env.REACT_APP_MAPBOX_TOKEN ||
   "pk.eyJ1Ijoic2VuZG1lMDkyMyIsImEiOiJjbXI1anZpOGcwYXJvMzFyMHo2aDU2YnI2In0.CutnKCVEf1SzDpddacdekg";
 
-const geocodeLocation = async (city, country, street = "", province = "") => {
+export const geocodeLocation = async (city, country, street = "", province = "") => {
   try {
     const token = MAPBOX_TOKEN;
     if (!token) return { lat: null, lng: null };
