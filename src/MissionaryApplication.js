@@ -5,6 +5,7 @@ import { FEATURED_VIDEOS } from "./sendmeVideos";
 import WatchHowLink from "./WatchHowLink";
 import { COUNTRIES, countryIso } from "./countries";
 import { geocodeMissionLocation } from "./missionGeocode";
+import { shrinkPhoto, uploadMissionPhoto } from "./missionPhoto";
 
 const inp = {
   width: "100%", padding: "13px 16px", borderRadius: 12, boxSizing: "border-box",
@@ -469,48 +470,7 @@ const FundingGoalCurrency = ({ form, set }) => {
 
 // ── OPTIONAL MISSION PICTURE ──────────────────────────────────────────────────
 // The applicant may add one picture (church, area or the work). It is shrunk in the browser
-// before upload (max 1600px, JPEG) so phone photos don't use the applicant's data or fill the
-// storage. It is only uploaded when the application is submitted, never before.
-const PHOTO_MAX_INPUT_BYTES = 15 * 1024 * 1024;   // refuse anything bigger than this before processing
-const PHOTO_MAX_EDGE = 1600;
-
-const shrinkPhoto = (file) => new Promise((resolve, reject) => {
-  if (!file || !/^image\//.test(file.type || "")) { reject(new Error("Please choose a picture (JPG, PNG or WebP).")); return; }
-  if (file.size > PHOTO_MAX_INPUT_BYTES) { reject(new Error("That picture is too large. Please choose one under 15 MB.")); return; }
-  const url = URL.createObjectURL(file);
-  const img = new Image();
-  img.onload = () => {
-    try {
-      const scale = Math.min(1, PHOTO_MAX_EDGE / Math.max(img.naturalWidth, img.naturalHeight));
-      const w = Math.max(1, Math.round(img.naturalWidth * scale));
-      const h = Math.max(1, Math.round(img.naturalHeight * scale));
-      const canvas = document.createElement("canvas");
-      canvas.width = w; canvas.height = h;
-      const ctx = canvas.getContext("2d");
-      ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, w, h);   // PNGs with transparency become white, not black
-      ctx.drawImage(img, 0, 0, w, h);
-      const attempt = (q) => canvas.toBlob((blob) => {
-        if (!blob) { URL.revokeObjectURL(url); reject(new Error("That picture could not be prepared. Please try another one.")); return; }
-        if (blob.size > 2 * 1024 * 1024 && q > 0.5) { attempt(0.6); return; }
-        URL.revokeObjectURL(url); resolve(blob);
-      }, "image/jpeg", q);
-      attempt(0.82);
-    } catch (e) { URL.revokeObjectURL(url); reject(new Error("That picture could not be prepared. Please try another one.")); }
-  };
-  img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("That picture could not be opened. Please try a JPG or PNG.")); };
-  img.src = url;
-});
-
-const uploadMissionPhoto = async (blob, userId) => {
-  const path = `${userId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
-  const { error } = await supabase.storage.from("mission-photos")
-    .upload(path, blob, { contentType: "image/jpeg", upsert: false, cacheControl: "31536000" });
-  if (error) throw error;
-  const { data } = supabase.storage.from("mission-photos").getPublicUrl(path);
-  if (!data || !data.publicUrl) throw new Error("The picture was uploaded but its link could not be created.");
-  return data.publicUrl;
-};
-
+// before upload (see missionPhoto.js). It is only uploaded when the application is submitted.
 const MissionPhotoField = ({ form, set, user, resubmit }) => {
   const [busy, setBusy] = useState(false);
   const [err, setErr]   = useState("");

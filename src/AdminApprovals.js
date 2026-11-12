@@ -621,6 +621,15 @@ export default function AdminApprovals({ onBack, user }) {
                     <div><strong style={{ color: "rgba(255,255,255,0.8)" }}>Mission:</strong> {m.blurb || m.description || "No description provided."}</div>
                   </div>
 
+                  {/* Picture the applicant added (never shown for Shadow Mode). Check it before approving. */}
+                  {m.photo_url && !m.protected && (
+                    <div style={{ marginBottom: 14 }}>
+                      <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 6 }}>📷 Picture added by applicant</div>
+                      <img src={m.photo_url} alt="Mission" loading="lazy" onError={ev => { ev.currentTarget.style.display = "none"; }}
+                        style={{ display: "block", width: "100%", maxHeight: 220, objectFit: "cover", borderRadius: 12, border: "1px solid rgba(255,255,255,0.1)" }} />
+                    </div>
+                  )}
+
                   {/* Church status */}
                   <div style={{ background: churchOk ? "rgba(62,207,142,0.07)" : "rgba(232,91,91,0.08)", borderRadius: 12, border: `1px solid ${churchOk ? "rgba(62,207,142,0.2)" : "rgba(232,91,91,0.25)"}`, padding: "12px 16px", marginBottom: 14 }}>
                     <div style={{ fontSize: 13, fontWeight: 700, color: churchOk ? "#3ecf8e" : "#e85b5b", marginBottom: 2 }}>

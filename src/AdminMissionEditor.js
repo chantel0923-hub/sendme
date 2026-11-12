@@ -7,10 +7,11 @@
 // milestone amounts, amount raised, status, church and missionary. Donors give
 // against those numbers, so money changes only go through the dedicated tools
 // (Cancel & Reallocate / Close Early), never a quick edit.
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { supabase } from "./supabase";
 import { COUNTRIES, countryIso } from "./countries";
 import { geocodeMissionLocation } from "./missionGeocode";
+import { shrinkPhoto, uploadMissionPhoto } from "./missionPhoto";
 
 const REGIONS = ["Africa", "Asia", "South America", "Middle East", "Europe", "North America", "Pacific Islands", "Central Asia", "Other"];
 const ACCESS_LEVELS = [
@@ -59,6 +60,31 @@ export default function AdminMissionEditor({ mission, onSaved, onCancel }) {
   const [saving, setSaving] = useState(false);
   const [mapMsg, setMapMsg] = useState(null);   // { ok, text }
   const [error, setError] = useState("");
+
+  // Mission picture (admin only). Nothing is uploaded or changed until "Save changes" is pressed.
+  const [photoBlob, setPhotoBlob]     = useState(null);    // a new picture chosen, not saved yet
+  const [removePhoto, setRemovePhoto] = useState(false);   // admin pressed "Remove picture"
+  const [photoBusy, setPhotoBusy]     = useState(false);
+  const [photoErr, setPhotoErr]       = useState("");
+  const [preview, setPreview]         = useState("");
+  const uploadedRef = useRef(null);                         // { blob, url } so a retry doesn't upload twice
+  useEffect(() => {
+    if (!photoBlob) { setPreview(""); return undefined; }
+    const u = URL.createObjectURL(photoBlob);
+    setPreview(u);
+    return () => URL.revokeObjectURL(u);
+  }, [photoBlob]);
+  const shownPhoto = photoBlob ? preview : (removePhoto ? "" : (m.photo_url || ""));
+
+  const pickPhoto = async (ev) => {
+    const file = ev.target.files && ev.target.files[0];
+    ev.target.value = "";
+    if (!file) return;
+    setPhotoBusy(true); setPhotoErr("");
+    try { setPhotoBlob(await shrinkPhoto(file)); setRemovePhoto(false); }
+    catch (ex) { setPhotoErr(ex.message || "That picture could not be used."); }
+    setPhotoBusy(false);
+  };
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -116,6 +142,25 @@ export default function AdminMissionEditor({ mission, onSaved, onCancel }) {
 
     setSaving(true);
     try {
+      // The picture is only touched when the admin chose a new one or pressed Remove, so editing
+      // text alone behaves exactly as before. A failed upload stops the save (nothing is half-saved).
+      if (!m.protected) {
+        if (photoBlob) {
+          let url;
+          if (uploadedRef.current && uploadedRef.current.blob === photoBlob) url = uploadedRef.current.url;
+          else {
+            const { data: au } = await supabase.auth.getUser();
+            const uid = au && au.user && au.user.id;
+            if (!uid) throw new Error("you are not signed in — please sign in again");
+            try { url = await uploadMissionPhoto(photoBlob, uid); }
+            catch (upErr) { throw new Error("the picture could not be uploaded (" + ((upErr && upErr.message) || "unknown reason") + ")"); }
+            uploadedRef.current = { blob: photoBlob, url };
+          }
+          payload.photo_url = url;
+        } else if (removePhoto && m.photo_url) {
+          payload.photo_url = null;
+        }
+      }
       const { data, error: err } = await supabase.from("missions").update(payload).eq("id", m.id).select("*").maybeSingle();
       if (err) throw err;
       // The Supabase client doesn't throw when the database silently blocks an update; it just returns no row.
@@ -141,6 +186,40 @@ export default function AdminMissionEditor({ mission, onSaved, onCancel }) {
 
       <label style={lbl}>Description</label>
       <textarea style={{ ...inp, minHeight: 110, resize: "vertical" }} value={form.blurb} onChange={e => set("blurb", e.target.value)} />
+
+      <div style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 12, padding: "12px 12px 12px", marginBottom: 12 }}>
+        <span style={lbl}>📷 Mission picture</span>
+        {m.protected ? (
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", lineHeight: 1.6 }}>
+            🔒 This is a Shadow Mode mission. Pictures are never shown for protected missions, so none can be added.
+          </div>
+        ) : (
+          <>
+            {photoErr && <div role="alert" style={{ background: "rgba(232,91,91,0.1)", border: "1px solid rgba(232,91,91,0.3)", borderRadius: 10, padding: "8px 12px", marginBottom: 10, fontSize: 12, color: "#e85b5b" }}>{photoErr}</div>}
+            {shownPhoto
+              ? <img src={shownPhoto} alt="Mission" style={{ display: "block", width: "100%", maxHeight: 220, objectFit: "cover", borderRadius: 10, marginBottom: 10, border: "1px solid rgba(255,255,255,0.1)" }} />
+              : <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginBottom: 10 }}>{removePhoto ? "The picture will be removed when you save." : "No picture yet."}</div>}
+            {photoBlob && <div style={{ fontSize: 12, color: "#e8b34b", marginBottom: 10 }}>New picture chosen — it is saved when you press “Save changes”.</div>}
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <label style={{ padding: "9px 14px", borderRadius: 9, border: "1px solid rgba(232,179,75,0.45)", background: "rgba(232,179,75,0.08)", color: "#e8b34b", fontWeight: 700, fontSize: 12, fontFamily: "Georgia, serif", cursor: photoBusy ? "default" : "pointer", opacity: photoBusy ? 0.6 : 1 }}>
+                {photoBusy ? "Preparing picture…" : (shownPhoto ? "Change picture" : "Add a picture")}
+                <input type="file" accept="image/*" onChange={pickPhoto} disabled={photoBusy || saving} style={{ display: "none" }} />
+              </label>
+              {(photoBlob || (m.photo_url && !removePhoto)) && !photoBusy && (
+                <button type="button" disabled={saving}
+                  onClick={() => { if (photoBlob) setPhotoBlob(null); else setRemovePhoto(true); setPhotoErr(""); }}
+                  style={{ padding: "9px 14px", borderRadius: 9, border: "1px solid rgba(255,255,255,0.15)", background: "transparent", color: "rgba(255,255,255,0.6)", fontWeight: 600, fontSize: 12, fontFamily: "Georgia, serif", cursor: "pointer" }}>
+                  {photoBlob ? "Discard new picture" : "Remove picture"}
+                </button>
+              )}
+              {removePhoto && !photoBlob && (
+                <button type="button" onClick={() => setRemovePhoto(false)} disabled={saving}
+                  style={{ padding: "9px 14px", borderRadius: 9, border: "1px solid rgba(255,255,255,0.15)", background: "transparent", color: "rgba(255,255,255,0.6)", fontWeight: 600, fontSize: 12, fontFamily: "Georgia, serif", cursor: "pointer" }}>Keep the picture</button>
+              )}
+            </div>
+          </>
+        )}
+      </div>
 
       <label style={lbl}>Region</label>
       <select style={inp} value={form.region} onChange={e => set("region", e.target.value)}>
