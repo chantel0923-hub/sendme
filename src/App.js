@@ -1043,7 +1043,7 @@ const MissionDetail = ({ mission: m, onBack, onDonate, onLedger, user, userRole,
           </div>
         )}
         <div style={{ background:`linear-gradient(160deg,${m.color}18 0%,#060c18 100%)`,borderBottom:`1px solid ${m.color}1a`,padding:"28px 0 24px" }}>
-          {m.photo && <img src={m.photo} alt="" loading="lazy" onError={e=>{e.currentTarget.style.display="none";}} style={{ display:"block",width:"100%",maxHeight:300,objectFit:"cover",borderRadius:18,marginBottom:20,border:`1px solid ${m.color}33` }}/>}
+          {m.photo && <img src={m.photo} alt="" loading="lazy" onError={e=>{e.currentTarget.style.display="none";}} style={{ display:"block",width:"100%",height:"auto",maxHeight:560,objectFit:"contain",background:"#060c18",borderRadius:18,marginBottom:20,border:`1px solid ${m.color}33` }}/>}
           <div style={{ display:"flex",gap:16,alignItems:"flex-start",marginBottom:16 }}>
             <div style={{ width:64,height:64,borderRadius:20,flexShrink:0,background:`linear-gradient(135deg,${m.color}44,${m.color}18)`,border:`2px solid ${m.color}55`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:28 }}>✝</div>
             <div style={{ flex:1 }}>

@@ -197,7 +197,7 @@ export default function AdminMissionEditor({ mission, onSaved, onCancel }) {
           <>
             {photoErr && <div role="alert" style={{ background: "rgba(232,91,91,0.1)", border: "1px solid rgba(232,91,91,0.3)", borderRadius: 10, padding: "8px 12px", marginBottom: 10, fontSize: 12, color: "#e85b5b" }}>{photoErr}</div>}
             {shownPhoto
-              ? <img src={shownPhoto} alt="Mission" style={{ display: "block", width: "100%", maxHeight: 220, objectFit: "cover", borderRadius: 10, marginBottom: 10, border: "1px solid rgba(255,255,255,0.1)" }} />
+              ? <img src={shownPhoto} alt="Mission" style={{ display: "block", width: "100%", height: "auto", maxHeight: 340, objectFit: "contain", background: "rgba(0,0,0,0.25)", borderRadius: 10, marginBottom: 10, border: "1px solid rgba(255,255,255,0.1)" }} />
               : <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginBottom: 10 }}>{removePhoto ? "The picture will be removed when you save." : "No picture yet."}</div>}
             {photoBlob && <div style={{ fontSize: 12, color: "#e8b34b", marginBottom: 10 }}>New picture chosen — it is saved when you press “Save changes”.</div>}
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>

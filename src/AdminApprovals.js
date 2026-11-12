@@ -626,7 +626,7 @@ export default function AdminApprovals({ onBack, user }) {
                     <div style={{ marginBottom: 14 }}>
                       <div style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 6 }}>📷 Picture added by applicant</div>
                       <img src={m.photo_url} alt="Mission" loading="lazy" onError={ev => { ev.currentTarget.style.display = "none"; }}
-                        style={{ display: "block", width: "100%", maxHeight: 220, objectFit: "cover", borderRadius: 12, border: "1px solid rgba(255,255,255,0.1)" }} />
+                        style={{ display: "block", width: "100%", height: "auto", maxHeight: 400, objectFit: "contain", background: "rgba(0,0,0,0.25)", borderRadius: 12, border: "1px solid rgba(255,255,255,0.1)" }} />
                     </div>
                   )}
 

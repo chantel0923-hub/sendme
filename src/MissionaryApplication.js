@@ -518,7 +518,7 @@ const MissionPhotoField = ({ form, set, user, resubmit }) => {
         Please avoid showing the faces of children or of anyone who could be at risk.
       </div>
       {err && <div role="alert" style={{ background:"rgba(240,82,82,0.1)", border:"1px solid rgba(240,82,82,0.3)", borderRadius:10, padding:"9px 14px", marginBottom:12, fontSize:12, color:"#f05252" }}>{err}</div>}
-      {preview && <img src={preview} alt="Chosen mission" style={{ display:"block", width:"100%", maxHeight:240, objectFit:"cover", borderRadius:12, marginBottom:12, border:"1px solid rgba(255,255,255,0.1)" }}/>}
+      {preview && <img src={preview} alt="Chosen mission" style={{ display:"block", width:"100%", height:"auto", maxHeight:340, objectFit:"contain", background:"rgba(0,0,0,0.25)", borderRadius:12, marginBottom:12, border:"1px solid rgba(255,255,255,0.1)" }}/>}
       <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
         <label style={{ padding:"11px 16px", borderRadius:12, border:"1px solid rgba(232,179,75,0.45)", background:"rgba(232,179,75,0.08)", color:"#e8b34b", fontWeight:700, cursor: busy ? "default" : "pointer", fontSize:13, fontFamily:"Georgia, serif", opacity: busy ? 0.6 : 1 }}>
           {busy ? "Preparing picture…" : (form.photoBlob ? "📷 Change picture" : "📷 Add a picture")}
