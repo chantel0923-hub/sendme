@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "./supabase";
 import { notifyAdmin } from "./notifications";
 import { FEATURED_VIDEOS } from "./sendmeVideos";
@@ -467,7 +467,113 @@ const FundingGoalCurrency = ({ form, set }) => {
   );
 };
 
-const Step4 = ({ form, set }) => (
+// ── OPTIONAL MISSION PICTURE ──────────────────────────────────────────────────
+// The applicant may add one picture (church, area or the work). It is shrunk in the browser
+// before upload (max 1600px, JPEG) so phone photos don't use the applicant's data or fill the
+// storage. It is only uploaded when the application is submitted, never before.
+const PHOTO_MAX_INPUT_BYTES = 15 * 1024 * 1024;   // refuse anything bigger than this before processing
+const PHOTO_MAX_EDGE = 1600;
+
+const shrinkPhoto = (file) => new Promise((resolve, reject) => {
+  if (!file || !/^image\//.test(file.type || "")) { reject(new Error("Please choose a picture (JPG, PNG or WebP).")); return; }
+  if (file.size > PHOTO_MAX_INPUT_BYTES) { reject(new Error("That picture is too large. Please choose one under 15 MB.")); return; }
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    try {
+      const scale = Math.min(1, PHOTO_MAX_EDGE / Math.max(img.naturalWidth, img.naturalHeight));
+      const w = Math.max(1, Math.round(img.naturalWidth * scale));
+      const h = Math.max(1, Math.round(img.naturalHeight * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, w, h);   // PNGs with transparency become white, not black
+      ctx.drawImage(img, 0, 0, w, h);
+      const attempt = (q) => canvas.toBlob((blob) => {
+        if (!blob) { URL.revokeObjectURL(url); reject(new Error("That picture could not be prepared. Please try another one.")); return; }
+        if (blob.size > 2 * 1024 * 1024 && q > 0.5) { attempt(0.6); return; }
+        URL.revokeObjectURL(url); resolve(blob);
+      }, "image/jpeg", q);
+      attempt(0.82);
+    } catch (e) { URL.revokeObjectURL(url); reject(new Error("That picture could not be prepared. Please try another one.")); }
+  };
+  img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("That picture could not be opened. Please try a JPG or PNG.")); };
+  img.src = url;
+});
+
+const uploadMissionPhoto = async (blob, userId) => {
+  const path = `${userId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
+  const { error } = await supabase.storage.from("mission-photos")
+    .upload(path, blob, { contentType: "image/jpeg", upsert: false, cacheControl: "31536000" });
+  if (error) throw error;
+  const { data } = supabase.storage.from("mission-photos").getPublicUrl(path);
+  if (!data || !data.publicUrl) throw new Error("The picture was uploaded but its link could not be created.");
+  return data.publicUrl;
+};
+
+const MissionPhotoField = ({ form, set, user, resubmit }) => {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr]   = useState("");
+  const [preview, setPreview] = useState("");
+  useEffect(() => {
+    if (!form.photoBlob) { setPreview(""); return undefined; }
+    const u = URL.createObjectURL(form.photoBlob);
+    setPreview(u);
+    return () => URL.revokeObjectURL(u);
+  }, [form.photoBlob]);
+
+  if (resubmit) return null;   // fixing a sent-back application: the picture is not changed here
+  const box = { background:"rgba(255,255,255,0.02)", borderRadius:14, border:"1px solid rgba(255,255,255,0.08)", padding:"16px 18px", marginBottom:14 };
+
+  if (form.shadowMode) return (
+    <div style={box}>
+      <label style={label}>Mission picture</label>
+      <div style={{ fontSize:12, color:"rgba(255,255,255,0.45)", lineHeight:1.7 }}>
+        🔒 Pictures are switched off while Shadow Mode is on, to protect your identity and the people you serve.
+      </div>
+    </div>
+  );
+  if (!user) return (
+    <div style={box}>
+      <label style={label}>Mission picture (optional)</label>
+      <div style={{ fontSize:12, color:"rgba(255,255,255,0.45)", lineHeight:1.7 }}>Please sign in to add a picture.</div>
+    </div>
+  );
+
+  const pick = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = "";            // lets the same file be chosen again after Remove
+    if (!file) return;
+    setBusy(true); setErr("");
+    try { set("photoBlob", await shrinkPhoto(file)); }
+    catch (ex) { setErr(ex.message || "That picture could not be used."); }
+    setBusy(false);
+  };
+
+  return (
+    <div style={box}>
+      <label style={label}>Mission picture (optional)</label>
+      <div style={{ fontSize:12, color:"rgba(255,255,255,0.4)", lineHeight:1.7, marginBottom:12 }}>
+        A picture of your church, the area or the work. Donors will see it on your mission page once it is approved.
+        Please avoid showing the faces of children or of anyone who could be at risk.
+      </div>
+      {err && <div role="alert" style={{ background:"rgba(240,82,82,0.1)", border:"1px solid rgba(240,82,82,0.3)", borderRadius:10, padding:"9px 14px", marginBottom:12, fontSize:12, color:"#f05252" }}>{err}</div>}
+      {preview && <img src={preview} alt="Chosen mission" style={{ display:"block", width:"100%", maxHeight:240, objectFit:"cover", borderRadius:12, marginBottom:12, border:"1px solid rgba(255,255,255,0.1)" }}/>}
+      <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
+        <label style={{ padding:"11px 16px", borderRadius:12, border:"1px solid rgba(232,179,75,0.45)", background:"rgba(232,179,75,0.08)", color:"#e8b34b", fontWeight:700, cursor: busy ? "default" : "pointer", fontSize:13, fontFamily:"Georgia, serif", opacity: busy ? 0.6 : 1 }}>
+          {busy ? "Preparing picture…" : (form.photoBlob ? "📷 Change picture" : "📷 Add a picture")}
+          <input type="file" accept="image/*" onChange={pick} disabled={busy} style={{ display:"none" }}/>
+        </label>
+        {form.photoBlob && !busy && (
+          <button type="button" onClick={()=>{ set("photoBlob", null); setErr(""); }}
+            style={{ padding:"11px 16px", borderRadius:12, border:"1px solid rgba(255,255,255,0.12)", background:"rgba(255,255,255,0.04)", color:"rgba(255,255,255,0.6)", cursor:"pointer", fontSize:13, fontFamily:"Georgia, serif" }}>Remove</button>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const Step4 = ({ form, set, user, resubmit }) => (
   <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
     <div style={sectionTitle}>Mission Details</div>
     <FInput label="Mission Title *" placeholder="e.g. Gospel & Food Aid — Merkato District" value={form.missionTitle} onChange={e=>set("missionTitle",e.target.value)}/>
@@ -501,6 +607,7 @@ const Step4 = ({ form, set }) => (
       <label style={label}>Describe your mission *</label>
       <textarea placeholder="What will you do? Who are you reaching?" value={form.missionDescription} onChange={e=>set("missionDescription",e.target.value)} style={{...textarea,minHeight:140}}/>
     </div>
+    <MissionPhotoField form={form} set={set} user={user} resubmit={resubmit}/>
     <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
       <FInput label="Mission Start Date" type="date" value={form.startDate} onChange={e=>set("startDate",e.target.value)}/>
       <FSelect label="Expected Duration" value={form.duration} onChange={e=>set("duration",e.target.value)}>
@@ -604,6 +711,7 @@ const Step5 = ({ form, set, submitted, submitting, onSubmit, resubmit }) => {
     ["Total donors asked for", form.fundingGoal?`$${Math.round(Number(form.fundingGoal)*1.1).toLocaleString()}`:null],
     ["Funding release", form.requiresFullFunding ? "⚠️ Full amount required before starting" : "3 milestone payments as work progresses"],
     ["Shadow mode",    form.shadowMode?"Requested":"No"],
+    ["Picture",        (form.photoBlob && !form.shadowMode && !resubmit) ? "✓ Added" : null],
   ];
 
   return (
@@ -783,9 +891,13 @@ export default function MissionaryApplication({ onBack, user, editMission }) {
     startDate:"", duration:"",
     milestone1:"", milestone2:"", milestone3:"", surchargeAcknowledged:false,
     requiresFullFunding:false,
+    photoBlob:null,
   });
 
   const set = (key, val) => setForm(f => ({...f,[key]:val}));
+  // Remembers a picture that already uploaded, so a retry after a failed save (e.g. a dropped
+  // connection) does not upload it a second time.
+  const uploadedPhotoRef = useRef(null);
 
   // Load registered churches on mount for Step 3 dropdown
   useEffect(() => {
@@ -928,6 +1040,23 @@ export default function MissionaryApplication({ onBack, user, editMission }) {
         if (rpcError) throw rpcError;
         saved = !!newStatus;
       } else {
+        // Optional picture. photo_url is only added to the row when there IS a picture, so
+        // applications without one behave exactly as before. A failed upload stops the
+        // submission with a clear message (never a silent drop of the picture).
+        if (form.photoBlob && !form.shadowMode) {
+          let photoUrl;
+          if (uploadedPhotoRef.current && uploadedPhotoRef.current.blob === form.photoBlob) {
+            photoUrl = uploadedPhotoRef.current.url;
+          } else {
+            if (!user?.id) throw new Error("Please sign in to add a picture, or remove the picture.");
+            try { photoUrl = await uploadMissionPhoto(form.photoBlob, user.id); }
+            catch (upErr) {
+              throw new Error("Your picture could not be uploaded (" + ((upErr && upErr.message) || "unknown reason") + "). Please try again, or remove the picture and submit without it.");
+            }
+            uploadedPhotoRef.current = { blob: form.photoBlob, url: photoUrl };
+          }
+          row.photo_url = photoUrl;
+        }
         const { data, error: dbError } = await supabase.from("missions").insert(row).select("id").single();
         if (dbError) throw dbError;
         saved = !!data?.id;
@@ -1020,7 +1149,7 @@ export default function MissionaryApplication({ onBack, user, editMission }) {
           {step===1 && <Step1 form={form} set={set} prefilledFromPrevious={prefilledFromPrevious}/>}
           {step===2 && <Step2 form={form} set={set} prefilledFromPrevious={prefilledFromPrevious}/>}
           {step===3 && <Step3 form={form} set={set} churches={churches} churchesLoading={churchesLoading}/>}
-          {step===4 && <Step4 form={form} set={set}/>}
+          {step===4 && <Step4 form={form} set={set} user={user} resubmit={!!editMission}/>}
           {step===5 && <Step5 form={form} set={set} submitted={submitted} submitting={submitting} onSubmit={handleSubmit} resubmit={!!editMission}/>}
         </div>
         {!submitted && (

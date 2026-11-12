@@ -137,6 +137,7 @@ const mapRow = (row, i) => ({
   status:row.status||"active", milestone:row.milestone||0,
   souls:row.souls||0, bibles:row.bibles||0, churches:row.churches_planted||0,
   prayers:row.prayers||0, protected:row.protected||false,
+  photo:(row.photo_url && !row.protected) ? row.photo_url : null,
   closedEarlyAt:row.closed_early_at||null,
   fundedOutside:row.funded_outside||false,
   trustLevel:row.trust_level||1, journeyStep:row.journey_step||1,
@@ -1042,6 +1043,7 @@ const MissionDetail = ({ mission: m, onBack, onDonate, onLedger, user, userRole,
           </div>
         )}
         <div style={{ background:`linear-gradient(160deg,${m.color}18 0%,#060c18 100%)`,borderBottom:`1px solid ${m.color}1a`,padding:"28px 0 24px" }}>
+          {m.photo && <img src={m.photo} alt="" loading="lazy" onError={e=>{e.currentTarget.style.display="none";}} style={{ display:"block",width:"100%",maxHeight:300,objectFit:"cover",borderRadius:18,marginBottom:20,border:`1px solid ${m.color}33` }}/>}
           <div style={{ display:"flex",gap:16,alignItems:"flex-start",marginBottom:16 }}>
             <div style={{ width:64,height:64,borderRadius:20,flexShrink:0,background:`linear-gradient(135deg,${m.color}44,${m.color}18)`,border:`2px solid ${m.color}55`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:28 }}>✝</div>
             <div style={{ flex:1 }}>
@@ -2060,7 +2062,9 @@ const HomeScreen = ({ onMission, user, userRole, onSignOut, onApply, onChurch, o
                 onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="";}}>
                 <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:10,marginBottom:10 }}>
                   <div style={{ display:"flex",gap:12,alignItems:"flex-start",flex:"1 1 220px",minWidth:0 }}>
-                    <div style={{ width:48,height:48,borderRadius:14,background:`${m.color}22`,border:`1.5px solid ${m.color}44`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0 }}>✝</div>
+                    {m.photo
+                      ? <img src={m.photo} alt="" loading="lazy" onError={e=>{e.currentTarget.style.display="none";}} style={{ width:48,height:48,borderRadius:14,objectFit:"cover",border:`1.5px solid ${m.color}44`,flexShrink:0 }}/>
+                      : <div style={{ width:48,height:48,borderRadius:14,background:`${m.color}22`,border:`1.5px solid ${m.color}44`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0 }}>✝</div>}
                     <div style={{ minWidth:0 }}>
                       <div style={{ fontSize:10,color:m.color,letterSpacing:2,textTransform:"uppercase",marginBottom:2 }}>{m.role}</div>
                       <div style={{ fontSize:16,fontWeight:700,color:"#eef1ff" }}>{m.protected?"Protected Mission":m.name}</div>
